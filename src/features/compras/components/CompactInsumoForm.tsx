@@ -32,16 +32,16 @@ const labelCls = "block text-[13px] font-medium text-foreground/70 mb-1.5";
  *  `px-3 py-2.5` con border da 42px, así que aquí se fija `h-10` (todos los
  *  controles de la fila miden lo mismo, incluido el botón). */
 const compactInputCls =
-  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const readOnlyInputCls =
-  "w-full h-10 px-3 bg-muted/40 border border-border rounded-xl text-sm text-muted-foreground cursor-default";
+  "w-full h-10 max-md:min-h-11 px-3 bg-muted/40 border border-border rounded-xl text-sm text-muted-foreground cursor-default";
 /** Igual que `readOnlyInputCls` pero a la altura (36px) de la variante
  *  compacta: así TODOS los controles miden lo mismo en cada variante. */
 const readOnlyInputCompactaCls =
-  "w-full h-9 px-2.5 bg-muted/40 border border-border rounded-lg text-sm text-muted-foreground cursor-default";
+  "w-full h-9 max-md:min-h-11 px-2.5 bg-muted/40 border border-border rounded-lg text-sm text-muted-foreground cursor-default";
 
 /** Select de Medida a la misma altura (40px) que el resto de la fila. */
-const unidadCampoCls = "bg-muted border border-border text-foreground h-10";
+const unidadCampoCls = "bg-muted border border-border text-foreground h-10 max-md:min-h-11";
 
 export interface InsumoSuggestion {
   id: string;
@@ -260,7 +260,7 @@ export function CompactInsumoForm({
   /** Punto 3: UNA sola altura de control por variante — 40px en la normal y
    *  36px en la compacta — aplicada a inputs, selects, caja read-only y
    *  botones, para que todos los campos queden en la misma línea base. */
-  const altoControl = esCompacta ? "h-9" : "h-10";
+  const altoControl = esCompacta ? "h-9 max-md:min-h-11" : "h-10";
   const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
   const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
   const [ivaTexto, setIvaTexto] = useState(iva == null ? "" : String(iva));
@@ -675,7 +675,7 @@ export function CompactInsumoForm({
 
   const tituloCls = `font-bold text-foreground m-0 ${esCompacta ? "text-xs" : "text-sm"}`;
 
-  const inputClsCompacta = "w-full h-9 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  const inputClsCompacta = "w-full h-9 max-md:min-h-11 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
   const labelClsCompacta = "block text-[11px] font-semibold text-muted-foreground mb-1";
 
   return (
@@ -830,8 +830,8 @@ export function CompactInsumoForm({
                   title="La medida la define el ítem del catálogo"
                   className={
                     (esCompacta
-                      ? "w-full h-9 px-2.5 rounded-lg text-sm "
-                      : "w-full h-10 px-3 rounded-xl text-sm ") +
+                      ? "w-full h-9 max-md:min-h-11 px-2.5 rounded-lg text-sm "
+                      : "w-full h-10 max-md:min-h-11 px-3 rounded-xl text-sm ") +
                     "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                   }
                 >
@@ -852,9 +852,9 @@ export function CompactInsumoForm({
                   }
                   fieldClassName={
                     readOnly
-                      ? "bg-muted/40 border border-border text-foreground h-10"
+                      ? "bg-muted/40 border border-border text-foreground h-10 max-md:min-h-11"
                       : esCompacta
-                        ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                        ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
                         : unidadCampoCls
                   }
                 />
@@ -933,8 +933,8 @@ export function CompactInsumoForm({
                     title="La medida la define el ítem del catálogo"
                     className={
                       (esCompacta
-                        ? "w-full h-9 px-2.5 rounded-lg text-sm "
-                        : "w-full h-10 px-3 rounded-xl text-sm ") +
+                        ? "w-full h-9 max-md:min-h-11 px-2.5 rounded-lg text-sm "
+                        : "w-full h-10 max-md:min-h-11 px-3 rounded-xl text-sm ") +
                       "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                     }
                   >
@@ -953,7 +953,7 @@ export function CompactInsumoForm({
                     unidades={opcionesMedidaContenido}
                     fieldClassName={
                       esCompacta
-                        ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                        ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
                         : unidadCampoCls
                     }
                   />
@@ -997,7 +997,7 @@ export function CompactInsumoForm({
               unidades={opcionesModoIva}
               fieldClassName={
                 esCompacta
-                  ? "bg-muted border border-border text-foreground h-9 rounded-lg"
+                  ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
                   : unidadCampoCls
               }
             />

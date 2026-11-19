@@ -1028,7 +1028,7 @@ const hoyFecha = () => {
     };
 
     const iCls =
-      "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+      "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
     return (
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
@@ -1051,7 +1051,7 @@ const hoyFecha = () => {
             </h3>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+              className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1110,7 +1110,7 @@ const hoyFecha = () => {
                   ) : estadoCargaClientes === "error" || (estadoCargaClientes === "sin-permiso" && estadoAlternativo === "error") ? (
                     <div className="px-3 py-2 text-sm text-red-600" role="alert">
                       No se pudieron cargar los clientes. Revisa la conexión y los permisos.
-                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setIntentoCarga(n => n + 1)} className="ml-2 font-semibold underline">Reintentar</button>
+                      <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setIntentoCarga(n => n + 1)} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center ml-2 font-semibold underline">Reintentar</button>
                     </div>
                   ) : estadoCargaClientes === "sin-permiso" && estadoAlternativo === "esperando" ? (
                     <p className="px-3 py-2 text-sm text-muted-foreground">Escribe más caracteres para buscar.</p>
@@ -1222,7 +1222,7 @@ const hoyFecha = () => {
                     key={m}
                     type="button"
                     onClick={() => setMetodoPago(m)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
                       metodoPago === m
                         ? `${METODO_PAGO_ESTILO[m].btn} text-white`
                         : "bg-muted border-border text-muted-foreground hover:border-primary/40"
@@ -1391,7 +1391,7 @@ const hoyFecha = () => {
                   setProdSearch("");
                   setShowPicker((p) => !p);
                 }}
-                className="w-full flex items-center justify-between px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-muted-foreground hover:border-primary/40 cursor-pointer transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-muted-foreground hover:border-primary/40 cursor-pointer transition-colors"
               >
                 <span>
                   {selProductos.length === 0
@@ -1584,13 +1584,13 @@ const hoyFecha = () => {
           <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+              className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
             >
               Cancelar
             </button>            <button
               onClick={() => void handleSave()}
               disabled={guardando || !minutosPreparacionValidos(minutosPreparacion)}
-              className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando || !minutosPreparacionValidos(minutosPreparacion) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando || !minutosPreparacionValidos(minutosPreparacion) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
             >
               {guardando ? "Comprando…" : "Comprar"}
             </button>
@@ -2065,6 +2065,127 @@ export function VentasScreen({
   }, [totalPages]);
 
 
+  // Piezas de una fila de venta. Las usan la tabla (desde 768 px) y las tarjetas
+  // (menos de 768 px) para mostrar exactamente los mismos botones y acciones.
+  const claseFilaVenta = (p: Venta) =>
+    p.estado === "Por verificar"
+      ? "bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-500/5 dark:hover:bg-amber-500/10"
+      : p.estado === "En espera"
+        ? "bg-violet-50/60 hover:bg-violet-50 dark:bg-violet-500/5 dark:hover:bg-violet-500/10"
+        : "hover:bg-muted/20";
+  const idVenta = (p: Venta) => (
+    <div className="flex items-center gap-2">
+                        {p.id}
+                        {p.estado === "Por verificar" && (
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                        )}
+                      </div>
+  );
+  const horaRecogidaVenta = (p: Venta) => (
+    <>{p.horaRecogida ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
+                          {formatearHora(p.horaRecogida)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">
+                          —
+                        </span>
+                      )}</>
+  );
+  const estadoVenta = (p: Venta) => (
+    <><span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${VENTA_STATUS_COLOR[p.estado]}`}
+                      >
+                        {etiquetaEstadoVenta(p)}
+                      </span>
+                      {p.estado === "En espera" && (
+                        <p className="mt-1 text-xs font-semibold text-foreground">Falta {fmtPago(p.montoFaltante ?? 0)}</p>
+                      )}
+                      {p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null && (
+                        <p className="mt-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">⏱ {tiempoRestante(p.finVentaLocalMs, ahora)}</p>
+                      )}</>
+  );
+  const accionesVenta = (p: Venta) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+                        {(p.estado === "Por verificar" || p.estado === "En espera") && (
+                          <button
+                            onClick={() => abrirDetalle(p)}
+                            title="Verificar pago"
+                            className="flex items-center gap-1 px-2.5 py-1.5 max-md:min-h-11 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Verificar
+                          </button>
+                        )}
+                        {canEdit && p.estado === "Por entregar" && (
+                          p.ventaLocal && p.finVentaLocalMs != null && (p.estadoOrden === "En proceso" || !p.estadoOrden) ? (
+                            <button type="button" onClick={() => setVentaLista(p)} disabled={marcandoLista}
+                              title="Marcar como listo" aria-label="Marcar como listo"
+                              className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                              <Check className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              title="Adelantar"
+                              aria-label="Adelantar"
+                              onClick={() => {
+                                if (p.estadoOrden && p.estadoOrden !== "Completada") {
+                                  toast.error("La cocina aún no termina este pedido");
+                                  return;
+                                }
+                                setVentaAdelantar(p);
+                              }}
+                              className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )
+                        )}
+                        <ActionIcons onView={() => abrirDetalle(p)} />
+                        {/* "Anular": sólo en estados anulables y dentro de los
+                            primeros 10 minutos. Fuera de la ventana queda
+                            atenuado y explica por qué. */}
+                        {canEdit && ESTADOS_ANULABLES.includes(p.estado) && (
+                          <button
+                            onClick={() => { if (puedeAnular(p)) abrirAnular(p); }}
+                            title={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                            aria-label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
+                            className={`p-1.5 max-md:p-3.5 rounded-lg transition-colors ${
+                              puedeAnular(p)
+                                ? "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                : "text-muted-foreground/50 cursor-not-allowed"
+                            }`}
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Devolución: marca la venta como devuelta en el
+                            backend y abre su gestión (canje o dinero). */}
+                        {p.estado === "Completado" && (
+                          <button
+                            onClick={() => setVentaDevolver(p)}
+                            title="Registrar devolución"
+                            aria-label="Registrar devolución"
+                            className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Acciones de factura. */}
+                        {!["Por verificar", "En espera", "Anulado", "Devolucion"].includes(p.estado) && (
+                          <button
+                            onClick={() => setFacturaVenta(p)}
+                            title="Imprimir factura"
+                            className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+  );
+
   return (
     <div className="px-4 sm:px-6 py-6">
       {ventaLista && (
@@ -2102,12 +2223,12 @@ export function VentasScreen({
             {pedidos.length} ventas registradas
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
           {_canCreate && (
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
             >
               <span className="text-lg leading-none">+</span>
               Nuevo pedido
@@ -2123,11 +2244,11 @@ export function VentasScreen({
         );
         if (pendientes.length === 0) return null;
         return (
-          <div className="flex items-center gap-4 px-5 py-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl dark:bg-amber-500/10 dark:border-amber-500/25">
+          <div className="flex items-center gap-4 max-md:flex-wrap max-md:gap-3 px-5 py-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl dark:bg-amber-500/10 dark:border-amber-500/25">
             <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
               <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 max-md:basis-0 max-md:grow max-md:min-w-[10rem]">
               <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
                 {pendientes.length}{" "}
                 {pendientes.length === 1
@@ -2139,7 +2260,7 @@ export function VentasScreen({
                 rechaza cada pedido.
               </p>
             </div>
-            <span className="shrink-0 text-xs font-bold px-3 py-1 rounded-full bg-amber-200 text-amber-900 animate-pulse dark:bg-amber-500/20 dark:text-amber-300 dark:animate-none">
+            <span className="shrink-0 max-md:w-full max-md:text-center text-xs font-bold px-3 py-1 rounded-full bg-amber-200 text-amber-900 animate-pulse dark:bg-amber-500/20 dark:text-amber-300 dark:animate-none">
               ● Requiere acción
             </span>
           </div>
@@ -2163,7 +2284,7 @@ export function VentasScreen({
             setEstadoFiltro(event.target.value);
             setPage(1);
           }}
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+          className="rounded-lg border border-border bg-card px-3 py-2 max-md:min-h-11 text-sm text-foreground"
         >
           <option value="">Todos los estados</option>
           {Object.entries(VENTA_STATUS_LABEL).map(([estado, etiqueta]) => (
@@ -2174,8 +2295,50 @@ export function VentasScreen({
         </select>
       </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Menos de 768 px: cada venta como tarjeta. Reutiliza las mismas piezas y
+          botones de la tabla (idVenta, estadoVenta, accionesVenta…). */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p className="text-4xl mb-3">📋</p>
+            <p>No se encontraron ventas</p>
+          </div>
+        ) : (
+          paged.map((p) => (
+            <div key={p.id} className={`rounded-2xl border border-border bg-card p-4 transition-colors ${claseFilaVenta(p)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-mono font-semibold text-foreground">{idVenta(p)}</div>
+                  <p className="text-base font-medium text-foreground mt-0.5 break-words">{p.usuario}</p>
+                </div>
+                <div className="text-right shrink-0">{estadoVenta(p)}</div>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Hora de recogida</dt>
+                  <dd className="mt-0.5 text-muted-foreground">{horaRecogidaVenta(p)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Método de pago</dt>
+                  <dd className="mt-0.5"><PagoPill metodo={p.metodoPago} /></dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Total</dt>
+                  <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(p.total)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Hora de estado</dt>
+                  <dd className="mt-0.5 text-muted-foreground" style={{ fontFamily: MONO }}>{horaEstado(p)}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesVenta(p)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Table: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -2214,36 +2377,16 @@ export function VentasScreen({
                 paged.map((p) => (
                   <tr
                     key={p.id}
-                    className={`transition-colors ${
-                       p.estado === "Por verificar"
-                        ? "bg-amber-50/60 hover:bg-amber-50 dark:bg-amber-500/5 dark:hover:bg-amber-500/10"
-                         : p.estado === "En espera"
-                          ? "bg-violet-50/60 hover:bg-violet-50 dark:bg-violet-500/5 dark:hover:bg-violet-500/10"
-                          : "hover:bg-muted/20"
-                    }`}
+                    className={`transition-colors ${claseFilaVenta(p)}`}
                   >
                     <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
-                      <div className="flex items-center gap-2">
-                        {p.id}
-                        {p.estado === "Por verificar" && (
-                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                        )}
-                      </div>
+                      {idVenta(p)}
                     </td>
                     <td className="px-4 py-3.5 text-sm font-medium text-foreground">
                       {p.usuario}
                     </td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
-                      {p.horaRecogida ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          {formatearHora(p.horaRecogida)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">
-                          —
-                        </span>
-                      )}
+                      {horaRecogidaVenta(p)}
                     </td>
                     <td className="px-4 py-3.5">
                       <PagoPill metodo={p.metodoPago} />
@@ -2256,17 +2399,7 @@ export function VentasScreen({
                           sola por el flujo (verificación → en preparación →
                           orden de producción → por entregar → completado) y en
                           la columna sólo se muestra el badge con su hora. */}
-                      <span
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${VENTA_STATUS_COLOR[p.estado]}`}
-                      >
-                        {etiquetaEstadoVenta(p)}
-                      </span>
-                      {p.estado === "En espera" && (
-                        <p className="mt-1 text-xs font-semibold text-foreground">Falta {fmtPago(p.montoFaltante ?? 0)}</p>
-                      )}
-                      {p.ventaLocal && p.estado === "Por entregar" && p.finVentaLocalMs != null && (
-                        <p className="mt-1 text-xs text-muted-foreground whitespace-nowrap tabular-nums">⏱ {tiempoRestante(p.finVentaLocalMs, ahora)}</p>
-                      )}
+                      {estadoVenta(p)}
                     </td>
                     <td
                       className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
@@ -2275,83 +2408,7 @@ export function VentasScreen({
                       {horaEstado(p)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        {(p.estado === "Por verificar" || p.estado === "En espera") && (
-                          <button
-                            onClick={() => abrirDetalle(p)}
-                            title="Verificar pago"
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer text-xs font-semibold"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            Verificar
-                          </button>
-                        )}
-                        {canEdit && p.estado === "Por entregar" && (
-                          p.ventaLocal && p.finVentaLocalMs != null && (p.estadoOrden === "En proceso" || !p.estadoOrden) ? (
-                            <button type="button" onClick={() => setVentaLista(p)} disabled={marcandoLista}
-                              title="Marcar como listo" aria-label="Marcar como listo"
-                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                              <Check className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              title="Adelantar"
-                              aria-label="Adelantar"
-                              onClick={() => {
-                                if (p.estadoOrden && p.estadoOrden !== "Completada") {
-                                  toast.error("La cocina aún no termina este pedido");
-                                  return;
-                                }
-                                setVentaAdelantar(p);
-                              }}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                            </button>
-                          )
-                        )}
-                        <ActionIcons onView={() => abrirDetalle(p)} />
-                        {/* "Anular": sólo en estados anulables y dentro de los
-                            primeros 10 minutos. Fuera de la ventana queda
-                            atenuado y explica por qué. */}
-                        {canEdit && ESTADOS_ANULABLES.includes(p.estado) && (
-                          <button
-                            onClick={() => { if (puedeAnular(p)) abrirAnular(p); }}
-                            title={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
-                            aria-label={puedeAnular(p) ? "Anular venta" : "Solo se puede anular en los primeros 10 minutos"}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              puedeAnular(p)
-                                ? "text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-                                : "text-muted-foreground/50 cursor-not-allowed"
-                            }`}
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-                        {/* Devolución: marca la venta como devuelta en el
-                            backend y abre su gestión (canje o dinero). */}
-                        {p.estado === "Completado" && (
-                          <button
-                            onClick={() => setVentaDevolver(p)}
-                            title="Registrar devolución"
-                            aria-label="Registrar devolución"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Undo2 className="w-4 h-4" />
-                          </button>
-                        )}
-                        {/* Acciones de factura. */}
-                        {!["Por verificar", "En espera", "Anulado", "Devolucion"].includes(p.estado) && (
-                          <button
-                            onClick={() => setFacturaVenta(p)}
-                            title="Imprimir factura"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                      {accionesVenta(p)}
                     </td>
                   </tr>
                 ))
@@ -2377,16 +2434,16 @@ export function VentasScreen({
           >
             <div className="max-w-4xl mx-auto px-6 py-6">
               {/* Top bar */}
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-6">
                 <button
                   onClick={cerrarDetalle}
-                  className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  className="flex items-center gap-2 whitespace-nowrap max-md:min-h-11 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   Volver a ventas
                 </button>
                 <span className="text-border">·</span>
-                <span className="text-sm text-muted-foreground">Venta {detailItem.id}</span>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">Venta {detailItem.id}</span>
                 <span className={`ml-auto text-xs font-semibold px-3 py-1 rounded-full ${VENTA_STATUS_COLOR[detailItem.estado]}`}>
                   {etiquetaEstadoVenta(detailItem)}
                 </span>
@@ -2696,15 +2753,15 @@ export function VentasScreen({
                       })}
                       <div className="flex flex-wrap gap-2 text-sm font-semibold">
                         <button onClick={() => setConfirmVerif("rechazar")} disabled={!canEdit || operacionPago}
-                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-700 disabled:opacity-50">
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 max-md:min-h-11 text-red-700 disabled:opacity-50">
                           Rechazar
                         </button>
                         <button onClick={() => setModalFaltante(true)} disabled={!puedePedirFaltante}
-                          className="rounded-xl bg-violet-600 px-3 py-2 text-white disabled:opacity-50">
+                          className="rounded-xl bg-violet-600 px-3 py-2 max-md:min-h-11 text-white disabled:opacity-50">
                           Pedir dinero faltante{falta !== undefined && falta > 0 && ` (${fmtPago(falta)})`}
                         </button>
                         <button onClick={() => setConfirmVerif("aprobar")} disabled={!puedeAceptarPago}
-                          className="rounded-xl bg-emerald-600 px-3 py-2 text-white disabled:opacity-50">
+                          className="rounded-xl bg-emerald-600 px-3 py-2 max-md:min-h-11 text-white disabled:opacity-50">
                           {falta !== undefined && falta > 0 ? `Aún faltan ${fmtPago(falta)}` : "Aceptar"}
                         </button>
                       </div>
@@ -2860,7 +2917,7 @@ export function VentasScreen({
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <p className="font-bold text-foreground">Pedir dinero faltante</p>
-                <button onClick={() => setModalFaltante(false)} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                <button onClick={() => setModalFaltante(false)} className="p-1 max-md:p-3.5 max-md:-m-2.5 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -2873,14 +2930,14 @@ export function VentasScreen({
               <div className="flex gap-2 px-5 pb-5">
                 <button
                   onClick={() => setModalFaltante(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 py-2.5 max-md:min-h-11 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => pedirFaltante(detailItem.id)}
                   disabled={!puedePedirFaltante}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${puedePedirFaltante ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
+                  className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors ${puedePedirFaltante ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
                 >
                   Confirmar
                 </button>
@@ -2933,7 +2990,7 @@ export function VentasScreen({
                       </p>
                     </div>
                   </div>
-                  <button onClick={cerrarAnular} className="p-1 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
+                  <button onClick={cerrarAnular} className="p-1 max-md:p-3.5 max-md:-m-2.5 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -3052,14 +3109,14 @@ export function VentasScreen({
                 <div className="flex gap-2 px-5 pb-5">
                   <button
                     onClick={cerrarAnular}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={() => void anularVentaSeleccionada()}
                     disabled={!puedeConfirmarAnulacion}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${
+                    className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors ${
                       puedeConfirmarAnulacion
                         ? "bg-red-600 hover:bg-red-700 cursor-pointer"
                         : "bg-red-600/50 opacity-50 cursor-not-allowed"
@@ -3099,7 +3156,7 @@ export function VentasScreen({
                 </div>
                 <button
                   onClick={() => setFacturaVenta(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>

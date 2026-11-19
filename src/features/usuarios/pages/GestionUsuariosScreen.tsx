@@ -224,27 +224,54 @@ export function GestionUsuariosScreen({
     }
   };
 
-  const inputClass = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
+  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
+  // 768 px) para mostrar exactamente los mismos controles y handlers.
+  const estadoUsuario = (u: UsuarioGestion) => (canEdit ? <EstadoSelect value={u.estado ? "activo" : "inactivo"} disabled={Boolean(u.esSuperAdmin) || actualizando === u.id} onChange={v => void cambiarEstado(u, v === "activo")} options={[{ value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR }, { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR }]} /> : <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${u.estado ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{u.estado ? "Activo" : "Inactivo"}</span>);
+  const accionesUsuario = (u: UsuarioGestion) => (<ActionIcons onView={() => setDetail(u)} onEdit={canEdit ? () => editar(u) : undefined} editDisabled={Boolean(u.esSuperAdmin)} editTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Editar en Clientes o Empleados"} onDelete={canDelete ? () => setDeleteItem(u) : undefined} deleteDisabled={Boolean(u.esSuperAdmin)} deleteTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Eliminar usuario"} />);
+
+  const inputClass = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer max-md:w-full max-md:min-h-11";
   if (!canVer) return <div className="flex flex-col items-center justify-center py-32 px-6 text-center"><div className="text-6xl mb-4">🔒</div><h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2><p className="text-muted-foreground">No tienes permiso para ver Gestión Usuarios. Pide acceso al administrador.</p></div>;
 
   return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full max-md:h-auto flex flex-col overflow-hidden max-md:overflow-visible">
       <div className="mb-3 shrink-0"><h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1><p className="text-muted-foreground text-sm mt-0.5">Todas las personas registradas en el sistema</p></div>
       <div className="flex flex-wrap gap-3 mb-5 shrink-0">
         <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Buscar por nombre, correo, rol o documento..." wrapperClassName="w-full max-w-sm shrink-0" />
         <select value={filterRol} onChange={e => { setFilterRol(e.target.value); setPage(1); }} className={inputClass}><option value="todos">Todos los roles</option>{rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}</select>
         <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }} className={inputClass}><option value="todos">Todos los estados</option><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select>
       </div>
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
+      {/* Menos de 768 px: cada usuario como tarjeta (la acción principal queda fuera de vista en la tabla).
+          Reutiliza estadoUsuario y accionesUsuario, los mismos controles de la tabla. */}
+      <div className="md:hidden space-y-3 mb-2">
+        {cargando ? <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</div>
+          : errorCarga ? <div role="alert" className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">{errorCarga}<button className="underline ml-2 max-md:min-h-11 max-md:px-2" onClick={() => void cargarUsuarios()}>Reintentar</button></div>
+          : paginados.length === 0 ? <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p></div>
+          : paginados.map(u => (
+            <div key={u.id_usuario} className="bg-card border border-border rounded-2xl p-4">
+              <div className="flex items-start gap-3">
+                <div className={`w-10 h-10 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{u.iniciales}</div>
+                <div className="min-w-0 flex-1"><p className="text-base font-semibold text-foreground break-words">{u.nombre}</p><p className="text-xs font-mono text-muted-foreground">{fmtDoc(u.tipo_documento, String(u.id_usuario))}</p></div>
+                <div className="shrink-0">{estadoUsuario(u)}</div>
+              </div>
+              <dl className="grid grid-cols-1 gap-y-3 mt-3 text-sm">
+                <div className="min-w-0"><dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt><dd className="mt-0.5 text-muted-foreground break-all">{u.correo || "—"}</dd></div>
+                <div><dt className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Rol actual</dt><dd><RolesBadges usuario={u} /></dd></div>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesUsuario(u)}</div>
+            </div>
+          ))}
+      </div>
+      {/* Tabla: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
         <div className="overflow-x-auto"><table className="w-full min-w-[720px]"><thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider"><tr>{["Nombre", "Correo", "Rol actual", "Estado", "Acciones"].map(h => <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
           <tbody className="divide-y divide-border">
-            {cargando ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</td></tr> : errorCarga ? <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga}<button className="underline ml-2" onClick={() => void cargarUsuarios()}>Reintentar</button></td></tr> : paginados.length === 0 ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p></td></tr> : paginados.map(u => (
+            {cargando ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</td></tr> : errorCarga ? <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga}<button className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center underline ml-2" onClick={() => void cargarUsuarios()}>Reintentar</button></td></tr> : paginados.length === 0 ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p></td></tr> : paginados.map(u => (
               <tr key={u.id_usuario} className="hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-1.5"><div className="flex items-center gap-3"><div className={`w-9 h-9 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{u.iniciales}</div><div><p className="text-sm font-semibold text-foreground">{u.nombre}</p><p className="text-xs font-mono text-muted-foreground">{fmtDoc(u.tipo_documento, String(u.id_usuario))}</p></div></div></td>
                 <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo || "—"}</td>
                 <td className="px-4 py-1.5"><RolesBadges usuario={u} /></td>
-                <td className="px-4 py-1.5">{canEdit ? <EstadoSelect value={u.estado ? "activo" : "inactivo"} disabled={Boolean(u.esSuperAdmin) || actualizando === u.id} onChange={v => void cambiarEstado(u, v === "activo")} options={[{ value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR }, { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR }]} /> : <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${u.estado ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{u.estado ? "Activo" : "Inactivo"}</span>}</td>
-                <td className="px-4 py-1.5"><ActionIcons onView={() => setDetail(u)} onEdit={canEdit ? () => editar(u) : undefined} editDisabled={Boolean(u.esSuperAdmin)} editTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Editar en Clientes o Empleados"} onDelete={canDelete ? () => setDeleteItem(u) : undefined} deleteDisabled={Boolean(u.esSuperAdmin)} deleteTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Eliminar usuario"} /></td>
+                <td className="px-4 py-1.5">{estadoUsuario(u)}</td>
+                <td className="px-4 py-1.5">{accionesUsuario(u)}</td>
               </tr>
             ))}
           </tbody>
@@ -253,11 +280,11 @@ export function GestionUsuariosScreen({
       {filtrados.length > 0 && <Paginador pagina={paginaActual} totalPaginas={paginas} onCambio={setPage} />}
 
       <AnimatePresence>{detail && <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"><div className="flex min-h-full items-center justify-center p-4"><motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: .95, opacity: 0 }} className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border"><div><h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detail.nombre}</h3><p className="text-xs font-mono text-muted-foreground">{fmtDoc(detail.tipo_documento, String(detail.id_usuario))}</p></div><button onClick={() => setDetail(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button></div>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border"><div><h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detail.nombre}</h3><p className="text-xs font-mono text-muted-foreground">{fmtDoc(detail.tipo_documento, String(detail.id_usuario))}</p></div><button onClick={() => setDetail(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button></div>
         <div className="p-5 space-y-4"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{ label: "Correo", value: detail.correo }, { label: "Teléfono", value: detail.telefono }, { label: "Estado de cuenta", value: detail.estado ? "Activo" : "Inactivo" }, { label: "Roles", value: "" }].map(item => <div key={item.label}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{item.label}</p>{item.label === "Roles" ? <RolesChipsDetalle usuario={detail} /> : <p className="text-sm font-semibold text-foreground break-words">{item.value || "—"}</p>}</div>)}</div>
-          {canEdit && <button disabled={Boolean(detail.esSuperAdmin) || actualizando === detail.id} onClick={() => void cambiarEstado(detail, !detail.estado)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted disabled:opacity-50"><RefreshCw className="w-4 h-4" />{detail.estado ? "Desactivar usuario" : "Activar usuario"}</button>}
-          {canEdit && <button onClick={() => { const target = detail; setDetail(null); editar(target); }} disabled={Boolean(detail.esSuperAdmin)} className="w-full py-2.5 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-red-700 disabled:opacity-50">Editar en Clientes o Empleados</button>}
-          <button onClick={() => setDetail(null)} className="w-full py-2.5 rounded-xl text-sm font-semibold border border-border hover:bg-muted">Cerrar</button>
+          {canEdit && <button disabled={Boolean(detail.esSuperAdmin) || actualizando === detail.id} onClick={() => void cambiarEstado(detail, !detail.estado)} className="w-full flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted disabled:opacity-50"><RefreshCw className="w-4 h-4" />{detail.estado ? "Desactivar usuario" : "Activar usuario"}</button>}
+          {canEdit && <button onClick={() => { const target = detail; setDetail(null); editar(target); }} disabled={Boolean(detail.esSuperAdmin)} className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-red-700 disabled:opacity-50">Editar en Clientes o Empleados</button>}
+          <button onClick={() => setDetail(null)} className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border hover:bg-muted">Cerrar</button>
         </div>
       </motion.div></div></div>}</AnimatePresence>
       <AnimatePresence>{deleteItem && <ConfirmDeleteModal title="Eliminar usuario" message={<>¿Seguro que deseas eliminar a <strong className="text-foreground">{deleteItem.nombre}</strong>? Esta acción no se puede deshacer.</>} onConfirm={() => void eliminar()} onCancel={() => setDeleteItem(null)} />}</AnimatePresence>

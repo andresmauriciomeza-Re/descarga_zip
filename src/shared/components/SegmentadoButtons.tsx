@@ -70,7 +70,7 @@ export function SegmentadoButtons({
               onClick={() => !bloqueada && onChange(op.valor)}
               aria-pressed={elegida}
               disabled={bloqueada}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              className={`px-3 py-1.5 max-md:min-h-11 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap max-md:whitespace-normal max-md:leading-tight ${
                 fullWidth ? "w-full" : ""
               } ${
                 elegida

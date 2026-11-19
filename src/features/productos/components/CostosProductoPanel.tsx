@@ -50,7 +50,7 @@ export function CostosProductoPanel({
           {cargando ? "Cargando parámetros de costos..." : error ?? "No se pudieron cargar los parámetros de costos."}
         </p>
         {error && onReintentar && (
-          <button type="button" onClick={onReintentar} className="mt-2 text-primary underline">
+          <button type="button" onClick={onReintentar} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-2 text-primary underline">
             Reintentar
           </button>
         )}

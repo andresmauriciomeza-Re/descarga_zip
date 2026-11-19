@@ -17,12 +17,12 @@ interface PaginadorProps {
 export function Paginador({ pagina, totalPaginas, onCambio }: PaginadorProps) {
   if (totalPaginas <= 1) return null;
   return (
-    <div className="flex items-center justify-center gap-4 mt-4">
+    <div className="flex flex-wrap items-center justify-center gap-4 max-md:gap-2 mt-4">
       <button
         onClick={() => onCambio(Math.max(1, pagina - 1))}
         disabled={pagina === 1}
         aria-label="Página anterior"
-        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+        className="p-1.5 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -31,7 +31,7 @@ export function Paginador({ pagina, totalPaginas, onCambio }: PaginadorProps) {
           key={n}
           onClick={() => onCambio(n)}
           aria-current={n === pagina ? "page" : undefined}
-          className={`w-8 h-8 rounded-lg text-sm font-semibold cursor-pointer ${
+          className={`w-8 h-8 max-md:w-11 max-md:h-11 rounded-lg text-sm font-semibold cursor-pointer ${
             n === pagina
               ? "bg-primary text-white"
               : "hover:bg-muted text-muted-foreground"
@@ -44,7 +44,7 @@ export function Paginador({ pagina, totalPaginas, onCambio }: PaginadorProps) {
         onClick={() => onCambio(Math.min(totalPaginas, pagina + 1))}
         disabled={pagina === totalPaginas}
         aria-label="Página siguiente"
-        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+        className="p-1.5 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
       >
         <ChevronRight className="w-4 h-4" />
       </button>

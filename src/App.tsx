@@ -1207,7 +1207,7 @@ function PrimaryBtn({
   className?: string;
 }) {
   const s = {
-    sm: "px-4 py-2 text-sm min-h-[38px]",
+    sm: "px-4 py-2 text-sm min-h-[38px] max-md:min-h-11",
     md: "px-5 py-3 text-base min-h-[48px]",
     lg: "px-7 py-4 text-lg min-h-[56px]",
   }[size];
@@ -1342,7 +1342,7 @@ function Sidebar({
         </div>
         <button
           onClick={onClose}
-          className="ml-auto p-1 rounded text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
+          className="ml-auto p-1 max-md:min-w-11 max-md:min-h-11 max-md:flex max-md:items-center max-md:justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
           aria-label="Cerrar menú"
           title="Cerrar menú"
         >
@@ -1381,7 +1381,7 @@ function Sidebar({
                   <button
                     key={it.screen}
                     onClick={() => ir(it.screen)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 max-md:min-h-12 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                   >
                     <it.Icon className="w-4 h-4 shrink-0" />
                     <span>{it.label}</span>
@@ -1397,7 +1397,7 @@ function Sidebar({
             <div key={sec.key}>
               <button
                 onClick={() => toggle(sec.key)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer mt-2 ${groupActive ? "text-primary" : "text-sidebar-foreground/35 hover:text-sidebar-foreground/60"}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 max-md:min-h-12 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer mt-2 ${groupActive ? "text-primary" : "text-sidebar-foreground/35 hover:text-sidebar-foreground/60"}`}
               >
                 <sec.Icon className="w-4 h-4 shrink-0" />
                 <span className="flex-1 text-left">{sec.label}</span>
@@ -1412,7 +1412,7 @@ function Sidebar({
                     <button
                       key={it.screen}
                       onClick={() => ir(it.screen)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white font-semibold" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
+                      className={`w-full flex items-center gap-2 px-3 py-2 max-md:min-h-12 rounded-xl text-sm transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white font-semibold" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
                     >
                       <it.Icon className="w-3.5 h-3.5 shrink-0" />
                       <span>{it.label}</span>
@@ -1523,7 +1523,7 @@ function PublicNav({
           {/* Cart */}
           <button
             onClick={() => navigate("cart")}
-            className="relative inline-flex items-center gap-2 px-4 py-2.5 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
+            className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
             aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
@@ -1573,7 +1573,7 @@ function PublicNav({
           {/* Dark mode */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="w-10 h-10 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
+            className="w-10 h-10 max-md:w-11 max-md:h-11 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
             title="Cambiar tema"
             aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
           >
@@ -1647,9 +1647,17 @@ function AdminTopBar({
     "supply-categories": "Categorías de insumos",
     "product-categories": "Categorías de productos",
     profile: "Mi perfil",
+    "sales-chart": "Estadísticas",
+    "ventas-pedidos": "Gestión Ventas",
+    devoluciones: "Devoluciones",
+    clientes: "Clientes",
+    "gestion-roles": "Gestión de Roles",
+    "gestion-productos": "Gestión Producto",
+    "cat-producto": "Categoría Producto",
+    "recepcion-compra": "Recepción de compra",
   };
   return (
-    <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border h-14 flex items-center px-4 gap-2 shadow-sm">
+    <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border h-14 flex items-center px-4 max-[359px]:px-2 gap-2 max-md:gap-1 shadow-sm">
       <button
         ref={menuButtonRef}
         onClick={onToggleSidebar}
@@ -1660,17 +1668,18 @@ function AdminTopBar({
       >
         <Menu className="w-5 h-5" />
       </button>
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground ml-2 min-w-0 overflow-hidden">
+      <div className="flex items-center gap-1.5 text-sm max-[399px]:text-xs text-muted-foreground ml-2 max-md:ml-0 min-w-0 overflow-hidden">
         <button
           onClick={() => navigate(homeScreen)}
-          className="hover:text-foreground transition-colors cursor-pointer shrink-0"
+          className={`hover:text-foreground transition-colors cursor-pointer max-md:min-h-11 max-md:min-w-11 ${current !== homeScreen ? "shrink-0 max-md:hidden" : "min-w-0 truncate max-md:block max-md:text-left max-md:leading-[2.75rem]"}`}
+          title={current === homeScreen ? (homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO) : undefined}
         >
           {homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO}
         </button>
         {current !== homeScreen && (
           <>
-            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-foreground font-medium min-w-0 truncate">
+            <ChevronRight className="w-3.5 h-3.5 shrink-0 max-md:hidden" />
+            <span className="text-foreground font-medium min-w-0 truncate max-md:whitespace-normal max-md:line-clamp-2 max-md:leading-tight" title={labels[current] ?? current}>
               {labels[current] ?? current}
             </span>
           </>
@@ -1707,7 +1716,7 @@ function AdminTopBar({
           )}
         </button>
         <div
-          className="ml-3 flex items-center gap-2 cursor-pointer"
+          className="ml-3 flex items-center gap-2 cursor-pointer max-md:min-w-11 max-md:min-h-11 max-md:justify-center"
           onClick={() => navigate("profile")}
           role="button"
           tabIndex={0}
@@ -2167,7 +2176,7 @@ function LandingScreen({
             </h2>
             <button
               onClick={() => navigate("catalog")}
-              className="text-[#DC2626] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0"
+              className="text-[#DC2626] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0 max-md:min-h-11"
             >
               Ver todas <ArrowRight className="w-4 h-4" />
             </button>
@@ -2340,7 +2349,7 @@ function LandingScreen({
                               onOpenDetail(favorita);
                             }}
                             size="sm"
-                            className="w-full"
+                            className="w-full max-md:min-h-11"
                           >
                             Ver detalle
                           </PrimaryBtn>
@@ -2760,7 +2769,7 @@ function CantidadInput({
         if (ajustada !== value) onChange(ajustada);
       }}
       onBlur={() => setTexto(null)}
-      className="w-12 text-center text-sm font-bold bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+      className="w-12 text-center text-sm max-md:text-base max-md:min-h-11 font-bold bg-transparent focus:outline-none focus:ring-2 focus:ring-primary/40 rounded-lg py-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
     />
   );
 }
@@ -2937,7 +2946,7 @@ function ProductCard({
                     ? `${p.name} agotado`
                     : `Agregar ${p.name} al carrito`
               }
-              className="flex items-center justify-center min-w-[40px] min-h-[40px] p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer motion-reduce:active:scale-100"
+              className="flex items-center justify-center min-w-[40px] min-h-[40px] max-md:min-w-11 max-md:min-h-11 p-2 bg-primary text-white rounded-xl hover:bg-red-700 transition-colors active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer motion-reduce:active:scale-100"
             >
               <ShoppingCart className="w-4 h-4" />
             </button>
@@ -2949,7 +2958,7 @@ function ProductCard({
             onOpen(p);
           }}
           size="sm"
-          className="w-full mt-3"
+          className="w-full mt-3 max-md:min-h-11"
         >
           Ver detalle
         </PrimaryBtn>
@@ -3119,7 +3128,7 @@ function CatalogScreen({
     <div className="relative min-h-[calc(100dvh-80px)]">
       <div
         aria-hidden="true"
-        className="absolute inset-0 z-0 bg-fixed"
+        className="absolute inset-0 z-0 bg-fixed dark:brightness-[0.2]"
         style={{
           backgroundImage: `url(${fondoMenu})`,
           backgroundSize: "cover",
@@ -3161,7 +3170,7 @@ function CatalogScreen({
               setCategoria("Todas");
               setPage(1);
             }}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
+            className={`px-4 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === "Todas" ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
             Todas
           </button>
           {filtros.map((c) => (
@@ -3171,7 +3180,7 @@ function CatalogScreen({
                 setCategoria(c.id);
                 setPage(1);
               }}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
+              className={`px-4 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold transition-all cursor-pointer ${cat === c.id ? "bg-primary text-white shadow" : "bg-muted text-muted-foreground hover:bg-border"}`}>
               {c.nombre}
             </button>
           ))}
@@ -3212,12 +3221,12 @@ function CatalogScreen({
           Mostrando {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filtered.length)} de {filtered.length} producto{filtered.length === 1 ? "" : "s"}
         </p>
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => irAPagina(Math.max(1, page - 1))}
               disabled={page === 1}
               aria-label="Página anterior"
-              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] max-md:min-h-11 rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
               <ChevronLeft className="w-4 h-4" />
               Anterior
@@ -3228,7 +3237,7 @@ function CatalogScreen({
                   key={n}
                   onClick={() => irAPagina(n)}
                   aria-current={n === page ? "page" : undefined}
-                  className={`w-10 h-10 min-h-[40px] min-w-[40px] rounded-lg text-sm font-semibold cursor-pointer ${n === page
+                  className={`w-10 h-10 min-h-[40px] min-w-[40px] max-md:w-11 max-md:h-11 rounded-lg text-sm font-semibold cursor-pointer ${n === page
                       ? "bg-primary text-white"
                       : "border border-border text-muted-foreground hover:bg-muted"
                     }`}
@@ -3241,7 +3250,7 @@ function CatalogScreen({
               onClick={() => irAPagina(Math.min(totalPages, page + 1))}
               disabled={page === totalPages}
               aria-label="Página siguiente"
-              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
+              className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] max-md:min-h-11 rounded-lg border border-border text-sm font-semibold cursor-pointer hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed text-foreground"
             >
               Siguiente
               <ChevronRight className="w-4 h-4" />
@@ -3398,7 +3407,7 @@ function ProductDetailScreen({
     <div className="relative min-h-[calc(100dvh-80px)]">
       <div
         aria-hidden="true"
-        className="absolute inset-0 z-0 bg-fixed"
+        className="absolute inset-0 z-0 bg-fixed dark:brightness-[0.2]"
         style={{
           backgroundImage: `url(${fondoMenu})`,
           backgroundSize: "cover",
@@ -3410,7 +3419,7 @@ function ProductDetailScreen({
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="flex items-center gap-2 max-md:min-h-11 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> {backLabel}
         </button>
@@ -3619,7 +3628,7 @@ function ProductDetailScreen({
                   onClick={() =>
                     setQty((q) => Math.max(1, q - 1))
                   }
-                  className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm"
+                  className="w-9 h-9 max-md:w-11 max-md:h-11 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
@@ -3643,7 +3652,7 @@ function ProductDetailScreen({
                         ? mensajeMax
                         : "Aumentar cantidad"
                   }
-                  className="w-9 h-9 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-9 h-9 max-md:w-11 max-md:h-11 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
@@ -4273,7 +4282,7 @@ function CartScreen({
       <div className="max-w-5xl mx-auto px-4 py-8">
         <button
           onClick={() => navigate("catalog")}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 cursor-pointer"
+          className="flex items-center gap-2 max-md:min-h-11 text-muted-foreground hover:text-foreground mb-6 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Seguir comprando
         </button>
@@ -4352,18 +4361,18 @@ function CartScreen({
                       </div>
                       <button
                         onClick={() => remove(item.id)}
-                        className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1"
+                        className="text-muted-foreground hover:text-red-500 transition-colors cursor-pointer p-1 max-md:p-3.5 max-md:-m-2.5"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between mt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mt-3">
                       <div className="flex items-center gap-2 bg-muted rounded-xl p-0.5">
                         <button
                           onClick={() =>
                             updateQty(item.id, item.quantity - 1)
                           }
-                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
+                          className="w-7 h-7 max-md:w-11 max-md:h-11 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -4389,12 +4398,12 @@ function CartScreen({
                                 ? mensajeMax
                                 : "Aumentar cantidad"
                           }
-                          className="w-7 h-7 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-7 h-7 max-md:w-11 max-md:h-11 rounded-lg bg-card flex items-center justify-center hover:bg-border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
-                      <div className="flex items-center justify-end gap-6">
+                      <div className="flex items-center justify-end gap-6 max-md:gap-4 ml-auto">
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground">Precio unitario</p>
                           <p className="text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
@@ -4515,7 +4524,7 @@ function CartScreen({
                   </h3>
                   <button
                     onClick={() => setCheckoutStep(0)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -4667,7 +4676,7 @@ function CartScreen({
                               `${String(nuevaHora).padStart(2, "0")}:${String(minutoActual).padStart(2, "0")}`,
                             );
                           }}
-                          className="flex-1 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                          className="flex-1 max-md:min-h-11 max-md:-my-2.5 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                         >
                           <option value="" disabled>
                             --:--
@@ -4696,7 +4705,7 @@ function CartScreen({
                               ).padStart(2, "0")}`,
                             );
                           }}
-                          className="w-14 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                          className="w-14 max-md:min-h-11 max-md:-my-2.5 bg-transparent text-sm text-foreground focus:outline-none cursor-pointer disabled:cursor-not-allowed"
                         >
                           <option value="" disabled>
                             --
@@ -4739,7 +4748,7 @@ function CartScreen({
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
                   <button
                     onClick={() => setCheckoutStep(0)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     Cancelar
                   </button>
@@ -4765,7 +4774,7 @@ function CartScreen({
                       setCheckoutStep(2);
                     }}
                     disabled={sinHorariosHoy}
-                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${sinHorariosHoy
+                    className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 flex items-center justify-center gap-2 ${sinHorariosHoy
                         ? "opacity-50 cursor-not-allowed"
                         : "cursor-pointer"
                       }`}
@@ -4939,7 +4948,7 @@ function CartScreen({
                   </div>
                   <button
                     onClick={() => setCheckoutStep(0)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -4965,14 +4974,14 @@ function CartScreen({
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
                   <button
                     onClick={() => setCheckoutStep(1)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     Atrás
                   </button>
                   <button
                     onClick={handleConfirm}
                     disabled={loading}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {loading ? (
                       <RefreshCw className="w-4 h-4 animate-spin" />
@@ -5129,7 +5138,7 @@ function ClientProfileScreen({
             <button
               onClick={onReintentarPerfil}
               disabled={perfilCargando}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
+              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
             >
               <RefreshCw className="w-3.5 h-3.5" aria-hidden />
               Reintentar
@@ -5158,7 +5167,7 @@ function ClientProfileScreen({
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={() => setShowCambiarContrasena(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
               >
                 <KeyRound className="w-4 h-4" />
                 Cambiar contraseña
@@ -5170,7 +5179,7 @@ function ClientProfileScreen({
                   setErrores({});
                   setEditando(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
               >
                 <Pencil className="w-4 h-4" /> Editar
               </button>
@@ -5181,7 +5190,7 @@ function ClientProfileScreen({
               <button
                 disabled
                 title="Termina de editar tu perfil primero"
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl opacity-60 cursor-not-allowed shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl opacity-60 cursor-not-allowed shrink-0"
               >
                 <KeyRound className="w-4 h-4" />
                 Cambiar contraseña
@@ -5302,14 +5311,14 @@ function ClientProfileScreen({
                   setEditando(false);
                   setErrores({});
                 }}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" /> Cancelar
               </button>
               <button
                 onClick={() => void handleGuardar()}
                 disabled={guardando}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
               >
                 <Check className="w-4 h-4" /> {guardando ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -5318,21 +5327,21 @@ function ClientProfileScreen({
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <button
                 onClick={() => navigate("catalog")}
-                className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" /> Volver al Menú
               </button>
               {isStaff && (
                 <button
                   onClick={() => navigate(adminHomeScreen)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
                 >
                   <ShieldCheck className="w-4 h-4" /> Ir a Administración
                 </button>
               )}
               <button
                 onClick={onLogout}
-                className="flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
+                className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
               >
                 <LogOut className="w-4 h-4" /> Cerrar sesión
               </button>
@@ -5568,12 +5577,12 @@ function AceptacionTerminos({ aceptados, onChange, error, inputRef }: {
   const id = useId();
   return (
     <div>
-      <div className="flex items-start gap-2 text-sm text-foreground dark:text-white">
+      <div className="flex items-start max-md:items-center gap-2 text-sm text-foreground dark:text-white">
         <input id={id} ref={inputRef} type="checkbox" checked={aceptados} onChange={(e) => onChange(e.target.checked)}
           aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
-          className="mt-1 accent-primary" />
-        <span><label htmlFor={id}>Acepto los </label>
-          <button type="button" onClick={() => setAbierto(true)} className="text-primary font-semibold underline cursor-pointer">términos y condiciones</button>
+          className="mt-1 max-md:mt-0 max-md:w-6 max-md:h-6 accent-primary" />
+        <span className="max-md:flex max-md:flex-wrap max-md:items-center"><label htmlFor={id} className="max-md:inline-flex max-md:items-center max-md:min-h-11">Acepto los&nbsp;</label>
+          <button type="button" onClick={() => setAbierto(true)} className="text-primary font-semibold underline cursor-pointer max-md:min-h-11">términos y condiciones</button>
         </span>
       </div>
       <MensajeError id={`${id}-error`} err={error} />
@@ -5582,7 +5591,7 @@ function AceptacionTerminos({ aceptados, onChange, error, inputRef }: {
           <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-2xl">
             <div className="flex justify-between gap-4 mb-4">
               <h2 id={`${id}-titulo`} className="font-bold text-foreground">{TITULO_TERMINOS}</h2>
-              <button type="button" onClick={() => setAbierto(false)} aria-label="Cerrar términos y condiciones" className="p-1 text-muted-foreground"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={() => setAbierto(false)} aria-label="Cerrar términos y condiciones" className="p-1 max-md:p-3.5 max-md:-m-2.5 text-muted-foreground"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3 text-sm text-foreground">{TERMINOS_CONDICIONES.map((texto) => <p key={texto}>{texto}</p>)}</div>
           </div>
@@ -5904,7 +5913,7 @@ function LoginScreen({
             <button
               type="button"
               onClick={() => setShowForgot(true)}
-              className="text-sm text-primary font-medium hover:underline cursor-pointer"
+              className="text-sm text-primary font-medium hover:underline cursor-pointer max-md:inline-flex max-md:items-center max-md:min-h-11"
             >
               ¿Olvidaste tu contraseña?
             </button>
@@ -5958,7 +5967,7 @@ function LoginScreen({
           {"¿No tienes cuenta? "}
           <button
             onClick={() => navigate("register")}
-            className="text-primary font-semibold hover:underline cursor-pointer"
+            className="text-primary font-semibold hover:underline cursor-pointer max-md:inline-block max-md:py-3 max-md:-my-3"
           >
             Regístrate aquí
           </button>
@@ -6161,7 +6170,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               onClick={onClose}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
               Volver al inicio de sesión
             </button>
@@ -6204,7 +6213,7 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
             <PasoNuevaContrasena onGuardar={cambiarPassword} />
             <button
               onClick={onClose}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
               Volver a iniciar sesión
             </button>
@@ -6758,7 +6767,7 @@ function RegisterScreen({
         <PrimaryBtn
           onClick={register}
           size="md"
-          className="w-full mt-2 h-10 min-h-0!"
+          className="w-full mt-2 h-10 max-md:h-11 min-h-0!"
           disabled={loading || !formValido}
         >
           {loading ? (
@@ -6773,7 +6782,7 @@ function RegisterScreen({
           {"¿Ya tienes cuenta? "}
           <button
             onClick={() => navigate("login")}
-            className="text-primary font-semibold hover:underline cursor-pointer"
+            className="text-primary font-semibold hover:underline cursor-pointer max-md:inline-block max-md:py-3 max-md:-my-3"
           >
             Ingresar
           </button>
@@ -7461,7 +7470,7 @@ function OrdersScreen({
                             onClick={() =>
                               updateStatus(order.id, s)
                             }
-                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${order.status === s ? STATUS_COLOR[s] + " ring-2 ring-offset-1 ring-current" : "bg-muted text-muted-foreground hover:bg-border"}`}
+                            className={`px-3 py-1.5 max-md:min-h-11 rounded-xl text-xs font-semibold transition-all cursor-pointer ${order.status === s ? STATUS_COLOR[s] + " ring-2 ring-offset-1 ring-current" : "bg-muted text-muted-foreground hover:bg-border"}`}
                           >
                             {STATUS_LABEL[s]}
                           </button>
@@ -10227,7 +10236,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground"
+      className={`min-h-screen bg-background text-foreground${isAdmin ? "" : " app-publica"}`}
       style={{ fontFamily: "var(--font-texto)" }}
     >
       <Toaster
@@ -10237,6 +10246,8 @@ export default function App() {
         toastOptions={{
           // Todas las alertas del sistema (landing y panel) duran 2 segundos.
           duration: 2000,
+          // En celular el botón de acción del toast ("Ver carrito") llega a 44 px.
+          classNames: { actionButton: "max-md:!h-11 max-md:!px-4 max-md:!text-sm" },
           style: {
             fontFamily: "var(--font-texto)",
             fontSize: "15px",
@@ -10362,7 +10373,7 @@ export default function App() {
                     type="button"
                     onClick={() => void recargarCatalogo().catch(() => { })}
                     disabled={catalogoCargando}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
+                    className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${catalogoCargando ? "animate-spin" : ""}`} />
                     {catalogoCargando ? "Reintentando…" : "Reintentar"}

@@ -80,7 +80,7 @@ export function ParametrosCostosModal({
   };
 
   const clsInput =
-    "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full rounded-lg border border-border bg-background px-3 py-2 max-md:min-h-11 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" role="presentation">
@@ -99,7 +99,7 @@ export function ParametrosCostosModal({
               Estos valores se usan para estimar la mano de obra, el gas y el precio recomendado.
             </p>
           </div>
-          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="rounded-lg p-2 hover:bg-muted">
+          <button type="button" onClick={onCerrar} aria-label="Cerrar" className="rounded-lg p-2 max-md:p-3.5 max-md:-m-1.5 hover:bg-muted">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -107,7 +107,7 @@ export function ParametrosCostosModal({
         {error && (
           <div className="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
             <p>{error}</p>
-            <button type="button" onClick={onReintentar} className="mt-2 font-semibold underline">
+            <button type="button" onClick={onReintentar} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-2 font-semibold underline">
               Reintentar carga
             </button>
           </div>
@@ -155,13 +155,13 @@ export function ParametrosCostosModal({
           )}
 
           <div className="mt-5 flex justify-end gap-3">
-            <button type="button" onClick={onCerrar} className="rounded-xl border border-border px-4 py-2 text-sm font-semibold">
+            <button type="button" onClick={onCerrar} className="rounded-xl border border-border px-4 py-2 max-md:min-h-11 text-sm font-semibold">
               Cerrar
             </button>
             <button
               type="submit"
               disabled={cargando || !parametros || guardando || !puedeEditar}
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-xl bg-primary px-4 py-2 max-md:min-h-11 text-sm font-semibold text-white disabled:opacity-50"
             >
               {guardando ? "Guardando..." : "Guardar parámetros"}
             </button>

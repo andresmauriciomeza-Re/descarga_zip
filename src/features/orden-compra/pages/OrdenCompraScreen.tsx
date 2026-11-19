@@ -297,7 +297,7 @@ const FORM_MAXW_PAGINA = "max-w-[1200px]";
 /** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
  *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */
 const iPaginaCls =
-  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 /** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
  *  que el formulario Nuevo Proveedor. */
 const seccionCls =
@@ -503,7 +503,7 @@ function EstadoBadge({ e }: { e: EstadoOrden }) {
   );
 }
 
-const iCls = "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ��������� CONFIRM MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -546,7 +546,7 @@ export function ConfirmModal({
               value={motivo || ""}
               onChange={e => onMotivoChange?.(e.target.value)}
               placeholder="Escribe el motivo de la anulación..."
-              className="w-full px-3 py-2 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+              className="w-full px-3 py-2 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
               rows={3}
             />
             {/* Punto 6: aviso permanente mientras el motivo siga vacío. */}
@@ -561,7 +561,7 @@ export function ConfirmModal({
           <button
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+            className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
           >
             Cancelar
           </button>
@@ -569,7 +569,7 @@ export function ConfirmModal({
             onClick={onConfirm}
             disabled={motivoVacio || loading}
             aria-disabled={motivoVacio || loading}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors ${
+            className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors ${
               motivoVacio
                 ? "bg-red-300 cursor-not-allowed"
                 : "cursor-pointer active:scale-95 " + (danger ? "bg-red-600 hover:bg-red-700" : "bg-primary hover:bg-red-700")
@@ -699,7 +699,7 @@ export function NuevoProveedorModal({
               }}
               error={form.obtenerError("tipoPersona")}
             />
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+            <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -710,7 +710,7 @@ export function NuevoProveedorModal({
           <ProveedorFormCampos form={form} />
         </div>
         <div className="flex justify-end gap-3 px-4 sm:px-6 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="px-5 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+          <button onClick={onClose} className="px-5 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
           <button
@@ -718,7 +718,7 @@ export function NuevoProveedorModal({
             // Fase 2: habilitado siempre; si hay errores, `submit` los pinta y
             // enfoca el primero en lugar de guardar.
             disabled={guardando}
-            className="px-5 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+            className="px-5 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Proveedor"}
           </button>
@@ -1306,7 +1306,7 @@ export function OrdenModal({
                   <button
                     onClick={salir}
                     title="Volver"
-                    className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                    className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
@@ -1328,7 +1328,7 @@ export function OrdenModal({
               <div className="flex items-center gap-2 shrink-0">
                 {isView && orden && <EstadoBadge e={orden.estado} />}
                 {!isPage && (
-                  <button onClick={salir} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  <button onClick={salir} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -1353,19 +1353,19 @@ export function OrdenModal({
               >
               {/* Status banners */}
               {isView && orden?.estado === "Completado" && orden.recepcion && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   Recepción guardada el <strong className="ml-1">{orden.recepcion.fechaRecepcion}</strong>. Esta orden ya no es editable.
                 </div>
               )}
               {isView && orden?.estado === "Enviado" && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   Orden enviada al proveedor. Pendiente de Recepción.
                 </div>
               )}
               {isView && orden?.estado === "Anulado" && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <Ban className="w-4 h-4 shrink-0" />
                   Esta orden ha sido anulada.
                 </div>
@@ -1870,14 +1870,14 @@ export function OrdenModal({
                     <div className="flex gap-3 shrink-0 pt-1">
                       <button
                         onClick={salir}
-                        className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                        className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                       >
                         Cancelar
                       </button>
                       <button
                         onClick={handleGuardar}
                         disabled={!formValido || guardando}
-                        className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                        className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                       >
                         <Check className="w-4 h-4" />
                         {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
@@ -1895,14 +1895,14 @@ export function OrdenModal({
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
                   onClick={salir}
-                  className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleGuardar}
                   disabled={!formValido || guardando}
-                  className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
                   {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
@@ -2215,7 +2215,7 @@ function RecepcionModal({
                   OC {orden.id} · {orden.proveedor} · Fecha: {today}
                 </p>
               </div>
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+              <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -2223,7 +2223,7 @@ function RecepcionModal({
             <div className="px-5 py-5 space-y-5">
               {/* Mal estado banner */}
               {hayMal && (
-                <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                <div className="flex items-center gap-3 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>
                     Hay insumos marcados en <strong>mal estado</strong>. Puede anular la OC o continuar con Recepción parcial.
@@ -2269,7 +2269,7 @@ function RecepcionModal({
                                 value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
                                 placeholder="0"
                                 onChange={e => updRec(item.rowId, numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                                className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-20 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
                             <td className="px-3 py-2.5 text-xs text-muted-foreground">{item.unidad}</td>
@@ -2280,7 +2280,7 @@ function RecepcionModal({
                                 value={item.costoUnitario === 0 ? "" : item.costoUnitario}
                                 placeholder="0"
                                 onChange={e => updPrice(item.rowId, numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                                className="w-28 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-28 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
                             <td className="px-3 py-2.5 text-sm font-semibold">
@@ -2364,7 +2364,7 @@ function RecepcionModal({
                       onChange={e => { setExNombre(e.target.value); setExShowSug(true); }}
                       onFocus={() => setExShowSug(true)}
                       placeholder="Buscar insumo..."
-                      className="pl-7 pr-2 py-2 w-44 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      className="pl-7 pr-2 py-2 max-md:min-h-11 w-44 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                     />
                     {exShowSug && exSugs.length > 0 && (
                       <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-xl shadow-xl z-30 overflow-hidden">
@@ -2396,12 +2396,12 @@ function RecepcionModal({
                     value={exCant === 0 ? "" : exCant}
                     onChange={e => setExCant(numeroDeInput(limpiarNumeroInput(e.target.value)))}
                     placeholder="Cant."
-                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-16 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                   <select
                     value={exUnidad}
                     onChange={e => setExUnidad(e.target.value)}
-                    className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none cursor-pointer"
+                    className="w-16 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm focus:outline-none cursor-pointer"
                   >
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
@@ -2409,7 +2409,7 @@ function RecepcionModal({
                     type="number" value={exPrecio || ""}
                     onChange={e => setExPrecio(Number(e.target.value))}
                     placeholder="P. unit."
-                    className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    className="w-24 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                   <button
                     onClick={addExtra}
@@ -2477,13 +2477,13 @@ function RecepcionModal({
             <div className="flex gap-3 px-5 py-4 border-t border-border">
               <button
                 onClick={onClose}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
+                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => setShowGuardarConf(true)}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 inline-flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 inline-flex items-center justify-center gap-2"
               >
                 <Check className="w-4 h-4" /> Guardar Recepción
               </button>
@@ -2907,7 +2907,7 @@ export function OrdenCompraScreen({
               onClick={(e) => {
                 onNuevaOrden();
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" /> Crear Orden
             </button>
@@ -2921,7 +2921,7 @@ export function OrdenCompraScreen({
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           placeholder="Buscar por Nº orden, proveedor, NIT, factura o estado…"
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full pl-10 pr-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
 
@@ -2943,7 +2943,7 @@ export function OrdenCompraScreen({
             <button
               type="button"
               onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
             >
               Reintentar
             </button>
@@ -3058,7 +3058,7 @@ export function OrdenCompraScreen({
                               historial={o.historialEstados ?? []}
                               estadoColors={ESTADO_CONFIG}
                             >
-                              <button type="button" className="text-[11px] text-primary hover:underline">
+                              <button type="button" className="text-[11px] text-primary hover:underline max-md:min-h-11 max-md:px-1">
                                 Ver historial
                               </button>
                             </EstadoHistorialTooltip>
@@ -3148,7 +3148,7 @@ export function OrdenCompraScreen({
                     )}
 
                     {/* Total, facturado y por facturar */}
-                    <div className="mt-2.5 rounded-xl bg-muted/50 border border-border px-3 py-2 space-y-1">
+                    <div className="mt-2.5 rounded-xl bg-muted/50 border border-border px-3 py-2 max-md:min-h-11 space-y-1">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-xs text-muted-foreground">Total</span>
                         <span className="text-sm font-semibold text-foreground">{fmtCOP(totalOrden)}</span>
@@ -3188,7 +3188,7 @@ export function OrdenCompraScreen({
                         historial={o.historialEstados ?? []}
                         estadoColors={ESTADO_CONFIG}
                       >
-                        <button type="button" className="text-[11px] text-primary hover:underline">
+                        <button type="button" className="text-[11px] text-primary hover:underline max-md:min-h-11 max-md:px-1">
                           Ver historial
                         </button>
                       </EstadoHistorialTooltip>
@@ -3201,7 +3201,7 @@ export function OrdenCompraScreen({
                       <button
                         onClick={() => onVerDetalle(o)}
                         title="Ver detalle"
-                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                        className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -3209,7 +3209,7 @@ export function OrdenCompraScreen({
                         <button
                           onClick={() => onEditarOrden(o)}
                           title="Editar orden"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          className={`${CLASE_BASE} max-md:p-3.5 ${CLASE_HOVER}`}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -3218,7 +3218,7 @@ export function OrdenCompraScreen({
                         <button
                           onClick={() => onAbrirRecepcion?.(o)}
                           title="Registrar recepción"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 max-md:min-h-11 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
                         >
                           <ClipboardCheck className="w-3.5 h-3.5" /> OC
                         </button>
@@ -3445,7 +3445,7 @@ export function NuevoInsumoModal({
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Insumo</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del insumo para agregarlo a la orden.</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+          <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -3535,13 +3535,13 @@ export function NuevoInsumoModal({
           </div>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-border">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+          <button onClick={onClose} className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
           <button
             onClick={() => void submit()}
             disabled={!formValido || guardando}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Insumo"}
           </button>
@@ -3639,7 +3639,7 @@ function OrdenDetallePageContenido({
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
         <button
           onClick={onBack}
-          className="p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="p-2.5 max-md:p-3 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           title="Volver"
         >
           <ArrowLeft className="w-5 h-5" />

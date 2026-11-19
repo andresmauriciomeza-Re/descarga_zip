@@ -578,9 +578,9 @@ export function GestionEmpleadosScreen({
     }
   };
 
-  const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
+  const iCls = "px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
   const fCls = (err?: string) =>
-    `w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
+    `w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
 
   // Empleado elegido en el modal "Nueva contratación". Si es Gloria, su
   // selector de Estado queda deshabilitado con el tooltip del super
@@ -589,6 +589,63 @@ export function GestionEmpleadosScreen({
     ? empleados.find(e => e.id === ctrEmpleadoId) ?? null
     : null;
   const ctrEsSuperAdmin = !!ctrEmpleado && esSuperAdmin(ctrEmpleado);
+
+  // Piezas de una fila de empleado. Las usan la tabla (desde 768 px) y las tarjetas
+  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
+  const celdaEmp = (e: Empleado) => {
+    const rol = rolInfo(e.rolIds?.[0] ?? "");
+    const tienePerfilCliente = clientes.some(c =>
+      c.correo.trim().toLowerCase() === e.correo.trim().toLowerCase()
+    );
+    return (<div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full ${e.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                          {e.iniciales}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{e.nombre}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs font-mono text-muted-foreground">{fmtDoc(e.tipoDocumento, e.numeroDocumento)}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 ${rol && !rol.activo ? "opacity-50" : ""}`}>
+                              {tienePerfilCliente ? "Cliente/Empleado" : "Empleado"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>);
+  };
+  const estadoEmp = (e: Empleado) => (<span title={esSuperAdmin(e) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
+                        <EstadoSelect
+                          value={e.activo ? "activo" : "inactivo"}
+                          disabled={esSuperAdmin(e)}
+                          onChange={nuevoEstado => {
+                            if ((nuevoEstado === "activo") === e.activo) return;
+                            toggleEstado(e.id);
+                          }}
+                          options={[
+                            { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                            { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                          ]}
+                        />
+                      </span>);
+  const accionesEmp = (e: Empleado) => (<div className="flex items-center gap-1">
+                        {/* Reenviar invitación: solo para quien aún no activa su
+                            cuenta (crea un token nuevo y manda el correo otra vez). */}
+                        {invitacionesPendientes.has(e.numeroDocumento) && (
+                          <button
+                            type="button"
+                            title="Reenviar invitación"
+                            aria-label="Reenviar invitación"
+                            disabled={reenviando === e.numeroDocumento}
+                            onClick={() => void reenviarInvitacionDe(e)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                        <ActionIcons
+                          onView={() => setDetailItem(e)}
+                          onEdit={() => { setEditItem({ ...e }); setEditErrors({}); }}
+                        />
+                      </div>);
 
   return (
     <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
@@ -599,16 +656,16 @@ export function GestionEmpleadosScreen({
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Empleados</h1>
           <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo empleado en La Sirena</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 sm:justify-end">
           <button
             onClick={() => { resetContratacion(); setShowContrat(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
           >
             <Briefcase className="w-4 h-4" /> Nueva contratación
           </button>
           <button
             onClick={() => { resetCreate(); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
           >
             <UserPlus className="w-4 h-4" /> Crear empleado
           </button>
@@ -649,10 +706,38 @@ export function GestionEmpleadosScreen({
       ) : errorCarga ? (
         <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-2 shrink-0">
           <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
-          <button onClick={() => void cargarEmpleados()} className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reintentar</button>
+          <button onClick={() => void cargarEmpleados()} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reintentar</button>
         </div>
       ) : (
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
+      <>
+      {/* Menos de 768 px: cada empleado como tarjeta. Reutiliza las mismas piezas
+          y controles de la tabla (celdaEmp, estadoEmp, accionesEmp…). */}
+      <div className="md:hidden space-y-3 mb-2">
+        {paged.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p className="text-4xl mb-3">👥</p><p>No se encontraron empleados</p>
+          </div>
+        ) : (
+          paged.map((e) => (
+            <div key={e.id} className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">{celdaEmp(e)}</div>
+                <div className="shrink-0">{estadoEmp(e)}</div>
+              </div>
+              <dl className="mt-3 text-sm">
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt>
+                <dd className="mt-0.5 text-muted-foreground break-all">{e.correo}</dd>
+                <dt className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">Cargo</dt>
+                <dd className="mt-0.5 text-muted-foreground">{chipsCargos(e.rolIds)}</dd>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesEmp(e)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabla: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -668,27 +753,10 @@ export function GestionEmpleadosScreen({
                   <p className="text-4xl mb-3">👥</p><p>No se encontraron empleados</p>
                 </td></tr>
               ) : paged.map(e => {
-                const rol = rolInfo(e.rolIds?.[0] ?? "");
-                const tienePerfilCliente = clientes.some(c =>
-                  c.correo.trim().toLowerCase() === e.correo.trim().toLowerCase()
-                );
                 return (
                   <tr key={e.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full ${e.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {e.iniciales}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{e.nombre}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-xs font-mono text-muted-foreground">{fmtDoc(e.tipoDocumento, e.numeroDocumento)}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 ${rol && !rol.activo ? "opacity-50" : ""}`}>
-                              {tienePerfilCliente ? "Cliente/Empleado" : "Empleado"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                      {celdaEmp(e)}
                     </td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
                     <td className="px-4 py-1.5 text-sm text-muted-foreground">{chipsCargos(e.rolIds)}</td>
@@ -698,42 +766,10 @@ export function GestionEmpleadosScreen({
                           P7: para Gloria el pill queda deshabilitado con el
                           tooltip que explica el motivo, igual que en
                           GestionUsuariosScreen. */}
-                      <span title={esSuperAdmin(e) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
-                        <EstadoSelect
-                          value={e.activo ? "activo" : "inactivo"}
-                          disabled={esSuperAdmin(e)}
-                          onChange={nuevoEstado => {
-                            if ((nuevoEstado === "activo") === e.activo) return;
-                            toggleEstado(e.id);
-                          }}
-                          options={[
-                            { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                            { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                          ]}
-                        />
-                      </span>
+                      {estadoEmp(e)}
                     </td>
                     <td className="px-4 py-1.5">
-                      <div className="flex items-center gap-1">
-                        {/* Reenviar invitación: solo para quien aún no activa su
-                            cuenta (crea un token nuevo y manda el correo otra vez). */}
-                        {invitacionesPendientes.has(e.numeroDocumento) && (
-                          <button
-                            type="button"
-                            title="Reenviar invitación"
-                            aria-label="Reenviar invitación"
-                            disabled={reenviando === e.numeroDocumento}
-                            onClick={() => void reenviarInvitacionDe(e)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
-                        )}
-                        <ActionIcons
-                          onView={() => setDetailItem(e)}
-                          onEdit={() => { setEditItem({ ...e }); setEditErrors({}); }}
-                        />
-                      </div>
+                      {accionesEmp(e)}
                     </td>
                   </tr>
                 );
@@ -742,6 +778,7 @@ export function GestionEmpleadosScreen({
           </table>
         </div>
       </div>
+      </>
       )}
 
       {/* Paginación (unificada, fuera de la card) */}
@@ -760,7 +797,7 @@ export function GestionEmpleadosScreen({
                 <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva Contratación</h3>
                   <button onClick={() => { setShowContrat(false); resetContratacion(); }}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -849,11 +886,11 @@ export function GestionEmpleadosScreen({
 
                 <div className="flex gap-3 px-4 py-3 border-t border-border">
                   <button onClick={() => { setShowContrat(false); resetContratacion(); }}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
                   </button>
                   <button onClick={() => void handleNuevaContratacion()} disabled={guardandoCtr}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
                     {guardandoCtr ? "Registrando..." : "Registrar"}
                   </button>
                 </div>
@@ -873,7 +910,7 @@ export function GestionEmpleadosScreen({
               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Empleado</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -951,7 +988,7 @@ export function GestionEmpleadosScreen({
               </div>
               <div className="px-5 py-4 border-t border-border">
                 <button onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                   Cerrar
                 </button>
               </div>
@@ -972,7 +1009,7 @@ export function GestionEmpleadosScreen({
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Empleado</h3>
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -1089,12 +1126,12 @@ export function GestionEmpleadosScreen({
 
                 <div className="flex gap-3 px-4 py-3 border-t border-border">
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
                   </button>
                   <button onClick={() => void handleCreate()}
                     disabled={creando}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
                     {creando ? "Creando..." : "Crear empleado"}
                   </button>
                 </div>
@@ -1114,7 +1151,7 @@ export function GestionEmpleadosScreen({
               className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{fontFamily:SERIF}}>Editar Empleado</h3>
-                <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <button onClick={() => setEditItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4"/>
                 </button>
               </div>
@@ -1131,20 +1168,20 @@ export function GestionEmpleadosScreen({
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                <div className="sm:col-span-6 flex gap-2 items-start">
-                  <div className="w-56 shrink-0">
+                <div className="sm:col-span-6 flex flex-wrap gap-2 items-start">
+                  <div className="w-56 max-md:w-full shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <select disabled value={editItem.tipoDocumento}
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
+                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                     </select>
                     {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 max-md:basis-full">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
                     <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento} autoComplete="off"
                       placeholder="12345678"
-                      className="w-full px-3 py-2 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
+                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
                     {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
                 </div>
@@ -1158,7 +1195,7 @@ export function GestionEmpleadosScreen({
                     <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
                         onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : undefined })); }}
                         onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
-                      className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                      className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
@@ -1195,24 +1232,24 @@ export function GestionEmpleadosScreen({
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>
                   <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaInicio}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaInicio: e.target.value })); if (editErrors.fechaInicio) setEditErrors(p => ({ ...p, fechaInicio: undefined })); }}
-                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
                   <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
-                    className={`w-full px-3 py-2 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                   {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
                 </div>
               </div>
               <div className="flex gap-3 px-4 py-3 border-t border-border">
                 <button onClick={() => setEditItem(null)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
                 <button onClick={() => void handleEdit()} disabled={guardando}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
+                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
                   {guardando ? "Guardando..." : "Guardar cambios"}
                 </button>
               </div>

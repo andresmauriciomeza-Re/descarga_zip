@@ -29,7 +29,7 @@ export function FiltroPeriodo({
           type="button"
           aria-pressed={value === p.id}
           onClick={() => onChange(p.id)}
-          className={`rounded-lg font-semibold cursor-pointer transition-all ${
+          className={`rounded-lg max-md:min-h-11 font-semibold cursor-pointer transition-all ${
             size === "sm" ? "px-3 py-1.5 text-xs" : "px-3.5 py-1.5 text-sm"
           } ${
             value === p.id

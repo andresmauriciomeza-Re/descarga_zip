@@ -41,10 +41,10 @@ import {
 // Layout compacto (tarea "sin scroll"): inputs de ~36px (py-2), labels con
 // menos margen y rejillas de 2 columnas iguales desde 768px (`md:`).
 const inputCls =
-  "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 const lecturaCls =
-  "w-full px-3 py-2 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
+  "w-full px-3 py-2 max-md:min-h-11 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
 const seccionCls =
   "flex items-center gap-2 text-sm font-bold text-foreground mb-3 pb-2 border-b border-border";
@@ -135,7 +135,7 @@ const SELECT_VACIO = "__vacio__";
 
 /** Clases de cada opción del menú, idénticas en tono a las de `UnidadSelect`. */
 const itemCls =
-  "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 text-sm outline-none transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10";
+  "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 max-md:min-h-11 text-sm outline-none transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10";
 
 /**
  * Select genérico: mismo estilo y misma validación en vivo que un input.
@@ -661,7 +661,7 @@ export function ProveedorFormCampos({
                         <button
                           type="button"
                           onClick={quitarAdjunto}
-                          className="text-[10px] font-semibold text-red-500 hover:text-red-600 cursor-pointer shrink-0"
+                          className="text-[10px] font-semibold text-red-500 hover:text-red-600 cursor-pointer shrink-0 max-md:min-h-11 max-md:px-2"
                         >
                           Quitar
                         </button>

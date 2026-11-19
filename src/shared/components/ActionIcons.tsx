@@ -68,7 +68,7 @@ export function ActionIcons({
           disabled={viewDisabled}
           aria-label="Ver detalle"
           title={viewTitle ?? "Ver detalle"}
-          className={`${CLASE_BASE} ${viewDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          className={`${CLASE_BASE} max-md:p-3.5 ${viewDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Eye className="w-4 h-4" />
         </button>
@@ -80,7 +80,7 @@ export function ActionIcons({
           disabled={editDisabled}
           aria-label="Editar"
           title={editTitle ?? "Editar"}
-          className={`${CLASE_BASE} ${editDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          className={`${CLASE_BASE} max-md:p-3.5 ${editDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Pencil className="w-4 h-4" />
         </button>
@@ -92,7 +92,7 @@ export function ActionIcons({
           disabled={deleteDisabled}
           aria-label={deleteLabel}
           title={deleteTitle ?? deleteLabel}
-          className={`${CLASE_BASE} ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
+          className={`${CLASE_BASE} max-md:p-3.5 ${deleteDisabled ? CLASE_DISABLED : CLASE_HOVER}`}
         >
           <Trash2 className="w-4 h-4" />
         </button>

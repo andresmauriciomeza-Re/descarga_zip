@@ -53,8 +53,8 @@ export function EstadoSelect<T extends string>({
         aria-label={triggerAriaLabel}
         title={triggerTitle}
         className={`${triggerContent
-          ? "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-          : `inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 ${
+          ? "inline-flex h-8 w-8 max-md:h-11 max-md:w-11 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+          : `inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border-0 max-md:relative max-md:after:absolute max-md:after:-inset-2 max-md:after:content-[''] ${
               seleccionada?.color || "bg-gray-100 text-gray-700"
             }`} focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors ${
           disabled ? "opacity-70 cursor-not-allowed" : "cursor-pointer"
@@ -85,7 +85,7 @@ export function EstadoSelect<T extends string>({
                   value={opt.value}
                   disabled={opt.disabled}
                   title={opt.help}
-                  className={`relative flex w-full select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 ${
+                  className={`relative flex w-full select-none items-center gap-2 rounded-lg px-2.5 py-2 max-md:min-h-11 text-xs font-medium outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[disabled]:opacity-50 ${
                     esSeleccionada ? "bg-primary/10 text-primary" : "text-foreground"
                   }`}
                 >

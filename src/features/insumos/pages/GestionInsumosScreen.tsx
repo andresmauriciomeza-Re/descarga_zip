@@ -66,7 +66,7 @@ const unidadBaseDeSeleccion = (valor: string): "g" | "ml" | null =>
 /** Estilo de los inputs del modal (comparte lenguaje visual con
     FichaTecnicaEditor, cuya clase por defecto es casi idéntica). */
 const ICLS_MODAL =
-  "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ─────────────────────────── Categorías ───────────────────────────
 export interface CategoriaInsumo {
@@ -311,7 +311,7 @@ function ConfirmDialog({
             <button
               ref={cancelRef}
               onClick={onCancelar}
-              className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+              className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
             >
               Cancelar
             </button>
@@ -319,7 +319,7 @@ function ConfirmDialog({
           <button
             ref={soloConfirmar ? cancelRef : undefined}
             onClick={onConfirmar}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
+            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all"
           >
             {textoConfirmar}
           </button>
@@ -1059,6 +1059,81 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       : null;
 
   // ─────────────────────────── Render ───────────────────────────
+  // Piezas de una fila de insumo. Las usan la tabla (desde 768 px) y las tarjetas
+  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
+  const nombreIns = (insumo: Insumo) => {
+    const esProductoInsumo = insumo.tipo === "ProductoInsumo";
+    return (<><div>{insumo.nombre}</div>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
+                      {esProductoInsumo ? "Producto insumo" : "Insumo"}
+                    </span></>);
+  };
+  const unidadIns = (insumo: Insumo) => (<><div>{insumo.unidadMedida}</div>
+                    {insumo.pesoMedida != null && (
+                      <div className="text-[11px] text-muted-foreground">
+                        {formatoCantidad.format(insumo.pesoMedida)} {insumo.unidadMedida}
+                      </div>
+                    )}</>);
+  const stockIns = (insumo: Insumo) => {
+    const stock = estadoStock(insumo);
+    return (<div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
+                      {insumo.estado === "activo" && stock === "sin-stock" && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap">
+                          Sin stock
+                        </span>
+                      )}
+                      {insumo.estado === "activo" && stock === "bajo" && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
+                          Stock bajo
+                        </span>
+                      )}
+                      {insumo.estado === "activo" && stock === "ok" && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
+                          OK
+                        </span>
+                      )}
+                    </div>);
+  };
+  const estadoIns = (insumo: Insumo) => (<EstadoSelect
+                      value={insumo.estado}
+                      onChange={nuevoEstado => {
+                        if (nuevoEstado === insumo.estado) return;
+                        toggleEstado(insumo.id);
+                      }}
+                      options={[
+                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+                      ]}
+                    />);
+  const accionesIns = (insumo: Insumo) => {
+    const esProductoInsumo = insumo.tipo === "ProductoInsumo";
+    const inactivo = insumo.estado === "inactivo";
+    return (<div className="flex items-center gap-1.5">
+                      <ActionIcons
+                        onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
+                        onEdit={() => openEdit(insumo)}
+                        editDisabled={inactivo}
+                        editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
+                        onDelete={() => intentarEliminar(insumo.id)}
+                      />
+                      {esProductoInsumo && (
+                        <button
+                          onClick={() => abrirOrdenProduccion?.(insumo.id)}
+                          disabled={!fichaVigente(fichas, insumo) || inactivo}
+                          title={
+                            inactivo ? "Producto Insumo inactivo" :
+                            !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
+                            "Programar producción"
+                          }
+                          className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ChefHat className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>);
+  };
+
   return (
     <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* Header */}
@@ -1075,7 +1150,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           <BotonDescargarExcel onClick={exportExcel} />
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
           >
             <Plus className="w-4 h-4" /> Crear Insumo
           </button>
@@ -1094,7 +1169,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           value={filtroEstado}
           onChange={e => { setFiltroEstado(e.target.value as "todos" | "activos" | "inactivos"); setPage(1); }}
           aria-label="Filtrar por estado"
-          className="px-4 py-2.5 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
+          className="px-4 py-2.5 max-md:min-h-11 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
         >
           <option value="todos">Todos los estados</option>
           <option value="activos">Activo</option>
@@ -1104,7 +1179,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           value={filtroTipo}
           onChange={e => { setFiltroTipo(e.target.value as "todos" | "insumos" | "productos"); setPage(1); }}
           aria-label="Filtrar por tipo"
-          className="px-4 py-2.5 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
+          className="px-4 py-2.5 max-md:min-h-11 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
         >
           <option value="todos">Todos los tipos</option>
           <option value="insumos">Insumos</option>
@@ -1128,7 +1203,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           title={`${insumosStockBajo.length} insumo${insumosStockBajo.length === 1 ? "" : "s"} con stock bajo: ${insumosStockBajo
             .map(i => `${i.nombre} (${fmtCant(i.stockActual, i.unidadMedida)}${estadoStock(i) === "sin-stock" ? ", sin stock" : ""})`)
             .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
-          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-all ${
+          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 max-md:min-h-11 rounded-xl border text-sm cursor-pointer transition-all ${
             filtroStockBajo
               ? "bg-amber-500 border-amber-600 text-white shadow-md font-bold"
               : "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-500/15 dark:border-amber-500/40 dark:text-amber-300 font-semibold hover:bg-amber-200 dark:hover:bg-amber-500/25"
@@ -1159,14 +1234,58 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
             <button
               type="button"
               onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
             >
               Reintentar
             </button>
           )}
         </div>
       ) : (
-      <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3">
+      <>
+      {/* Menos de 768 px: cada insumo como tarjeta. Reutiliza las mismas piezas
+          y botones de la tabla (nombreIns, stockIns, accionesIns…). */}
+      <div className="md:hidden space-y-3 mb-3">
+        {paged.length === 0 ? (
+          <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
+            <p className="font-medium">No hay resultados</p>
+          </div>
+        ) : (
+          paged.map((insumo) => (
+            <div key={insumo.id} className={`rounded-2xl border border-border bg-white dark:bg-card p-4 ${insumo.estado === "inactivo" ? "opacity-50" : ""}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-mono font-bold text-foreground">{formatearId(insumo.id)}</p>
+                  <div className="mt-0.5 text-base font-medium text-foreground break-words">{nombreIns(insumo)}</div>
+                </div>
+                <div className="shrink-0">{estadoIns(insumo)}</div>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Categoría</dt>
+                  <dd className="mt-0.5 text-foreground">{categoriaDe(insumo.categoriaId)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Unidad</dt>
+                  <dd className="mt-0.5 text-muted-foreground">{unidadIns(insumo)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock mínimo</dt>
+                  <dd className="mt-0.5 font-mono text-muted-foreground">{insumo.stockMinimo}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock actual</dt>
+                  <dd className="mt-0.5">{stockIns(insumo)}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesIns(insumo)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabla: desde 768 px */}
+      <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3 max-md:hidden">
         <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <colgroup>
@@ -1207,80 +1326,23 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     {categoriaDe(insumo.categoriaId)}
                   </td>
                   <td className="px-3 py-3.5 text-sm text-foreground break-words">
-                    <div>{insumo.nombre}</div>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
-                      {esProductoInsumo ? "Producto insumo" : "Insumo"}
-                    </span>
+                    {nombreIns(insumo)}
                   </td>
                   <td className="px-3 py-3.5 text-sm text-muted-foreground">
-                    <div>{insumo.unidadMedida}</div>
-                    {insumo.pesoMedida != null && (
-                      <div className="text-[11px] text-muted-foreground">
-                        {formatoCantidad.format(insumo.pesoMedida)} {insumo.unidadMedida}
-                      </div>
-                    )}
+                    {unidadIns(insumo)}
                   </td>
                   <td className="px-3 py-3.5">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
-                      {insumo.estado === "activo" && stock === "sin-stock" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap">
-                          Sin stock
-                        </span>
-                      )}
-                      {insumo.estado === "activo" && stock === "bajo" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
-                          Stock bajo
-                        </span>
-                      )}
-                      {insumo.estado === "activo" && stock === "ok" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
-                          OK
-                        </span>
-                      )}
-                    </div>
+                    {stockIns(insumo)}
                   </td>
                   <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
                   <td className="px-3 py-3.5">
                     {/* Pill de estado (diseño de Proveedores). Mantiene el
                         flujo de siempre: elegir la opción contraria pide la
                         confirmación y si es la actual no hace nada. */}
-                    <EstadoSelect
-                      value={insumo.estado}
-                      onChange={nuevoEstado => {
-                        if (nuevoEstado === insumo.estado) return;
-                        toggleEstado(insumo.id);
-                      }}
-                      options={[
-                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                      ]}
-                    />
+                    {estadoIns(insumo)}
                   </td>
                   <td className="px-3 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <ActionIcons
-                        onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
-                        onEdit={() => openEdit(insumo)}
-                        editDisabled={inactivo}
-                        editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
-                        onDelete={() => intentarEliminar(insumo.id)}
-                      />
-                      {esProductoInsumo && (
-                        <button
-                          onClick={() => abrirOrdenProduccion?.(insumo.id)}
-                          disabled={!fichaVigente(fichas, insumo) || inactivo}
-                          title={
-                            inactivo ? "Producto Insumo inactivo" :
-                            !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
-                            "Programar producción"
-                          }
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <ChefHat className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                    {accionesIns(insumo)}
                   </td>
                 </tr>
               );
@@ -1289,6 +1351,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         </table>
         </div>
       </div>
+      </>
       )}
 
       {/* Pagination */}
@@ -1307,7 +1370,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
               /* El modal se ensancha SOLO cuando el tipo es "Producto insumo"
                  (dos columnas); el cambio de ancho tiene transición suave. */
               className={`bg-white dark:bg-card rounded-2xl w-full ${
-                tipoForm === "producto-insumo" ? "max-h-[calc(100vh-2rem)]" : "max-h-[90dvh]"
+                tipoForm === "producto-insumo" ? "max-h-[calc(100dvh-2rem)]" : "max-h-[90dvh]"
               } shadow-2xl border border-border flex flex-col transition-[max-width] duration-300 ease-out ${
                 tipoForm === "producto-insumo" ? "max-w-4xl" : "max-w-md"
               }`}
@@ -1321,7 +1384,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   </h3>
                   <button
                     onClick={tipoForm === "producto-insumo" ? handleCancelarProducto : cerrarModal}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1561,7 +1624,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       onChange={e => escribirNombre(e.target.value)}
                       placeholder="Ej: Queso Mozzarella"
                       disabled={!!editingId}
-                      className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm focus:outline-none ${
                         editingId
                           ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
                           : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
@@ -1580,7 +1643,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                         onChange={e => { setCategoriaId(e.target.value); tocar("categoria"); }}
                         onBlur={() => tocar("categoria")}
                         disabled={!!editingId}
-                        className={`w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none ${
+                        className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm focus:outline-none ${
                           editingId
                             ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
                             : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30 cursor-pointer"
@@ -1629,7 +1692,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                               value={contenidoPresentacion || ""}
                               placeholder="Contenido *"
                               onChange={(e) => setContenidoPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                              className="h-full min-h-[2.875rem] w-full rounded-xl border border-border bg-muted px-3 py-2.5 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                              className="h-full min-h-[2.875rem] w-full rounded-xl border border-border bg-muted px-3 py-2.5 max-md:min-h-11 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                             />
                             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                               {unidad === OTRA_PRESENTACION_G ? "g" : "ml"}
@@ -1659,7 +1722,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           tocar("pesoMedida");
                         }}
                         onBlur={() => tocar("pesoMedida")}
-                        className="w-full px-3 py-2.5 pr-14 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="w-full px-3 py-2.5 max-md:min-h-11 pr-14 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         {unidadPeso}
@@ -1684,7 +1747,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           value={stockActual === 0 ? "" : stockActual}
                           placeholder="0"
                           disabled
-                          className="w-full px-3 py-2.5 rounded-xl text-sm bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
+                          className="w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
                         />
                       </div>
                     )}
@@ -1709,7 +1772,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                             tocar("stockMinimo");
                           }}
                           onBlur={() => tocar("stockMinimo")}
-                          className={`w-full px-3 py-2.5 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${presentacionUnidad || esOtraPresentacion(unidad) ? "pr-20" : ""}`}
+                          className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${presentacionUnidad || esOtraPresentacion(unidad) ? "pr-20" : ""}`}
                         />
                         {(!presentacionUnidad && esOtraPresentacion(unidad)) && (
                           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -1737,14 +1800,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
               }`}>
                 <button
                   onClick={tipoForm === "producto-insumo" ? handleCancelarProducto : cerrarModal}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={tipoForm === "producto-insumo" ? handleGuardarProducto : handleSave}
                   disabled={guardando}
-                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
                     guardando ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer active:scale-95"
                   }`}
                 >
@@ -1780,7 +1843,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       prefijo del ID): un solo modal, un solo título dinámico. */}
                   {detalleItem.tipo === "ProductoInsumo" ? "Detalle de Producto Insumo" : "Detalle de Insumo"}
                 </h3>
-                <button onClick={() => setShowDetalleModal(false)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0">
+                <button onClick={() => setShowDetalleModal(false)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1825,7 +1888,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           {fv ? (
                             <FichaTecnicaDetalle
                               v={fv}
-                              readCls="w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground"
+                              readCls="w-full px-3 py-2 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-foreground"
                               modo="insumo"
                               unidadCantidad={d.unidadMedida}
                             />
@@ -1901,7 +1964,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       onClick={() => { setShowDetalleModal(false); abrirOrdenProduccion?.(d.id); }}
                       disabled={!fichaVigente(fichas, d) || d.estado === "inactivo"}
                       title={d.estado === "inactivo" ? "Producto Insumo inactivo" : !fichaVigente(fichas, d) ? "Registra su ficha técnica primero" : "Programar producción"}
-                      className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex-1 py-2.5 max-md:min-h-11 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Programar producción
                     </button>
@@ -1909,7 +1972,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                 })()}
                 <button
                   onClick={() => setShowDetalleModal(false)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>

@@ -318,10 +318,38 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     onClienteAbiertoDesdeUsuarios?.();
   }, [clienteAAbrirDesdeUsuarios, cargando, clientes]);
 
-  const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
+  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
+  // 768 px) para mostrar exactamente los mismos controles y handlers.
+  const estadoCliente = (c: Cliente) => (
+    <span
+      title={tooltipEstado(c) ?? undefined}
+      className="inline-block"
+    >
+      <EstadoSelect
+        value={c.activo ? "activo" : "inactivo"}
+        disabled={!canEdit || !!bloqueoEstado(c)}
+        onChange={nuevoEstado => {
+          if ((nuevoEstado === "activo") === c.activo) return;
+          toggleEstado(c.id);
+        }}
+        options={[
+          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+        ]}
+      />
+    </span>
+  );
+  const accionesCliente = (c: Cliente) => (
+    <ActionIcons
+      onView={() => setDetailItem(c)}
+      onEdit={canEdit ? () => abrirEdicion(c) : undefined}
+    />
+  );
+
+  const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer max-md:w-full max-md:min-h-11";
 
   return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-4 h-full max-md:h-auto flex flex-col overflow-hidden max-md:overflow-visible">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
@@ -333,7 +361,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
           {canCreate && (
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer shadow-sm"
             >
               <UserPlus className="w-4 h-4" /> Crear cliente
             </button>
@@ -368,7 +396,43 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
           min-h-0`: en pantalla locked la raíz ocupa el viewport y la card se
           estiraba hasta el fondo dejando un hueco vacío bajo la última fila.
           Ahora la card mide su contenido y el paginador queda pegado debajo. */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0">
+
+      {/* Menos de 768 px: cada cliente como tarjeta (la acción principal queda fuera de vista en la tabla).
+          Reutiliza estadoCliente y accionesCliente, los mismos controles de la tabla. */}
+      <div className="md:hidden space-y-3 mb-2">
+        {cargando ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando clientes…</div>
+        ) : errorCarga ? (
+          <div role="alert" className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2 max-md:min-h-11 max-md:px-2" onClick={() => void cargarClientes()}>Reintentar</button></div>
+        ) : paged.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p></div>
+        ) : paged.map(c => (
+          <div key={c.id} className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-full ${c.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{c.iniciales}</div>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-semibold text-foreground break-words">{c.nombre}</p>
+                <p className="text-xs text-muted-foreground font-mono">{fmtDoc(c.tipoDocumento, c.numeroDocumento)}</p>
+              </div>
+              <div className="shrink-0">{estadoCliente(c)}</div>
+            </div>
+            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 mt-3 text-sm">
+              <div className="min-w-0">
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt>
+                <dd className="mt-0.5 text-muted-foreground break-all">{c.correo || "—"}</dd>
+              </div>
+              <div className="text-right">
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Pedidos</dt>
+                <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</dd>
+              </div>
+            </dl>
+            <div className="mt-3 pt-3 border-t border-border">{accionesCliente(c)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabla: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
           <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -382,7 +446,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
               {cargando ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando clientes…</td></tr>
               ) : errorCarga ? (
-                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2" onClick={() => void cargarClientes()}>Reintentar</button></td></tr>
+                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center underline ml-2" onClick={() => void cargarClientes()}>Reintentar</button></td></tr>
               ) : paged.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p>
@@ -407,29 +471,10 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                         badge y el switch vivía en Acciones. La del
                         administrador y la de la propia cuenta quedan
                         bloqueadas, con el motivo en el tooltip. */}
-                    <span
-                      title={tooltipEstado(c) ?? undefined}
-                      className="inline-block"
-                    >
-                      <EstadoSelect
-                        value={c.activo ? "activo" : "inactivo"}
-                        disabled={!canEdit || !!bloqueoEstado(c)}
-                        onChange={nuevoEstado => {
-                          if ((nuevoEstado === "activo") === c.activo) return;
-                          toggleEstado(c.id);
-                        }}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                      />
-                    </span>
+                    {estadoCliente(c)}
                   </td>
                   <td className="px-4 py-1.5">
-                    <ActionIcons
-                      onView={() => setDetailItem(c)}
-                      onEdit={canEdit ? () => abrirEdicion(c) : undefined}
-                    />
+                    {accionesCliente(c)}
                   </td>
                 </tr>
               ))}
@@ -452,7 +497,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
               className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Cliente</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -483,7 +528,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
               </div>
               <div className="px-5 py-4 border-t border-border">
                 <button onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                   Cerrar
                 </button>
               </div>
@@ -503,7 +548,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Cliente</h3>
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -521,7 +566,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                       // tiempo real, porque el formato y el duplicado
                       // dependen del tipo (CC 6-10, CE/PP 6-12).
                       onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: errorDocumentoAlta(e.target.value, newDocumento) })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     >
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                     </select>
@@ -540,7 +585,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                       // máximo 10 números, cortando el valor con slice(0,10).
                        onChange={e => { const v = soloDigitos(e.target.value).slice(0, newTipoDoc === "CC" ? 10 : 12); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
                       placeholder="12345678"
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
                   </div>
@@ -557,7 +602,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                        onBlur={() => setNewNombre(normalizarNombre(newNombre))}
                       placeholder="Ej: Laura Martínez"
                       autoFocus
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
                   </div>
@@ -573,7 +618,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                       autoComplete="off"
                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: undefined })); }}
                       placeholder="correo@ejemplo.com"
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
                   </div>
@@ -594,7 +639,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                         setCreateErrors(p => ({ ...p, telefono: v ? validarTelefono(v) ?? undefined : undefined }));
                       }}
                       placeholder="3001234567"
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
                     />
                     {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
                   </div>
@@ -615,7 +660,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
 
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
                   <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                     Cancelar
                   </button>
                   <button onClick={handleCreate}
@@ -624,7 +669,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     // debajo del campo en el momento de escribir.
                     disabled={createBloqueado}
                     title={createBloqueado ? "Corrige los campos marcados en rojo para crear el cliente" : undefined}
-                    className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${createBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>
+                    className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${createBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>
                     Crear cliente
                   </button>
                 </div>
@@ -644,7 +689,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar Cliente</h3>
-                <button onClick={() => setEditItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                <button onClick={() => setEditItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -658,24 +703,24 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
                   </div>
                 </div>
-                  <div className="sm:col-span-6 flex gap-3 items-start">
-                  <div className="w-56 shrink-0">
+                  <div className="sm:col-span-6 flex max-md:flex-col gap-3 items-start">
+                  <div className="w-56 max-md:w-full shrink-0">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
                     <input
                       type="text"
                       value={etiquetaTipoDocumento(editItem.tipoDocumento)}
                       disabled
-                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
+                      className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
                     />
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 max-md:w-full">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
                     <input
                       type="text"
                       value={editItem.numeroDocumento}
                       disabled
                       autoComplete="off"
-                      className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
+                      className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -689,7 +734,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     <input type={type} value={editItem[field]} autoComplete="off"
                        onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: undefined })); }}
                       onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
                   </div>
                 ))}
@@ -697,13 +742,13 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono <MarcaObligatorio /></label>
                     <input type="tel" inputMode="numeric" value={editItem.telefono} autoComplete="off"
                       onChange={e => { const v = soloDigitos(e.target.value); setEditItem(x => x && ({ ...x, telefono: v })); setEditErrors(p => ({ ...p, telefono: validarTelefono(v) ?? undefined })); }}
-                      className={`w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
+                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
                     {editErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.telefono}</p>}
                   </div>
                   <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
                   <input type="number" value={editItem.pedidos} disabled
-                    className="w-full px-3 py-2.5 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed" />
+                    className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed" />
                   <p className="text-xs text-muted-foreground mt-1">Los pedidos se actualizan automáticamente. No se puede modificar.</p>
                 </div>
                  <div>
@@ -721,11 +766,11 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
               </div>
               <div className="flex gap-3 px-5 py-4 border-t border-border">
                 <button onClick={() => setEditItem(null)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
                 <button onClick={handleEdit}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                   Guardar cambios
                 </button>
               </div>

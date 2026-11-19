@@ -71,9 +71,9 @@ import {
 const SERIF = "var(--font-titulo)";
 
 const iCls =
-  "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const compactInputCls =
-  "w-full px-2.5 py-2 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  "w-full px-2.5 py-2 max-md:min-h-11 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
 
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
@@ -1176,13 +1176,212 @@ export function RecepcionCompraScreen({
     onBack();
   };
 
+  // Piezas de una fila de "Recibido según factura". Las usan la tabla (desde 768 px)
+  // y las tarjetas (menos de 768 px): mismos campos, mismos handlers y mismos cálculos.
+  const insumoRec = (item: ItemRecibido) => (<>
+
+                              <p className="font-semibold">
+                                {item.nombre}
+                              </p>
+
+                              <p className="text-[11px] text-muted-foreground break-words">
+                                {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
+                                {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                Pedido: {item.cantidadSolicitada}{" "}
+                                {item.unidadSolicitada ?? item.unidad}
+                              </p>
+  </>);
+  const cantPresRec = (item: ItemRecibido) => (<>
+
+                              <div className="flex flex-col items-start gap-1.5">
+                                {(item.tipoItem ?? "insumo") === "producto" ? (
+                                  <span className="text-xs text-muted-foreground">{item.unidad}</span>
+                                ) : (
+                                  <UnidadSelect
+                                    value={item.unidad}
+                                    onChange={(unidad) => updPresentacionFila(item.rowId, unidad)}
+                                    ariaLabel={`Presentación de ${item.nombre}`}
+                                    unidades={opcionesPresentacionDe(item)}
+                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-xs"
+                                  />
+                                )}
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={cantidadMaximaRecibida(item)}
+                                  value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
+                                  placeholder="0"
+                                  aria-label={`Cantidad recibida de ${item.nombre}`}
+                                  onChange={(e) =>
+                                    updRec(
+                                      item.rowId,
+                                      numeroDeInput(limpiarNumeroInput(e.target.value))
+                                    )
+                                  }
+                                  className="w-20 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                />
+                                {esEmpaque(item.unidad) && (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
+                                  </span>
+                                )}
+                              </div>
+                              {factorDeUnidadRecibida(item) == null && esEmpaque(item.unidad) && (
+                                <p className="mt-1 text-[10px] text-red-500">
+                                  Falta configurar el contenido de esta presentación.
+                                </p>
+                              )}
+  </>);
+  const montoRec = (item: ItemRecibido) => (<>
+
+                              <input
+                                type="number"
+                                min={0}
+                                value={item.costoUnitario === 0 ? "" : item.costoUnitario}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  updMontoFila(
+                                    item.rowId,
+                                    numeroDeInput(limpiarNumeroInput(e.target.value))
+                                  )
+                                }
+                                className="w-24 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              />
+                              {/* Punto 3 + ajuste: el costo de referencia CON
+                                  IVA POR UNIDAD con el que se valida el
+                                  precio de venta (sólo en productos). Con
+                                  paca/caja se muestra también el costo de la
+                                  presentación. */}
+                              {(item.tipoItem ?? "insumo") === "producto" && (
+                                <>
+                                  <p className="text-[10px] text-muted-foreground mt-1 text-center whitespace-nowrap">
+                                    C/und: {fmtCOP(costoConIvaDeLinea(item))}
+                                  </p>
+                                  {unidadesPorLinea(item) > 1 && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5 text-center whitespace-nowrap">
+                                      C/empaque:{" "}
+                                      {fmtCOP(
+                                        costoConIva(
+                                          item.costoUnitario,
+                                          item.iva ?? 0,
+                                          item.modoIva,
+                                        ),
+                                      )}
+                                    </p>
+                                  )}
+                                </>
+                              )}
+  </>);
+  const ivaRec = (item: ItemRecibido) => (<>
+
+                              {(item.modoIva ?? "incluido") !== "exento" && (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={item.iva == null ? "" : item.iva}
+                                  placeholder="0"
+                                  onChange={(e) =>
+                                    updIvaFila(
+                                      item.rowId,
+                                      e.target.value.trim() === ""
+                                        ? undefined
+                                        : numeroDeInput(limpiarNumeroInput(e.target.value)),
+                                    )
+                                  }
+                                  className={`w-16 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-sm text-center ${
+                                    item.iva == null ? "border-red-400" : "border-border"
+                                  }`}
+                                />
+                              )}
+                              {(item.modoIva ?? "incluido") !== "exento" && item.iva == null && (
+                                <p className="mt-1 text-[10px] text-red-500">Ingresa el IVA.</p>
+                              )}
+                              <div
+                                className="mt-1 flex flex-wrap gap-1"
+                                title={MODOS_IVA.map(ayudaModoIva).join(" · ")}
+                              >
+                                {MODOS_IVA.map((modo) => (
+                                  <button
+                                    key={modo}
+                                    type="button"
+                                    aria-pressed={(item.modoIva ?? "incluido") === modo}
+                                    title={ayudaModoIva(modo)}
+                                    onClick={() => updModoIvaFila(item.rowId, modo)}
+                                    className={`rounded border px-1.5 py-1 max-md:min-h-11 max-md:px-3 max-md:text-xs text-[10px] font-semibold ${
+                                      (item.modoIva ?? "incluido") === modo
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : "border-border text-muted-foreground"
+                                    }`}
+                                  >
+                                    {ETIQUETA_MODO_IVA[modo].etiqueta}
+                                  </button>
+                                ))}
+                              </div>
+  </>);
+  const subtotalRec = (item: ItemRecibido) => (<>
+
+                              {fmtCOP(
+                                calcularLineaIva({
+                                  cantidad: item.cantidadRecibida,
+                                  montoUnitario: item.costoUnitario,
+                                  porcentajeIva: item.iva ?? 0,
+                                  modoIva: item.modoIva ?? "incluido",
+                                }).subtotalConIva
+                              )}
+  </>);
+  const quitarRec = (item: ItemRecibido) => (<>
+
+                              <button
+                                onClick={() =>
+                                  quitarItem(item.rowId, item.nombre)
+                                }
+                                title="Quitar de esta factura"
+                                className={`${CLASE_BASE} max-md:p-3.5 ${CLASE_HOVER}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+  </>);
+  const precioRec = (item: ItemRecibido) => (<>
+
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={
+                                      (item.precioVenta ?? 0) === 0
+                                        ? ""
+                                        : item.precioVenta
+                                    }
+                                    placeholder="0"
+                                    onChange={(e) =>
+                                      updPvFila(
+                                        item.rowId,
+                                        numeroDeInput(limpiarNumeroInput(e.target.value))
+                                      )
+                                    }
+                                    className={`w-24 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
+                                      errorPvDe(item)
+                                        ? "border-red-400 focus:ring-red-300"
+                                        : "border-border"
+                                    }`}
+                                  />
+                                  {errorPvDe(item) && (
+                                    <p className="text-[10px] font-medium text-red-500 mt-1">
+                                      {errorPvDe(item)}
+                                    </p>
+                                  )}
+                                
+  </>);
+
   return (
     <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
         <button
           onClick={onBack}
-          className="p-2.5 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="p-2.5 max-md:p-3 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           title="Volver"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -1446,7 +1645,52 @@ export function RecepcionCompraScreen({
                   Recibido según factura
                 </h3>
 
-                <div className="border border-border rounded-xl overflow-hidden">
+                {/* Menos de 768 px: cada fila recibida como tarjeta. Reutiliza los mismos
+                    campos y handlers de la tabla (insumoRec, montoRec, ivaRec…). */}
+                <div className="md:hidden space-y-3">
+                  {items.length === 0 ? (
+                    <p className="rounded-xl border border-border px-3 py-8 text-center text-xs text-muted-foreground">
+                      Todos los insumos de la OC {orden.id} ya se registraron en facturas anteriores
+                    </p>
+                  ) : (
+                    items.map((item) => (
+                      <div key={item.rowId} className="rounded-xl border border-border bg-card p-3 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1 [&>p]:break-words">{insumoRec(item)}</div>
+                          <div className="shrink-0">{quitarRec(item)}</div>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Cantidad + presentación</p>
+                          {cantPresRec(item)}
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Monto unitario</p>
+                          {montoRec(item)}
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">IVA</p>
+                          {ivaRec(item)}
+                        </div>
+                        {mostrarColPrecioVta && (item.tipoItem ?? "insumo") === "producto" && (
+                          <div>
+                            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Precio de venta</p>
+                            {precioRec(item)}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between border-t border-border pt-2">
+                          <span className="text-xs uppercase tracking-wider text-muted-foreground">Subtotal</span>
+                          <span className="text-sm font-semibold whitespace-nowrap">{subtotalRec(item)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total recibido</span>
+                    <span className="text-sm font-bold text-foreground">{fmtCOP(totalRec)}</span>
+                  </div>
+                </div>
+
+                <div className="border border-border rounded-xl overflow-hidden max-md:hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[820px]">
                       <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -1498,59 +1742,11 @@ export function RecepcionCompraScreen({
                           items.map((item) => (
                           <tr key={item.rowId}>
                             <td className="px-3 py-3">
-                              <p className="font-semibold">
-                                {item.nombre}
-                              </p>
-
-                              <p className="text-[11px] text-muted-foreground break-words">
-                                {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
-                                {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground">
-                                Pedido: {item.cantidadSolicitada}{" "}
-                                {item.unidadSolicitada ?? item.unidad}
-                              </p>
+                              {insumoRec(item)}
                             </td>
 
                             <td className="px-3 py-3">
-                              <div className="flex flex-col items-start gap-1.5">
-                                {(item.tipoItem ?? "insumo") === "producto" ? (
-                                  <span className="text-xs text-muted-foreground">{item.unidad}</span>
-                                ) : (
-                                  <UnidadSelect
-                                    value={item.unidad}
-                                    onChange={(unidad) => updPresentacionFila(item.rowId, unidad)}
-                                    ariaLabel={`Presentación de ${item.nombre}`}
-                                    unidades={opcionesPresentacionDe(item)}
-                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-xs"
-                                  />
-                                )}
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={cantidadMaximaRecibida(item)}
-                                  value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
-                                  placeholder="0"
-                                  aria-label={`Cantidad recibida de ${item.nombre}`}
-                                  onChange={(e) =>
-                                    updRec(
-                                      item.rowId,
-                                      numeroDeInput(limpiarNumeroInput(e.target.value))
-                                    )
-                                  }
-                                  className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                                />
-                                {esEmpaque(item.unidad) && (
-                                  <span className="text-[11px] text-muted-foreground">
-                                    {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
-                                  </span>
-                                )}
-                              </div>
-                              {factorDeUnidadRecibida(item) == null && esEmpaque(item.unidad) && (
-                                <p className="mt-1 text-[10px] text-red-500">
-                                  Falta configurar el contenido de esta presentación.
-                                </p>
-                              )}
+                              {cantPresRec(item)}
                             </td>
 
                             <td className="px-3 py-3">
@@ -1567,95 +1763,16 @@ export function RecepcionCompraScreen({
                                     numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
-                                className="w-20 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-20 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                             </td>
 
                             <td className="px-3 py-3">
-                              <input
-                                type="number"
-                                min={0}
-                                value={item.costoUnitario === 0 ? "" : item.costoUnitario}
-                                placeholder="0"
-                                onChange={(e) =>
-                                  updMontoFila(
-                                    item.rowId,
-                                    numeroDeInput(limpiarNumeroInput(e.target.value))
-                                  )
-                                }
-                                className="w-24 px-2 py-2 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              />
-                              {/* Punto 3 + ajuste: el costo de referencia CON
-                                  IVA POR UNIDAD con el que se valida el
-                                  precio de venta (sólo en productos). Con
-                                  paca/caja se muestra también el costo de la
-                                  presentación. */}
-                              {(item.tipoItem ?? "insumo") === "producto" && (
-                                <>
-                                  <p className="text-[10px] text-muted-foreground mt-1 text-center whitespace-nowrap">
-                                    C/und: {fmtCOP(costoConIvaDeLinea(item))}
-                                  </p>
-                                  {unidadesPorLinea(item) > 1 && (
-                                    <p className="text-[10px] text-muted-foreground mt-0.5 text-center whitespace-nowrap">
-                                      C/empaque:{" "}
-                                      {fmtCOP(
-                                        costoConIva(
-                                          item.costoUnitario,
-                                          item.iva ?? 0,
-                                          item.modoIva,
-                                        ),
-                                      )}
-                                    </p>
-                                  )}
-                                </>
-                              )}
+                              {montoRec(item)}
                             </td>
 
                             <td className="px-3 py-3">
-                              {(item.modoIva ?? "incluido") !== "exento" && (
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  value={item.iva == null ? "" : item.iva}
-                                  placeholder="0"
-                                  onChange={(e) =>
-                                    updIvaFila(
-                                      item.rowId,
-                                      e.target.value.trim() === ""
-                                        ? undefined
-                                        : numeroDeInput(limpiarNumeroInput(e.target.value)),
-                                    )
-                                  }
-                                  className={`w-16 px-2 py-2 bg-background border rounded-lg text-sm text-center ${
-                                    item.iva == null ? "border-red-400" : "border-border"
-                                  }`}
-                                />
-                              )}
-                              {(item.modoIva ?? "incluido") !== "exento" && item.iva == null && (
-                                <p className="mt-1 text-[10px] text-red-500">Ingresa el IVA.</p>
-                              )}
-                              <div
-                                className="mt-1 flex flex-wrap gap-1"
-                                title={MODOS_IVA.map(ayudaModoIva).join(" · ")}
-                              >
-                                {MODOS_IVA.map((modo) => (
-                                  <button
-                                    key={modo}
-                                    type="button"
-                                    aria-pressed={(item.modoIva ?? "incluido") === modo}
-                                    title={ayudaModoIva(modo)}
-                                    onClick={() => updModoIvaFila(item.rowId, modo)}
-                                    className={`rounded border px-1.5 py-1 text-[10px] font-semibold ${
-                                      (item.modoIva ?? "incluido") === modo
-                                        ? "border-primary bg-primary/10 text-primary"
-                                        : "border-border text-muted-foreground"
-                                    }`}
-                                  >
-                                    {ETIQUETA_MODO_IVA[modo].etiqueta}
-                                  </button>
-                                ))}
-                              </div>
+                              {ivaRec(item)}
                             </td>
 
                             {/* Ajuste (bloque 2): sin columna de ganancia.
@@ -1665,32 +1782,7 @@ export function RecepcionCompraScreen({
                             {mostrarColPrecioVta &&
                               ((item.tipoItem ?? "insumo") === "producto" ? (
                                 <td className="px-3 py-3 align-top">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    value={
-                                      (item.precioVenta ?? 0) === 0
-                                        ? ""
-                                        : item.precioVenta
-                                    }
-                                    placeholder="0"
-                                    onChange={(e) =>
-                                      updPvFila(
-                                        item.rowId,
-                                        numeroDeInput(limpiarNumeroInput(e.target.value))
-                                      )
-                                    }
-                                    className={`w-24 px-2 py-2 bg-background border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
-                                      errorPvDe(item)
-                                        ? "border-red-400 focus:ring-red-300"
-                                        : "border-border"
-                                    }`}
-                                  />
-                                  {errorPvDe(item) && (
-                                    <p className="text-[10px] font-medium text-red-500 mt-1">
-                                      {errorPvDe(item)}
-                                    </p>
-                                  )}
+                                  {precioRec(item)}
                                 </td>
                               ) : (
                                 <td className="px-3 py-3 text-center text-xs text-muted-foreground">
@@ -1699,26 +1791,11 @@ export function RecepcionCompraScreen({
                               ))}
 
                             <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
-                              {fmtCOP(
-                                calcularLineaIva({
-                                  cantidad: item.cantidadRecibida,
-                                  montoUnitario: item.costoUnitario,
-                                  porcentajeIva: item.iva ?? 0,
-                                  modoIva: item.modoIva ?? "incluido",
-                                }).subtotalConIva
-                              )}
+                              {subtotalRec(item)}
                             </td>
 
                             <td className="px-3 py-3">
-                              <button
-                                onClick={() =>
-                                  quitarItem(item.rowId, item.nombre)
-                                }
-                                title="Quitar de esta factura"
-                                className={`${CLASE_BASE} ${CLASE_HOVER}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {quitarRec(item)}
                             </td>
                           </tr>
                           ))
@@ -2003,7 +2080,7 @@ export function RecepcionCompraScreen({
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={onBack}
-                  className="flex-1 py-3 border border-border rounded-xl text-sm font-semibold hover:bg-muted cursor-pointer"
+                  className="flex-1 py-3 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold hover:bg-muted cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2014,7 +2091,7 @@ export function RecepcionCompraScreen({
                   // puede guardar (el backstop en `guardarRecepcion` cubre la
                   // tecla Enter y cualquier otro camino).
                   disabled={lineasPvMala.length > 0 || !!lineaSinFactorPresentacion}
-                  className={`flex-1 py-3 bg-primary text-white rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-3 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 ${
                     lineasPvMala.length > 0 || lineaSinFactorPresentacion
                       ? "opacity-50 cursor-not-allowed"
                       : "hover:bg-red-700 cursor-pointer"

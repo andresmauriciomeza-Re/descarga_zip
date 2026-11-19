@@ -57,7 +57,7 @@ export function VisorImagen({
           <button
             onClick={onClose}
             aria-label="Cerrar visor"
-            className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer transition-colors"
+            className="absolute top-4 right-4 z-10 p-2 max-md:p-3 rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
           </button>

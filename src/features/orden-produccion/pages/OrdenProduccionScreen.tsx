@@ -1697,7 +1697,7 @@ export function OrdenProduccionScreen({
     descripcion: string;
   } | null>(null);
 
-  const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   const sCls = iCls + " cursor-pointer";
   const tCls = iCls + " resize-none";
   // Mismo campo solo lectura que usa la ficha detalle de Gestión de Productos.
@@ -2194,7 +2194,7 @@ export function OrdenProduccionScreen({
         className={`bg-card rounded-2xl w-full ${ancho ?? "max-w-lg"} shadow-2xl border border-border max-h-[90vh] flex flex-col my-4`}>
         <div className={`shrink-0 flex items-center justify-between ${crear ? "px-9 py-7" : "px-5 py-4"} border-b border-border`}>
           <h3 className={`${crear ? "text-2xl" : "text-lg"} font-bold text-foreground`} style={{ fontFamily: SERIF }}>{title}</h3>
-          <button onClick={onClose} className={`${crear ? "p-2.5" : "p-1.5"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
+          <button onClick={onClose} className={`${crear ? "p-2.5 max-md:p-3 max-md:-m-1" : "p-1.5 max-md:p-3.5 max-md:-m-2"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
         </div>
         <div className={`flex-1 overflow-y-auto ${crear ? "px-9 pt-7 pb-2" : "px-5 py-4"}`}>{children}</div>
         <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-3 pb-7" : "px-5 py-4"} border-t border-border`}>
@@ -2281,11 +2281,11 @@ export function OrdenProduccionScreen({
           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Orden Producción</h1>
           <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => setMostrarParametrosCostos(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-semibold text-foreground hover:bg-muted"
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 max-md:min-h-11 text-sm font-semibold text-foreground hover:bg-muted"
           >
             <Calculator className="h-4 w-4" />
             Parámetros de costos
@@ -2305,7 +2305,7 @@ export function OrdenProduccionScreen({
                 setShowCreate(true);
               }
             }}
-              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
+              className="inline-flex items-center gap-2 px-5 py-3 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
               <Plus className="w-4 h-4" /> Crear Orden de Producción
             </button>
           )}
@@ -2358,7 +2358,7 @@ export function OrdenProduccionScreen({
             <button
               type="button"
               onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
             >
               Reintentar
             </button>
@@ -2696,7 +2696,7 @@ export function OrdenProduccionScreen({
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
                   Completar orden — {completarItem.id}
                 </h3>
-                <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted p-3">
@@ -2921,7 +2921,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
                 <button
@@ -2939,7 +2939,7 @@ export function OrdenProduccionScreen({
                     }
                     confirmarCompletar();
                   }}
-                  className={`flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+                  className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
                   Completar orden
@@ -2963,7 +2963,7 @@ export function OrdenProduccionScreen({
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: SERIF }}>
                   <AlertCircle className="w-5 h-5 text-red-600 shrink-0" /> Inventario insuficiente
                 </h3>
-                <button onClick={() => setFaltantesIniciar(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => setFaltantesIniciar(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
                 <p className="text-xs text-muted-foreground">
@@ -2984,7 +2984,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 px-5 py-4 border-t border-border">
                 <button onClick={() => setFaltantesIniciar(null)}
-                  className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
+                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
                   Cerrar
                 </button>
               </div>
@@ -3002,7 +3002,7 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4 max-h-[90vh] flex flex-col">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 <EstimacionPedido orden={detailItem} />
@@ -3392,7 +3392,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
                 <button onClick={() => setDetailItem(null)} className="w-32 shrink-0 py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
-                <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
+                <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 max-md:min-h-11 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
               </div>
             </motion.div>
           </div>
@@ -3425,7 +3425,7 @@ export function OrdenProduccionScreen({
                 className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
                 <div className="shrink-0 flex items-center justify-between gap-3 px-5 py-4 border-b border-border">
                   <h3 className="text-lg font-bold text-foreground min-w-0 truncate" style={{ fontFamily: SERIF }}>Ficha técnica — {linea.nombre}</h3>
-                  <button onClick={() => setVerFicha(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setVerFicha(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="flex-1 min-h-0 flex flex-col px-5 py-4 space-y-3">
                   {detailItem.lineas.length > 1 && (
@@ -3494,7 +3494,7 @@ export function OrdenProduccionScreen({
                   )}
                 </div>
                 <div className="shrink-0 px-5 py-4 border-t border-border">
-                  <button onClick={() => setVerFicha(null)} className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
+                  <button onClick={() => setVerFicha(null)} className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
                 </div>
               </motion.div>
             </div>
@@ -3513,7 +3513,7 @@ export function OrdenProduccionScreen({
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>Dar de baja — {darBajaItem.id}</h3>
                   <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
 
                 <div className="space-y-4 px-5 py-5 max-h-[68vh] overflow-y-auto">
@@ -3611,11 +3611,11 @@ export function OrdenProduccionScreen({
 
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
                   <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors">
                     Cancelar
                   </button>
                   <button onClick={confirmarDarBaja}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95">
+                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95">
                     Registrar
                   </button>
                 </div>

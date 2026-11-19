@@ -23,7 +23,7 @@ export function CampoTiempoPreparacion({ valor, onChange, deshabilitado }: {
       </label>
       <input
         id={id}
-        className="w-full rounded-xl border border-border bg-muted px-3 py-2 text-sm"
+        className="w-full rounded-xl border border-border bg-muted px-3 py-2 max-md:min-h-11 text-sm"
         type="number"
         min={MINIMO}
         max={MAXIMO}
