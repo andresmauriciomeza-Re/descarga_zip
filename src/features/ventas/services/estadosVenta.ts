@@ -33,10 +33,6 @@ export const TRANSICIONES_VENTA: readonly TransicionVenta[] = [
   { desde: 'Completado', a: 'Devolucion', disparador: 'devolucion' },
 ];
 
-/** Ventana (segundos) en la que una venta todavía se puede anular/cancelar,
-    contada desde su fecha de creación. El backend es quien la aplica; aquí es
-    sólo la vista (botón del listado y contador). */
-export const SEGUNDOS_ANULACION = 10 * 60;
 
 /** Estados desde los que el panel ofrece "Anular"; Completado aplica solo a
     ventas cobradas en local sin orden de tienda, dentro de los primeros 10 min. */
@@ -45,13 +41,4 @@ export const ESTADOS_ANULABLES: readonly EstadoVenta[] = [
   'En espera',
   'Por entregar',
   'Completado',
-];
-
-export const puedeTransicionar = (desde: EstadoVenta, a: EstadoVenta): boolean =>
-  TRANSICIONES_VENTA.some((transicion) => transicion.desde === desde && transicion.a === a);
-
-export const ESTADOS_FINALES: readonly EstadoVenta[] = [
-  'Completado',
-  'Devolucion',
-  'Anulado',
 ];

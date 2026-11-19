@@ -65,10 +65,6 @@ export const listarCompras = async (filtros?: {
   return data.map(mapearCompraApi);
 };
 
-export const obtenerCompra = async (id: string): Promise<GestionCompra> => {
-  const { data } = await api.get<CompraApi>(`/compras/${Number(id)}`);
-  return mapearCompraApi(data);
-};
 
 /** Compra directa (sin orden de compra). El backend suma el stock de insumos y
     productos, actualiza costos y deja la bebida sin precio en "Disponible". */

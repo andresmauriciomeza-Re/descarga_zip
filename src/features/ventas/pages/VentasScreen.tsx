@@ -253,12 +253,7 @@ export type EstadoClienteVenta =
   | "Anulado"
   | "Devolución";
 
-/** Estado de devolución se asigna desde el flujo de Devoluciones. */
-export const VENTA_STATUS_MANUALES: VentaStatus[] = ["Devolucion"];
 
-/** Estados que solo asigna el flujo (nunca una mano en la tabla):
-    Anulado y En espera. La tabla completa vive en `estadosVenta.ts`. */
-export const VENTA_STATUS_FLUJO: VentaStatus[] = ["Anulado", "En espera"];
 
 /** Motivo de rechazo: es el literal que queda guardado en
     `tb_venta.motivo_rechazo` (varchar 100). Puede ser uno de los motivos
@@ -458,16 +453,6 @@ export const etiquetaEstadoVenta = (p: Venta) =>
     ? "Anulado"
     : VENTA_STATUS_LABEL[p.estado];
 
-/** Etiquetas PARA EL CLIENTE de cada estado (tabla de la sección 3). El panel
-    admin usa `VENTA_STATUS_LABEL`; el portal del cliente estas. */
-export const VENTA_STATUS_LABEL_CLIENTE: Record<VentaStatus, string> = {
-  "Por verificar": "Por verificar",
-  "En espera": "En espera",
-  "Por entregar": "Por entregar",
-  Completado: "Completado",
-  Devolucion: "Devuelta",
-  Anulado: "Rechazado",
-};
 
 // Punto C2: ya NO existe el desplegable de estado en la tabla. La columna es
 // de solo lectura y los avances los produce el flujo: verificación de pago,

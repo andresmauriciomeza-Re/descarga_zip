@@ -249,30 +249,7 @@ export const listarOrdenesProduccion = async (filtros?: {
   return data.map(mapearOrdenApi);
 };
 
-export const obtenerOrdenProduccion = async (id: string): Promise<OrdenProduccion> => {
-  const idApi = Number(String(id).replace(/^OP-/, ""));
-  const { data } = await api.get<OrdenApi>(`/ordenes-produccion/${idApi}`);
-  return mapearOrdenApi(data);
-};
 
-/** `{ requeridos, faltantes }` de una orden (lo usa "Ver ficha"/diagnóstico). */
-export const obtenerRequeridosOrden = async (
-  id: string,
-): Promise<{ requeridos: InsumoRequerido[]; faltantes: FaltanteUnidad[] }> => {
-  const idApi = Number(String(id).replace(/^OP-/, ""));
-  const { data } = await api.get<{ requeridos: RequeridoApi[]; faltantes: FaltanteApi[] }>(
-    `/ordenes-produccion/${idApi}/requeridos`,
-  );
-  return {
-    requeridos: (data.requeridos ?? []).map((r) => ({
-      insumoId: r.id_insumo == null ? "" : idInsumoFront(r.id_insumo),
-      nombre: r.nombre,
-      cantidad: Number(r.requerido ?? 0),
-      unidad: r.unidad ?? "und",
-    })),
-    faltantes: (data.faltantes ?? []).map(mapearFaltanteApi),
-  };
-};
 
 export interface CapacidadLineaApi {
   id_detalle_op: number;
@@ -302,15 +279,6 @@ export const obtenerCalculoVerificacionOrden = async (
   return data;
 };
 
-export const obtenerCapacidadOrdenProduccion = async (
-  id: string,
-): Promise<{ cantidades_bloqueadas: boolean; lineas: CapacidadLineaApi[] }> => {
-  const idApi = Number(String(id).replace(/^OP-/, ""));
-  const { data } = await api.get<{ cantidades_bloqueadas: boolean; lineas: CapacidadLineaApi[] }>(
-    `/ordenes-produccion/${idApi}/capacidad`,
-  );
-  return data;
-};
 
 /** Crear "Preparación en lote". `lineas[].id` es el id del frontend ("INS-###")
     del producto insumo a preparar; `id_producto` identifica sin ambigüedad un
