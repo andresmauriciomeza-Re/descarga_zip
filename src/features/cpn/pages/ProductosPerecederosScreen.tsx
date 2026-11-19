@@ -219,7 +219,7 @@ function TipoBadge({ tipo }: { tipo: Tipo }) {
   );
 }
 
-const iCls = "w-full px-3 py-2.5 bg-muted dark:bg-input border border-transparent rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
+const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted dark:bg-input border border-transparent rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
 const sCls = `${iCls} appearance-none cursor-pointer`;
 const tCls = `${iCls} resize-y`;
 
@@ -864,6 +864,49 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
     );
   };
 
+  // Piezas de una fila de producto no conforme. Las usan la tabla (desde 768 px) y las
+  // tarjetas (menos de 768 px) para mostrar exactamente los mismos botones y datos.
+  const origenDe = (item: NoConformidad) =>
+    item.ventaRef ? `Venta #${item.ventaRef}` : item.ordenRef ? `OP ${item.ordenRef}` : null;
+  const productoCpn = (item: NoConformidad) => (<><p className="text-sm font-medium text-foreground">{item.nombre}</p>
+                      <p className="text-xs text-muted-foreground">{item.categoria}</p></>);
+  const cantidadCpn = (item: NoConformidad) => (<>{item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">
+                        {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
+                      </span></>);
+  const motivoCpn = (item: NoConformidad) => (<><p className="font-semibold">{item.tipoNoConformidad}</p>
+                      <p className="text-muted-foreground truncate text-xs mt-0.5">{item.descripcionProblema}</p></>);
+  const origenCpn = (item: NoConformidad) => {
+    const origen = origenDe(item);
+    return (<>{origen
+                        ? <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-muted rounded-lg text-muted-foreground whitespace-nowrap">{origen}</span>
+                        : <span className="text-xs text-muted-foreground/40 italic">—</span>
+                      }</>);
+  };
+  const accionesCpn = (item: NoConformidad) => {
+    const pendiente = item.estado === "Pendiente";
+    return (<div className="flex items-center gap-1.5">
+                        {/* Editar y Completar: solo Pendiente. Eliminar: solo
+                            Pendientes registrados a mano (la merma de
+                            producción y las devoluciones las crea el sistema). */}
+                        <ActionIcons
+                          onView={() => setViewItem(item)}
+                          onEdit={canEdit ? () => abrirEditar(item) : undefined}
+                          editDisabled={!pendiente}
+                          editTitle={pendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
+                          onDelete={canDelete && !item.generadoPorSistema ? () => setDeleteTarget(item) : undefined}
+                          deleteDisabled={!pendiente}
+                          deleteTitle={pendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
+                        />
+                        {canEdit && pendiente && (
+                          <button onClick={() => abrirCompletar(item)}
+                            title="Completar registro pendiente"
+                            className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>);
+  };
+
   return (
     <div className="px-4 sm:px-6 py-6">
       {/* Header */}
@@ -881,7 +924,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           {_canCreate && (
             <button
               onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap"
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               Nueva no conformidad
@@ -899,7 +942,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           wrapperClassName="flex-1 min-w-48 max-w-sm"
         />
         <select value={filterEst} onChange={e => { setFilterEst(e.target.value as EstadoNC | ""); setPage(1); }}
-          className="px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none cursor-pointer appearance-none min-w-36">
+          className="px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none cursor-pointer appearance-none min-w-36">
           <option value="">Todo estado</option>
           <option>Pendiente</option>
           <option>Completado</option>
@@ -918,15 +961,57 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
           {onReintentar && (
             <button onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
+              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
               Reintentar
             </button>
           )}
         </div>
       ) : (
       <>
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
+      {/* Menos de 768 px: cada registro como tarjeta. Reutiliza las mismas piezas
+      y botones de la tabla (productoCpn, motivoCpn, accionesCpn…). */}
+      <div className="md:hidden space-y-3 mb-4">
+        {paged.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p className="text-4xl mb-3">📋</p>
+            <p>No se encontraron registros</p>
+          </div>
+        ) : (
+          paged.map((item) => (
+            <div key={item.id} className={`rounded-2xl border border-border bg-card p-4 ${item.tipo === "Venta" ? "bg-red-50/30" : ""}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-mono font-bold text-foreground">{item.id}</p>
+                  <div className="mt-1 break-words">{productoCpn(item)}</div>
+                </div>
+                <div className="shrink-0"><TipoBadge tipo={item.tipo} /></div>
+              </div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Fecha</dt>
+                  <dd className="mt-0.5 text-muted-foreground">{item.fechaRegistro}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Cantidad</dt>
+                  <dd className="mt-0.5 font-bold text-foreground">{cantidadCpn(item)}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Motivo</dt>
+                  <dd className="mt-0.5 text-foreground break-words [&_p.truncate]:!whitespace-normal [&_p.truncate]:!overflow-visible [&_p.truncate]:!text-clip">{motivoCpn(item)}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Origen</dt>
+                  <dd className="mt-0.5">{origenCpn(item)}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesCpn(item)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Tabla: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4 max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
@@ -961,47 +1046,20 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                     <td className="px-4 py-2.5 text-sm font-mono font-bold text-foreground whitespace-nowrap">{item.id}</td>
                     <td className="px-4 py-2.5"><TipoBadge tipo={item.tipo} /></td>
                     <td className="px-4 py-2.5">
-                      <p className="text-sm font-medium text-foreground">{item.nombre}</p>
-                      <p className="text-xs text-muted-foreground">{item.categoria}</p>
+                      {productoCpn(item)}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{item.fechaRegistro}</td>
                     <td className="px-4 py-2.5 text-sm font-bold text-center text-foreground">
-                      {item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">
-                        {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
-                      </span>
+                      {cantidadCpn(item)}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-foreground max-w-36">
-                      <p className="font-semibold">{item.tipoNoConformidad}</p>
-                      <p className="text-muted-foreground truncate text-xs mt-0.5">{item.descripcionProblema}</p>
+                      {motivoCpn(item)}
                     </td>
                     <td className="px-4 py-2.5">
-                      {origen
-                        ? <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-muted rounded-lg text-muted-foreground whitespace-nowrap">{origen}</span>
-                        : <span className="text-xs text-muted-foreground/40 italic">—</span>
-                      }
+                      {origenCpn(item)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        {/* Editar y Completar: solo Pendiente. Eliminar: solo
-                            Pendientes registrados a mano (la merma de
-                            producción y las devoluciones las crea el sistema). */}
-                        <ActionIcons
-                          onView={() => setViewItem(item)}
-                          onEdit={canEdit ? () => abrirEditar(item) : undefined}
-                          editDisabled={!pendiente}
-                          editTitle={pendiente ? "Editar" : "Solo se puede editar en estado Pendiente"}
-                          onDelete={canDelete && !item.generadoPorSistema ? () => setDeleteTarget(item) : undefined}
-                          deleteDisabled={!pendiente}
-                          deleteTitle={pendiente ? "Eliminar" : "Solo se puede eliminar en estado Pendiente"}
-                        />
-                        {canEdit && pendiente && (
-                          <button onClick={() => abrirCompletar(item)}
-                            title="Completar registro pendiente"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer">
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                      {accionesCpn(item)}
                     </td>
                   </tr>
                 );
@@ -1040,7 +1098,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                 <TipoBadge tipo={viewItem.tipo} />
                 <EstadoBadge e={viewItem.estado} />
                 <button onClick={() => setViewItem(null)}
-                  className="ml-2 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                  className="ml-2 p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -1057,7 +1115,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
 
             <div className="px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setViewItem(null)}
-                className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
+                className="w-full py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                 Cerrar
               </button>
             </div>
@@ -1080,7 +1138,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
             <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
               <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Registrar producto no conforme</h3>
               <button onClick={() => setShowCreate(false)}
-                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1091,11 +1149,11 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
 
             <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setShowCreate(false)}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                 Cancelar
               </button>
               <button onClick={() => void handleCreate()} disabled={guardando || subiendo}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 {guardando ? "Registrando..." : "Registrar"}
               </button>
             </div>
@@ -1118,7 +1176,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
             <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
               <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h3>
               <button onClick={() => setEditItem(null)}
-                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1129,11 +1187,11 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
 
             <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setEditItem(null)}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                 Cancelar
               </button>
               <button onClick={() => void handleEdit()} disabled={guardando || subiendo}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>
@@ -1158,7 +1216,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                 Completar — {completarItem.id} · {completarItem.nombre}
               </h3>
               <button onClick={() => setCompletarItem(null)}
-                className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
+                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1191,11 +1249,11 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
               <button onClick={() => setCompletarItem(null)}
-                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                 Cancelar
               </button>
               <button onClick={() => void handleCompletar()} disabled={guardando}
-                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                 {guardando ? "Guardando..." : "Completar"}
               </button>
             </div>

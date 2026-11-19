@@ -148,7 +148,7 @@ export function PasoCodigoVerificacion({
       <button
         onClick={() => void reenviar()}
         disabled={cooldown > 0 || reenviando}
-        className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60 mb-0.5"
+        className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60 mb-0.5"
       >
         {cooldown > 0
           ? `Reenviar en 00:${String(cooldown).padStart(2, "0")}`
@@ -157,7 +157,7 @@ export function PasoCodigoVerificacion({
       {onVolverOtroCorreo && (
         <button
           onClick={onVolverOtroCorreo}
-          className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+          className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
           ← Ingresar otro correo
         </button>

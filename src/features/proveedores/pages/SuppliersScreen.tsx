@@ -48,8 +48,8 @@ function ConfirmModal({
         </div>
         <p className="text-muted-foreground mb-6 leading-relaxed">{message}</p>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer">Sí, confirmar</button>
+          <button onClick={onCancel} className="flex-1 py-3 max-md:min-h-11 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-3 max-md:min-h-11 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer">Sí, confirmar</button>
         </div>
       </motion.div>
     </div>
@@ -332,12 +332,12 @@ function Modal({
         >
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+            <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
           </div>
           <div className="px-5 py-4 space-y-4">{children}</div>
           <div className="flex gap-3 px-5 py-4 border-t border-border">
-            <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-            <button onClick={onConfirm} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{confirmLabel}</button>
+            <button onClick={onClose} className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
+            <button onClick={onConfirm} className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{confirmLabel}</button>
           </div>
         </motion.div>
       </div>
@@ -461,7 +461,7 @@ export function SuppliersScreen({
     setPage((p) => Math.min(p, Math.max(1, totalPages)));
   }, [totalPages]);
 
-  const disabledCls = "w-full px-3 py-2.5 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
+  const disabledCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
   const proveedorForm = useProveedorForm(
     form,
@@ -704,7 +704,7 @@ export function SuppliersScreen({
     // Formulario activo (alta o edición): el selector del encabezado lee y
     // escribe su tipo de persona.
     const formActivo = enAlta || !editItem ? proveedorForm : editForm;
-    const btnCls = "px-5 h-10 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
+    const btnCls = "px-5 h-10 max-md:min-h-11 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
     return (
       // Contenedor centrado (max-w-4xl, mx-auto) y SIN scroll interno: usa el
       // scroll único de `<main>` en App.tsx (prohibido el scroll doble).
@@ -715,7 +715,7 @@ export function SuppliersScreen({
           <button
             onClick={salirDePantalla}
             title="Volver"
-            className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+            className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
@@ -785,7 +785,7 @@ export function SuppliersScreen({
         <div className="flex items-center gap-2">
           {canCreate && (
             <button onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
+              className="inline-flex items-center gap-2 px-4 py-2 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
               <Plus className="w-4 h-4" /> Crear Proveedor
             </button>
           )}
@@ -797,7 +797,7 @@ export function SuppliersScreen({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
           placeholder="Buscar por NIT, nombre, asesor o email..."
-          className="w-full pl-10 pr-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          className="w-full pl-10 pr-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
       {/* Punto 2.5: la card medía todo el alto restante (`flex-1 min-h-0`) y,
@@ -821,7 +821,7 @@ export function SuppliersScreen({
                 <button
                   type="button"
                   onClick={onReintentar}
-                  className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+                  className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
                 >
                   Reintentar
                 </button>
@@ -943,18 +943,18 @@ export function SuppliersScreen({
               {/* Acciones abajo — mismas reglas y permisos que la tabla. */}
               <div className="mt-2.5 flex items-center gap-1.5">
                 <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                  className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                  className="p-2 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                   <Eye className="w-4 h-4" />
                 </button>
                 {canEdit && (
                   <button onClick={() => setEditItem({ ...s })} title="Editar"
-                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                    className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                     <Pencil className="w-4 h-4" />
                   </button>
                 )}
                 {canDelete && (
                   <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                    className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
+                    className="p-2 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
@@ -993,7 +993,7 @@ export function SuppliersScreen({
                 />
                 <button
                   onClick={() => setDetailItem(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1004,7 +1004,7 @@ export function SuppliersScreen({
               <div className="flex justify-end px-6 py-4 border-t border-border shrink-0">
                 <button
                   onClick={() => setDetailItem(null)}
-                  className="px-5 h-10 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
+                  className="px-5 h-10 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>
@@ -1043,13 +1043,13 @@ export function SuppliersScreen({
                 <div className="flex gap-3">
                   <button
                     onClick={() => setConfirmToggleId(null)}
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={() => applyToggleEstado(confirmToggleId)}
-                    className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
                   >
                     Confirmar
                   </button>

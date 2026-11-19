@@ -120,7 +120,7 @@ function fmtCOP(n: number) {
 // ─── NUEVA COMPRA ─────────────────────────────────────────────────────────────
 
 const iCls =
-  "w-full px-3 py-2.5 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
 const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
@@ -146,7 +146,7 @@ const valorDatoCls = "block text-sm font-semibold text-foreground break-words";
  *  (py-2.5 + border da 42px, y la fila de insumos y el selector de IVA van a
  *  40px, así todos los controles del formulario miden lo mismo). */
 const iPaginaCls =
-  "w-full h-10 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** P14: qué se está agregando a la factura de compra. Mismos valores que
  *  `OrdenItem.tipoItem`, para que el dato guardado sea compatible con las
@@ -296,13 +296,13 @@ function TablaItemsFactura({
           // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
           // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
           // pegado a la cabecera.
-          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden max-md:overflow-x-auto"
         }
       >
         {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
             `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
-          className="table-fixed w-full text-sm"
+          className="table-fixed w-full text-sm max-md:min-w-[480px]"
         >
           <colgroup>
             {headers.map((h) => (
@@ -344,7 +344,7 @@ function TablaItemsFactura({
               <tr>
                 <td
                   colSpan={columnCount}
-                  className="text-center text-[11px] font-medium text-muted-foreground/80 px-3 py-6"
+                  className="text-center max-md:text-left text-[11px] font-medium text-muted-foreground/80 px-3 max-md:px-4 py-6"
                 >
                   {enPagina ? "Aún no has agregado ítems" : "Sin ítems agregados"}
                 </td>
@@ -1163,7 +1163,7 @@ function CompraForm({
                   <button
                     onClick={salir}
                     title="Volver"
-                    className="shrink-0 p-2 -ml-1 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                    className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
                   >
                     <ArrowLeft className="w-4 h-4" />
                   </button>
@@ -1185,7 +1185,7 @@ function CompraForm({
                 {!isPage && (
                   <button
                     onClick={salir}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1224,7 +1224,7 @@ function CompraForm({
               {/* Franja de anulación: motivo + fecha (trazabilidad de la
                   anulación), en vez del aviso genérico de antes. */}
               {isView && compra?.estado === "Anulado" && (
-                <div className="shrink-0 flex items-start gap-2.5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                <div className="shrink-0 flex items-start gap-2.5 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
                   <Ban className="w-4 h-4 shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="font-semibold">Esta compra ha sido anulada.</p>
@@ -1873,14 +1873,14 @@ function CompraForm({
                   <div className="flex gap-3 shrink-0 mt-auto pt-2">
                     <button
                       onClick={salir}
-                      className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                      className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                     >
                       Cancelar
                     </button>
                     <button
                       onClick={guardar}
                       disabled={!botonGuardarOk}
-                      className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                      className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                     >
                       <Check className="w-4 h-4" />
                       Guardar
@@ -1896,14 +1896,14 @@ function CompraForm({
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
                   onClick={salir}
-                  className="flex-1 h-10 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={guardar}
                   disabled={!botonGuardarOk}
-                  className="flex-1 h-10 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
                 >
                   <Check className="w-4 h-4" />
                   Guardar
@@ -2314,7 +2314,7 @@ export function GestionCompraScreen({
           {canCreate && (
             <button
               onClick={onNuevaCompra}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
             >
               <Plus className="w-4 h-4" /> Crear Compra
             </button>
@@ -2344,7 +2344,7 @@ export function GestionCompraScreen({
             <button
               type="button"
               onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
+              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
             >
               Reintentar
             </button>
@@ -2493,7 +2493,7 @@ export function GestionCompraScreen({
                       <button
                         onClick={() => setDetail(g)}
                         title="Ver detalle"
-                        className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                        className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
@@ -2502,7 +2502,7 @@ export function GestionCompraScreen({
                           onClick={() => pedirCambiarEstado(g.id)}
                           title="Anular compra"
                           aria-label="Anular compra"
-                          className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
+                          className="p-2 max-md:p-3.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
                         >
                           <Ban className="w-4 h-4" />
                         </button>

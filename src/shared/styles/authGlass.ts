@@ -13,7 +13,7 @@ export const AUTH_GLASS_CARD =
 
 /** Base de todo campo de texto sobre vidrio (sin ancho: `w-full` o `w-10` lo pide quien lo usa). */
 export const AUTH_GLASS_INPUT_BASE =
-  "px-4 py-2 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "px-4 py-2 max-md:min-h-11 rounded-xl border focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** Borde/fondo neutro sobre vidrio (equivale al `border-border bg-muted` de los formularios del panel). */
 export const AUTH_GLASS_INPUT_OK =
@@ -32,7 +32,7 @@ export const AUTH_GLASS_INPUT_TEXT =
 
 /** Botón secundario de vidrio: la flecha "volver" del login/registro y la X de cerrar de los modales. */
 export const AUTH_GLASS_BUTTON_SECONDARY =
-  "p-2.5 rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors";
+  "p-2.5 max-md:min-w-11 max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center rounded-xl border border-black/10 dark:border-white/20 bg-white/40 dark:bg-white/10 text-foreground/70 dark:text-white/70 hover:bg-white/60 dark:hover:bg-white/20 cursor-pointer transition-colors";
 
 /** Fondo detrás de un modal: oscurecido y desenfocado, para que el vidrio
  *  se note también sobre pantallas blancas (p. ej. Mi perfil). */

@@ -60,6 +60,7 @@ import {
 import type { Screen } from "@/shared/utils/screen";
 import { ChartCard } from "@/shared/components/ChartCard";
 import { FiltroPeriodo } from "@/shared/components/FiltroPeriodo";
+import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -353,6 +354,13 @@ export function DashboardScreen({
     })
     .slice(0, 5)
     .map(({ venta }) => venta);
+
+  // En celular las etiquetas de fecha del eje X no caben en horizontal:
+  // se giran (solo presentación; en escritorio el objeto es null y no cambia nada).
+  const esMovil = useIsMobile();
+  const ejeXMovil = esMovil
+    ? { angle: -45, textAnchor: "end" as const, height: 56 }
+    : null;
 
   // ── Filtro global de los indicadores: Diario · Semanal · Mensual ──
   const [periodo, setPeriodo] = useState<Periodo>("semana");
@@ -911,7 +919,7 @@ export function DashboardScreen({
           <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{titulo}</h2>
           <button
             onClick={() => navigate(destino)}
-            className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1"
+            className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1 max-md:min-h-11 max-md:px-2 max-md:-mr-2"
           >
             Ver todos <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -1176,7 +1184,7 @@ export function DashboardScreen({
                 <ResponsiveContainer width="100%" height={240}>
                   <ComposedChart data={dataVentasGrafica} margin={{ left: -8, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} {...ejeXMovil} />
                     <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 10 }} />
                     <YAxis
                       yAxisId="cop"
@@ -1197,7 +1205,7 @@ export function DashboardScreen({
               <div className="flex justify-end mt-2">
                 <button
                   onClick={() => navigate("sales-chart")}
-                  className="text-primary text-xs font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-primary text-xs font-semibold hover:underline flex items-center gap-1 cursor-pointer max-md:min-h-11"
                 >
                   Ver detalle por semana <ArrowRight className="w-3.5 h-3.5" />
                 </button>
@@ -1296,7 +1304,7 @@ export function DashboardScreen({
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
                     <Legend />
@@ -1330,7 +1338,7 @@ export function DashboardScreen({
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
                     <Legend />
@@ -1372,7 +1380,7 @@ export function DashboardScreen({
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={dataNoConformes} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
                     <Legend />
@@ -1418,7 +1426,7 @@ export function DashboardScreen({
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Últimas ventas</h2>
             <button
               onClick={() => navigate("ventas-pedidos")}
-              className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1"
+              className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1 max-md:min-h-11 max-md:px-2 max-md:-mr-2"
             >
               Ver todos <ArrowRight className="w-3.5 h-3.5" />
             </button>

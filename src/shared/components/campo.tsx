@@ -115,7 +115,7 @@ export function PasswordField({
         tabIndex={-1}
         title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
         aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+        className="absolute right-2 max-md:right-0 top-1/2 -translate-y-1/2 p-1 max-md:p-3.5 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
       >
         {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>

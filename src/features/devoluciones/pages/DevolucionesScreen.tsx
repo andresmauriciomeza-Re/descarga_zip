@@ -695,6 +695,63 @@ export function DevolucionesScreen({
     devolucionDetalle?.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
     0;
 
+  // Piezas de una fila de devolución. Las usan la tabla (desde 768 px) y las
+  // tarjetas (menos de 768 px) para mostrar exactamente los mismos botones.
+  const datosDev = (dev: Venta) => {
+    const totalDev =
+                    dev.total ||
+                    dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
+                    0;
+                  const pendiente = !dev.devolucionResuelta;
+                  // Estado derivado: solo se resuelve con el flujo de
+                  // "Gestionar devolución", por eso la pill va sin menú.
+                  const estadoDevLabel = etiquetaEstadoDev(dev);
+                  const estadoDevColor = pendiente
+                    ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200";
+    return { totalDev, pendiente, estadoDevLabel, estadoDevColor };
+  };
+  const claseFilaDev = (pendiente: boolean) =>
+    pendiente
+      ? "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
+      : "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20";
+  const estadoDev = (dev: Venta) => {
+    const { estadoDevLabel, estadoDevColor } = datosDev(dev);
+    return (
+      <EstadoSelect
+                          value={estadoDevLabel}
+                          onChange={() => {}}
+                          options={[{ value: estadoDevLabel, label: estadoDevLabel, color: estadoDevColor }]}
+                          disabled
+                        />
+    );
+  };
+  const accionesDev = (dev: Venta) => {
+    const { pendiente } = datosDev(dev);
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            disabled={!pendiente}
+                            onClick={() =>
+                              pendiente && setActiva(nuevaDevolucion(dev))
+                            }
+                            title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 max-md:min-h-11 max-md:px-3.5 rounded-lg text-xs font-semibold transition-colors ${
+                              pendiente
+                                ? "bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
+                            }`}
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                          <ActionIcons
+                            onView={() => setDetalleDevolucion(dev)}
+                          />
+                        </div>
+    );
+  };
+
   return (
     <div className="px-4 sm:px-6 py-6">
       {/* Header */}
@@ -729,7 +786,54 @@ export function DevolucionesScreen({
             placeholder="Buscar por venta, cliente, producto o estado…"
           />
 
-          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          {/* Menos de 768 px: cada devolución como tarjeta. Reutiliza las mismas piezas
+              y botones de la tabla (estadoDev, accionesDev…). */}
+          <div className="md:hidden space-y-3">
+            {visibles.length === 0 ? (
+              <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+                <p className="text-4xl mb-3">🔄</p>
+                <p>No se encontraron devoluciones</p>
+              </div>
+            ) : (
+              visibles.map((dev) => {
+                const { totalDev, pendiente } = datosDev(dev);
+                return (
+                  <div key={dev.id} className={`rounded-2xl border border-border p-4 transition-colors ${claseFilaDev(pendiente)}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-mono font-semibold text-foreground">#{dev.id}</p>
+                        <p className="text-base font-medium text-foreground mt-0.5 break-words">{dev.usuario}</p>
+                      </div>
+                      <div className="shrink-0">{estadoDev(dev)}</div>
+                    </div>
+                    <p className="text-sm text-foreground mt-2 line-clamp-2 break-words" title={dev.productos}>{dev.productos || "—"}</p>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
+                      <div>
+                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">Fecha</dt>
+                        <dd className="mt-0.5 text-muted-foreground">{dev.fecha}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">Total</dt>
+                        <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO_DEV }}>{fmtCOPDev(totalDev)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">Pago</dt>
+                        <dd className="mt-0.5"><PagoPill metodo={dev.metodoPago} /></dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">Reembolso</dt>
+                        <dd className="mt-0.5"><PagoPill metodo={dev.metodoReembolso} /></dd>
+                      </div>
+                    </dl>
+                    <div className="mt-3 pt-3 border-t border-border">{accionesDev(dev)}</div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Tabla: desde 768 px */}
+          <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px]">
               <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -761,26 +865,12 @@ export function DevolucionesScreen({
                   </tr>
                 ) : (
                   visibles.map((dev) => {
-                  const totalDev =
-                    dev.total ||
-                    dev.detalle?.reduce((s, d) => s + d.precio * d.cantidad, 0) ||
-                    0;
-                  const pendiente = !dev.devolucionResuelta;
-                  // Estado derivado: solo se resuelve con el flujo de
-                  // "Gestionar devolución", por eso la pill va sin menú.
-                  const estadoDevLabel = etiquetaEstadoDev(dev);
-                  const estadoDevColor = pendiente
-                    ? "bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-200"
-                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200";
+                  const { totalDev, pendiente } = datosDev(dev);
 
                   return (
                     <tr
                       key={dev.id}
-                      className={`transition-colors ${
-                        pendiente
-                          ? "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-500/10 dark:hover:bg-orange-500/20"
-                          : "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
-                      }`}
+                      className={`transition-colors ${claseFilaDev(pendiente)}`}
                     >
                       <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
                         #{dev.id}
@@ -806,34 +896,10 @@ export function DevolucionesScreen({
                         <PagoPill metodo={dev.metodoReembolso} />
                       </td>
                       <td className="px-4 py-3.5">
-                        <EstadoSelect
-                          value={estadoDevLabel}
-                          onChange={() => {}}
-                          options={[{ value: estadoDevLabel, label: estadoDevLabel, color: estadoDevColor }]}
-                          disabled
-                        />
+                        {estadoDev(dev)}
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <button
-                            type="button"
-                            disabled={!pendiente}
-                            onClick={() =>
-                              pendiente && setActiva(nuevaDevolucion(dev))
-                            }
-                            title={pendiente ? "Gestionar devolución" : "La devolución ya está resuelta"}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                              pendiente
-                                ? "bg-card border border-border text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-                                : "bg-muted text-muted-foreground opacity-50 cursor-not-allowed"
-                            }`}
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                          <ActionIcons
-                            onView={() => setDetalleDevolucion(dev)}
-                          />
-                        </div>
+                        {accionesDev(dev)}
                       </td>
                     </tr>
                   );
@@ -874,7 +940,7 @@ export function DevolucionesScreen({
                 </div>
                 <button
                   onClick={() => setActiva(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -927,7 +993,7 @@ export function DevolucionesScreen({
                             ) : (
                               <div className="w-8 h-8 rounded-lg bg-muted shrink-0" />
                             )}
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 max-md:min-w-[10rem]">
                               <p className="text-xs font-semibold text-foreground truncate">{nombre}</p>
                               <p className="text-xs text-muted-foreground">
                                 {d.tamaño === "Mediana" || d.tamaño === "Grande"
@@ -954,7 +1020,7 @@ export function DevolucionesScreen({
                                   ? `Motivo: ${motivoLinea}`
                                   : "Registrar el motivo de la devolución"
                               }
-                              className={`flex items-center gap-1 px-2 h-6 rounded-lg text-[11px] font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-40 ${
+                              className={`flex items-center gap-1 px-2 h-6 max-md:h-11 max-md:px-3 rounded-lg text-[11px] font-semibold transition-colors shrink-0 cursor-pointer disabled:opacity-40 ${
                                 motivoLinea
                                   ? "bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-500/20 dark:text-orange-300"
                                   : "bg-card border border-border text-muted-foreground hover:bg-muted"
@@ -968,7 +1034,7 @@ export function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setDevQty(i, d.cantidad, -1)}
                                 disabled={q === 0}
-                                className="w-6 h-6 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-6 h-6 max-md:w-11 max-md:h-11 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
@@ -977,7 +1043,7 @@ export function DevolucionesScreen({
                                 type="button"
                                 onClick={() => setDevQty(i, d.cantidad, 1)}
                                 disabled={q >= d.cantidad}
-                                className="w-6 h-6 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
+                                className="w-6 h-6 max-md:w-11 max-md:h-11 rounded-lg bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-40 cursor-pointer"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -1021,12 +1087,12 @@ export function DevolucionesScreen({
                       queda siempre visible y es el catálogo de canje el que se
                       encoge y scrollea por dentro. Si scrolls toda la columna,
                       abrir "Cambio de producto" empuja el monto fuera de vista. */}
-                  <div className="flex-1 min-h-0 flex flex-col gap-3 p-4">
+                  <div className="flex-1 min-h-0 max-lg:flex-none flex flex-col gap-3 p-4">
                     {/* Opción 1: Cambio de producto */}
                     <div
                       className={`rounded-2xl border-2 transition-all ${
                         activa.paso === "producto"
-                          ? "flex-1 min-h-0 flex flex-col overflow-hidden"
+                          ? "flex-1 min-h-0 flex flex-col overflow-hidden max-lg:flex-none max-lg:overflow-visible"
                           : "shrink-0"
                       } ${
                         totalComp > 0
@@ -1059,7 +1125,7 @@ export function DevolucionesScreen({
                       </button>
 
                       {activa.paso === "producto" && (
-                        <div className="px-3.5 pb-3.5 flex flex-col flex-1 min-h-0 space-y-2.5">
+                        <div className="px-3.5 pb-3.5 flex flex-col flex-1 min-h-0 max-lg:flex-none space-y-2.5">
                           {activa.compensacion.length > 0 && (
                             <div className="shrink-0 bg-card border border-blue-200 dark:border-blue-500/30 rounded-xl px-3 py-2">
                               {activa.compensacion.map((r) => (
@@ -1098,7 +1164,7 @@ export function DevolucionesScreen({
                                 key={c}
                                 type="button"
                                 onClick={() => setCatCanje(c)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                                className={`px-2.5 py-1 max-md:min-h-11 max-md:px-4 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
                                   catCanje === c
                                     ? "bg-blue-600 dark:bg-blue-500 text-white border-transparent"
                                     : "bg-card text-foreground border-border hover:border-blue-400"
@@ -1126,8 +1192,8 @@ export function DevolucionesScreen({
                               no aplastarse a cero cuando el modal es corto, y
                               así la tarjeta de "Dinero" y los botones de abajo
                               (Cancelar/Confirmar) nunca se tapan. */}
-                          <div className="flex-1 min-h-[220px] overflow-y-auto pr-0.5">
-                            <div className="grid grid-cols-2 xl:grid-cols-3 gap-2">
+                          <div className="flex-1 min-h-[220px] max-lg:flex-none max-lg:h-[22rem] overflow-y-auto pr-0.5">
+                            <div className="grid grid-cols-2 max-md:grid-cols-1 xl:grid-cols-3 gap-2">
                             {productosCanje.map((prod) => {
                               const variantes =
                                 prod.sizes.length > 0
@@ -1159,7 +1225,7 @@ export function DevolucionesScreen({
                                     </p>
                                   </div>
 
-                                  <div className="flex gap-1.5">
+                                  <div className="flex gap-1.5 max-md:flex-col">
                                     {variantes.map((v) => {
                                       const cant = cantCanje(prod, v.label);
                                       const esPizza = prod.category.toLowerCase().includes("pizza");
@@ -1201,7 +1267,7 @@ export function DevolucionesScreen({
                                               type="button"
                                               onClick={() => setReemplazo(prod, v.label ? v : null, -1)}
                                               disabled={cant === 0}
-                                              className="w-5 h-5 rounded bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30 cursor-pointer"
+                                              className="w-5 h-5 max-md:w-11 max-md:h-11 rounded bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30 cursor-pointer"
                                             >
                                               <Minus className="w-3 h-3" />
                                             </button>
@@ -1213,7 +1279,7 @@ export function DevolucionesScreen({
                                               type="button"
                                               onClick={() => setReemplazo(prod, v.label ? v : null, 1)}
                                               disabled={totalDevueltos === 0 || lleno}
-                                              className="w-5 h-5 rounded bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30 cursor-pointer"
+                                              className="w-5 h-5 max-md:w-11 max-md:h-11 rounded bg-card border border-border flex items-center justify-center hover:bg-muted disabled:opacity-30 cursor-pointer"
                                             >
                                               <Plus className="w-3 h-3" />
                                             </button>
@@ -1252,7 +1318,7 @@ export function DevolucionesScreen({
                           onClick={() =>
                             setActiva((p) => (p ? { ...p, paso: "dinero" } : p))
                           }
-                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left cursor-pointer"
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 max-md:min-h-11 text-left cursor-pointer"
                         >
                           <Banknote className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <span
@@ -1390,7 +1456,7 @@ export function DevolucionesScreen({
                       type="button"
                       disabled={!puedeConfirmar}
                       onClick={confirmarDevolucion}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Check className="w-4 h-4" strokeWidth={3} />
                       Confirmar
@@ -1433,7 +1499,7 @@ export function DevolucionesScreen({
                             onClick={() =>
                               setActiva((p) => (p ? { ...p, editandoMotivo: null } : p))
                             }
-                            className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                            className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1453,7 +1519,7 @@ export function DevolucionesScreen({
                                   type="button"
                                   disabled={m === "Cambio de sabor" && bloqueoCambioSabor}
                                   onClick={() => setMotivo(idx, { motivo: m })}
-                                  className={`px-2.5 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground ${
+                                  className={`px-2.5 py-2 max-md:min-h-11 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground ${
                                     mv.motivo === m
                                       ? "bg-orange-100 border-orange-300 text-orange-800 dark:bg-orange-500/20 dark:border-orange-500/40 dark:text-orange-300"
                                       : "bg-card border-border text-muted-foreground hover:bg-muted"
@@ -1510,7 +1576,7 @@ export function DevolucionesScreen({
                               }
                               setActiva((p) => (p ? { ...p, editandoMotivo: null } : p));
                             }}
-                            className="w-full py-2.5 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                            className="w-full py-2.5 max-md:min-h-11 bg-foreground text-background text-sm font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                           >
                             Listo
                           </button>
@@ -1548,7 +1614,7 @@ export function DevolucionesScreen({
                 </div>
                 <button
                   onClick={() => setResumen(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1656,7 +1722,7 @@ export function DevolucionesScreen({
               <div className="px-5 py-4 border-t border-border">
                 <button
                   onClick={() => setResumen(null)}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                  className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>
@@ -1691,7 +1757,7 @@ export function DevolucionesScreen({
                 </div>
                 <button
                   onClick={() => setDetalleDevolucion(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1813,7 +1879,7 @@ export function DevolucionesScreen({
               <div className="px-5 py-4 border-t border-border">
                 <button
                   onClick={() => setDetalleDevolucion(null)}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                  className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>

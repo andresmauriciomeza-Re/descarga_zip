@@ -200,7 +200,7 @@ function SmModal({
           </h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+            className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
           >
             <X className="w-4 h-4" />
           </button>
@@ -215,13 +215,13 @@ function SmModal({
         <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+            className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
           >
             {confirmLabel}
           </button>
@@ -293,7 +293,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
   } | null>(null);
 
   const inputCls =
-    "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
   /** El mismo input de arriba, pero en el estado de error de los formularios. */
   const campoCls = (err?: string) =>
@@ -471,6 +471,67 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
 
   // Ancho amplio (igual que Proveedores/Gestión de Insumos): el listado usa
   // el ancho completo del panel en vez del antiguo max-w-3xl.
+  // Piezas de una fila de categoría. Las usan la tabla (desde 768 px) y las tarjetas
+  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
+  const nombreCat = (c: CategoriaProducto) => (<span className="inline-flex items-center gap-2">
+                        {/* Emoji (columna emoji): text-3xl ≈ los 32 px del
+                            ícono anterior; la fila sigue midiendo 61 px. */}
+                        {c.icono && (
+                          <span
+                            aria-hidden="true"
+                            className="text-3xl leading-none shrink-0"
+                          >
+                            {c.icono}
+                          </span>
+                        )}
+                        {c.nombre}
+                      </span>);
+  const descripcionCat = (c: CategoriaProducto) => (<span
+                        className="block max-w-[420px] truncate"
+                        title={c.descripcion?.trim() || undefined}
+                      >
+                        {c.descripcion?.trim() ? c.descripcion : "—"}
+                      </span>);
+  const estadoCat = (c: CategoriaProducto) => (<EstadoSelect
+                        value={estadoDe(c)}
+                        disabled={!canEdit}
+                        onChange={(next) => {
+                          if (next === estadoDe(c)) return;
+                          setConfirmEstado({
+                            id: c.id,
+                            nombre: c.nombre,
+                            current: estadoDe(c),
+                            next,
+                            productosMenu: c.productosMenu ?? 0,
+                          });
+                        }}
+                        options={OPCIONES_ESTADO_CATEGORIA}
+                      />);
+  const accionesCat = (c: CategoriaProducto) => (<ActionIcons
+                        onView={() => setDetailItem(c)}
+                        onEdit={
+                          canEdit
+                            ? () => {
+                                setEditErrors({});
+                                setEditItem({ ...c });
+                                // Grupo del selector donde vive el emoji
+                                // actual, para que al abrir Editar el grupo
+                                // activo sea el del ícono de la categoría
+                                // (índice 0 si no se encuentra).
+                                setGrupoIconoEdicion(
+                                  Math.max(
+                                    0,
+                                    GRUPOS_ICONOS.findIndex((g) =>
+                                      g.iconos.includes(c.icono ?? ""),
+                                    ),
+                                  ),
+                                );
+                              }
+                            : undefined
+                        }
+                        onDelete={canDelete ? () => pedirEliminar(c) : undefined}
+                      />);
+
   return (
     <div className="px-4 sm:px-6 py-6">
       {/* Header */}
@@ -516,7 +577,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
           <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
           {onReintentar && (
             <button onClick={onReintentar}
-              className="mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
+              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
               Reintentar
             </button>
           )}
@@ -533,8 +594,35 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
         placeholder="Buscar por ID o nombre..."
       />
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Menos de 768 px: cada categoría como tarjeta. Reutiliza las mismas piezas
+          y controles de la tabla (nombreCat, estadoCat, accionesCat…). */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p className="text-4xl mb-3">🏷️</p>
+            <p>No se encontraron categorías</p>
+          </div>
+        ) : (
+          paged.map((c) => (
+            <div key={c.id} className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 text-base font-medium text-foreground break-words">{nombreCat(c)}</div>
+                <div className="shrink-0">{estadoCat(c)}</div>
+              </div>
+              <dl className="mt-3 text-sm">
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">ID</dt>
+                <dd className="mt-0.5 font-mono font-semibold text-foreground">{c.id}</dd>
+                <dt className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">Descripción</dt>
+                <dd className="mt-0.5 text-muted-foreground [&>span]:!max-w-none [&>span]:!whitespace-normal [&>span]:!overflow-visible [&>span]:!text-clip break-words">{descripcionCat(c)}</dd>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesCat(c)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Table: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
@@ -580,19 +668,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                       {c.id}
                     </td>
                     <td className="px-4 py-2.5 text-sm font-medium text-foreground">
-                      <span className="inline-flex items-center gap-2">
-                        {/* Emoji (columna emoji): text-3xl ≈ los 32 px del
-                            ícono anterior; la fila sigue midiendo 61 px. */}
-                        {c.icono && (
-                          <span
-                            aria-hidden="true"
-                            className="text-3xl leading-none shrink-0"
-                          >
-                            {c.icono}
-                          </span>
-                        )}
-                        {c.nombre}
-                      </span>
+                      {nombreCat(c)}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-muted-foreground">
                       {/* Descripción (P17a): campo OPCIONAL, así que sin dato
@@ -602,58 +678,16 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                           ve en el tooltip— para que una descripción larga no se
                           lleve todo el ancho de la tabla ni rompa las filas de
                           61 px; el resto del ancho lo toma la columna Nombre. */}
-                      <span
-                        className="block max-w-[420px] truncate"
-                        title={c.descripcion?.trim() || undefined}
-                      >
-                        {c.descripcion?.trim() ? c.descripcion : "—"}
-                      </span>
+                      {descripcionCat(c)}
                     </td>
                     <td className="px-4 py-2.5">
                       {/* Pill de estado (diseño de Proveedores). Elegir la opción
                           contraria pide confirmación, igual que en Gestión de
                           Producto; sin permiso de edición queda la pill sola. */}
-                      <EstadoSelect
-                        value={estadoDe(c)}
-                        disabled={!canEdit}
-                        onChange={(next) => {
-                          if (next === estadoDe(c)) return;
-                          setConfirmEstado({
-                            id: c.id,
-                            nombre: c.nombre,
-                            current: estadoDe(c),
-                            next,
-                            productosMenu: c.productosMenu ?? 0,
-                          });
-                        }}
-                        options={OPCIONES_ESTADO_CATEGORIA}
-                      />
+                      {estadoCat(c)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <ActionIcons
-                        onView={() => setDetailItem(c)}
-                        onEdit={
-                          canEdit
-                            ? () => {
-                                setEditErrors({});
-                                setEditItem({ ...c });
-                                // Grupo del selector donde vive el emoji
-                                // actual, para que al abrir Editar el grupo
-                                // activo sea el del ícono de la categoría
-                                // (índice 0 si no se encuentra).
-                                setGrupoIconoEdicion(
-                                  Math.max(
-                                    0,
-                                    GRUPOS_ICONOS.findIndex((g) =>
-                                      g.iconos.includes(c.icono ?? ""),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : undefined
-                        }
-                        onDelete={canDelete ? () => pedirEliminar(c) : undefined}
-                      />
+                      {accionesCat(c)}
                     </td>
                   </tr>
                 ))
@@ -827,7 +861,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                       key={grupo.nombre}
                       type="button"
                       onClick={() => setGrupoIconoSeleccionado(idx)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                      className={`px-3 py-1 max-md:min-h-11 max-md:px-4 rounded-full text-xs font-medium transition-colors cursor-pointer ${
                         grupoIconoSeleccionado === idx
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground hover:bg-border"
@@ -964,7 +998,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                         key={grupo.nombre}
                         type="button"
                         onClick={() => setGrupoIconoEdicion(idx)}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                        className={`px-3 py-1 max-md:min-h-11 max-md:px-4 rounded-full text-xs font-medium transition-colors cursor-pointer ${
                           grupoIconoEdicion === idx
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted text-muted-foreground hover:bg-border"
@@ -1024,7 +1058,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                 </h3>
                 <button
                   onClick={() => setDetailItem(null)}
-                  className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1085,7 +1119,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
               <div className="px-5 py-4 border-t border-border">
                 <button
                   onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
+                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
                 >
                   Cerrar
                 </button>
@@ -1150,13 +1184,13 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
               <div className="flex gap-3">
                 <button
                   onClick={() => setConfirmEstado(null)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => void handleCambiarEstado()}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
                 >
                   Confirmar
                 </button>

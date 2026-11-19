@@ -74,7 +74,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
   }, [loggedInUser?.id]);
 
   const iCls = (err?: string) =>
-    `w-full px-3 py-2.5 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${
+    `w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${
       err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"
     }`;
 
@@ -159,7 +159,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <button
               onClick={onReintentarPerfil}
               disabled={perfilCargando}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
+              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-300 text-xs font-semibold text-red-700 hover:bg-red-100 cursor-pointer transition-colors disabled:opacity-60"
             >
               <RefreshCw className="w-3.5 h-3.5" aria-hidden />
               Reintentar
@@ -179,8 +179,8 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
           <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold shrink-0 shadow-sm ${avatarBg}`}>
             {iniciales}
           </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-foreground truncate" style={{ fontFamily: SERIF }}>
+          <div className="flex-1 min-w-0 max-lg:min-w-[12rem]">
+            <h2 className="text-xl font-bold text-foreground truncate max-lg:whitespace-normal max-lg:break-words" style={{ fontFamily: SERIF }}>
               {nombre}
             </h2>
             {rolesParaCambiar && rolesParaCambiar.length > 0 && onCambiarRol ? (
@@ -199,14 +199,14 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={() => setShowCambiarContrasena(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0"
               >
                 <KeyRound className="w-4 h-4" />
                 Cambiar contraseña
               </button>
               <button
                 onClick={handleEditar}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
               >
                 <Pencil className="w-4 h-4" />
                 Editar
@@ -218,7 +218,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               <button
                 disabled
                 title="Termina de editar tu perfil primero"
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl opacity-60 cursor-not-allowed shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 max-md:min-h-11 border border-border bg-white dark:bg-card text-foreground text-sm font-semibold rounded-xl opacity-60 cursor-not-allowed shrink-0"
               >
                 <KeyRound className="w-4 h-4" />
                 Cambiar contraseña
@@ -372,7 +372,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <>
               <button
                 onClick={handleCancelar}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
                 Cancelar
@@ -380,7 +380,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               <button
                 onClick={() => void handleGuardar()}
                 disabled={guardando}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 cursor-pointer transition-all disabled:opacity-60"
               >
                 <Check className="w-4 h-4" />
                 {guardando ? "Guardando…" : "Guardar cambios"}
@@ -390,7 +390,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <div className="flex flex-col sm:flex-row gap-3 w-full">
               <button
                 onClick={() => navigate(isStaff ? adminHomeScreen : inStore ? "landing" : "dashboard")}
-                className="flex items-center gap-2 px-5 py-2.5 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-muted text-foreground rounded-xl text-sm font-semibold hover:bg-border cursor-pointer transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 {isStaff
@@ -402,7 +402,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               {inStore && isStaff && (
               <button
                 onClick={() => navigate(adminHomeScreen)}
-                className="flex items-center gap-2 px-5 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
+                className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-semibold hover:bg-primary/20 cursor-pointer transition-colors"
               >
                 <ShieldCheck className="w-4 h-4" />
                 Ir a Administración
@@ -410,7 +410,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
               )}
               <button
                 onClick={onLogout}
-                className="flex items-center gap-2 px-5 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
+                className="flex items-center gap-2 px-5 py-2.5 max-md:min-h-11 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 cursor-pointer transition-colors sm:ml-auto"
               >
                 <LogOut className="w-4 h-4" />
                 Cerrar sesión

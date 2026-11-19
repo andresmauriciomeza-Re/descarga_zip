@@ -215,3 +215,32 @@
   }
 
 }
+
+/* En celular (público y panel): los campos de texto a 16 px. Con menos de
+   16 px iOS hace zoom automático al enfocar y descuadra la pantalla. Va fuera
+   de @layer para ganarle a las utilidades `text-sm`/`text-xs` de cada campo.
+    */
+@media (max-width: 767px) {
+  :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+    select,
+    textarea
+  ) {
+    font-size: 16px;
+  }
+}
+
+/* Móvil en horizontal (poca altura): los modales que se centran con
+   `fixed inset-0 flex items-center` y no tienen scroll propio quedaban con el
+   pie (Cerrar/Guardar) fuera de pantalla. Con poca altura el overlay hace
+   scroll y la tarjeta se centra con márgenes automáticos (si cabe, queda
+   centrada igual que siempre; si no, se alinea arriba y se puede desplazar). */
+@media (max-height: 560px) {
+  .fixed.inset-0.flex.items-center {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  .fixed.inset-0.flex.items-center > * {
+    margin-block: auto;
+  }
+}

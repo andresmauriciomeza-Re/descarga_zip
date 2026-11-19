@@ -183,7 +183,7 @@ export function CalendarDropdown({
           }
         }}
         aria-invalid={error}
-        className={`w-full flex items-center justify-between px-3 py-2.5 bg-muted rounded-xl border text-sm text-foreground hover:border-primary/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+        className={`w-full flex items-center justify-between px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border text-sm text-foreground hover:border-primary/50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 ${
           error ? "border-red-400 focus:ring-red-300" : "border-border"
         }`}
       >
@@ -199,14 +199,14 @@ export function CalendarDropdown({
             ref={panelRef}
             // z-[100]: mismo nivel que los portales de los selects del panel
             // (EstadoSelect/UnidadSelect), por encima de los overlays z-50.
-            className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64"
+            className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64 max-md:w-80 max-md:max-w-[calc(100vw-8px)]"
             style={{
               top: pos?.top ?? 0,
               left: pos?.left ?? 0,
               // Invisible hasta medir la posición (useLayoutEffect): evita el
               // parpadeo del cuadro en la esquina antes de anclarlo al campo.
               visibility: pos ? "visible" : "hidden",
-              maxHeight: "calc(100vh - 200px)",
+              maxHeight: "calc(100dvh - 200px)",
               overflowY: "auto",
             }}
           >
@@ -216,29 +216,29 @@ export function CalendarDropdown({
               </span>
               <div className="flex gap-0.5">
                 <button type="button" onClick={prevMonth}
-                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
+                  className="w-6 h-6 max-md:w-11 max-md:h-11 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
                 <button type="button" onClick={nextMonth}
-                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
+                  className="w-6 h-6 max-md:w-11 max-md:h-11 flex items-center justify-center rounded hover:bg-muted cursor-pointer text-foreground">
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-7 px-2 pt-1.5">
+            <div className="grid grid-cols-7 px-2 max-md:px-0 pt-1.5">
               {DIAS.map(d => (
                 <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-0.5">{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 px-2 pb-1.5">
+            <div className="grid grid-cols-7 px-2 max-md:px-0 pb-1.5">
               {cells.map((day, i) => (
-                <div key={i} className="flex items-center justify-center p-0.5">
+                <div key={i} className="flex items-center justify-center p-0.5 max-md:p-0">
                   {day ? (
                     <button
                       type="button"
                       onClick={() => pick(day)}
                       disabled={isDisabled(day)}
-                      className={`w-7 h-7 rounded-full text-xs font-medium transition-all ${
+                      className={`w-7 h-7 max-md:w-11 max-md:h-11 rounded-full text-xs font-medium transition-all ${
                         isDisabled(day)
                           ? "text-muted-foreground/40 cursor-not-allowed"
                           : isSelected(day)
@@ -256,7 +256,7 @@ export function CalendarDropdown({
             </div>
             <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
               <button type="button" onClick={() => { onChange(""); setOpen(false); onClose?.(); onBlur?.(); }}
-                className="text-[11px] font-semibold text-muted-foreground hover:text-primary cursor-pointer">
+                className="text-[11px] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-muted-foreground hover:text-primary cursor-pointer">
                 Borrar
               </button>
               <button type="button" onClick={() => {
@@ -274,7 +274,7 @@ export function CalendarDropdown({
                 onClose?.();
                 onBlur?.();
               }}
-                className="text-[11px] font-semibold text-primary hover:text-red-700 cursor-pointer">
+                className="text-[11px] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-primary hover:text-red-700 cursor-pointer">
                 Hoy
               </button>
             </div>

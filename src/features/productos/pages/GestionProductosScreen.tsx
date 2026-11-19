@@ -789,7 +789,7 @@ function CampoImagenes({
         <>
           {/* Fila 1: alta desde el equipo, a ancho completo. */}
           <label
-            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-3 py-2 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-3 py-2 max-md:min-h-11 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
               completa || subiendo ? "opacity-50 pointer-events-none" : ""
             }`}
           >
@@ -1320,7 +1320,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   /** Nombre visible de una categoría: el del listado del módulo Categoría de
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
@@ -2027,7 +2027,7 @@ export function GestionProductosScreen({
     }
   };
 
-  const roCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
+  const roCls = "w-full px-3 py-2 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
   const recomendadosPizza = (
     f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
     idCategoria: string,
@@ -2383,13 +2383,13 @@ export function GestionProductosScreen({
         <div className="flex gap-3 px-5 py-4 border-t border-border">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+            className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
+            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
           >
             {confirmLabel}
           </button>
@@ -2412,7 +2412,7 @@ export function GestionProductosScreen({
               <button
                 type="button"
                 onClick={onReintentarCarga}
-                className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
               >
                 Reintentar
               </button>
@@ -2425,7 +2425,7 @@ export function GestionProductosScreen({
 
   // ── Pantalla completa Crear Producto ──────────────────────────────
   if (showCreate) {
-    const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
     // Categoría elegida: define el tipo y los tamaños de la ficha. La pregunta
     // "¿Tiene ficha técnica?" solo existe para categorías SIN configuración.
     const cfgCrear = cfgDe(form.idCategoria);
@@ -2474,18 +2474,18 @@ export function GestionProductosScreen({
               onClick={() => setFichaOculta(v => !v)}
               disabled={sinFichaDefinitiva}
               title={sinFichaDefinitiva ? "Este producto no lleva ficha técnica" : undefined}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
             <button onClick={() => { setShowCreate(false); setVisorCrear(null); setForm(emptyForm()); setCantidadAPreparar(""); resetFichaForm(); setFormTieneFicha(null); setTieneFichaError(""); setConfirmCategoria(null); }}
-              className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+              className="px-5 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
             <button onClick={() => void handleCreate()}
               disabled={guardando}
               title={errorNombreServidor || undefined}
-              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+              className="px-6 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Crear"}
             </button>
           </div>
@@ -2654,7 +2654,7 @@ export function GestionProductosScreen({
     // cambió mientras el detalle estaba abierto.
     const vIdx = ficha ? Math.min(detailVIdx, ficha.length - 1) : 0;
     const fichaV = ficha ? ficha[vIdx] : null;
-    const readCls = "w-full px-3 py-2 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
+    const readCls = "w-full px-3 py-2 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-foreground";
     const tipoDetalle = tipoDe(detailItem, catName(detailItem.idCategoria));
     const llevaFichaDetalle = tipoDetalle === TIPOS_PRODUCTO[0];
     // Stock: la ficha VIGENTE manda, igual que en el listado.
@@ -2696,12 +2696,12 @@ export function GestionProductosScreen({
           </div>
           <div className="flex flex-wrap gap-3">
             <button onClick={() => setDetailItem(null)}
-              className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+              className="px-5 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cerrar
             </button>
             {canEdit && (
               <button onClick={() => { openEdit(detailItem); setDetailItem(null); }}
-                className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
+                className="px-6 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
                 Editar
               </button>
             )}
@@ -2961,12 +2961,12 @@ export function GestionProductosScreen({
               onClick={() => setFichaOculta(v => !v)}
               disabled={!llevaFichaEditar}
               title={!llevaFichaEditar ? "Este producto no lleva ficha técnica" : undefined}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {fichaOculta ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               {fichaOculta ? "Mostrar ficha técnica" : "Ocultar ficha técnica"}
             </button>
             <button onClick={() => { setEditItem(null); setConfirmCategoriaEdit(null); }}
-              className="px-5 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+              className="px-5 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
               Cancelar
             </button>
             <button onClick={() => void handleEdit()}
@@ -2974,7 +2974,7 @@ export function GestionProductosScreen({
                 && Number(editItem.precioUnitario) > 0 && Number(editItem.precioGrande) > 0
                 && Number(editItem.precioGrande) <= Number(editItem.precioUnitario))}
               title={errorNombreServidor || undefined}
-              className="px-6 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+              className="px-6 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               {guardando ? "Guardando…" : "Guardar"}
             </button>
           </div>
@@ -3108,7 +3108,7 @@ export function GestionProductosScreen({
                     </div>
                     <FichaTecnicaDetalle
                       v={vSel}
-                      readCls="w-full px-3 py-2.5 bg-muted/60 rounded-xl border border-border text-sm text-muted-foreground"
+                      readCls="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/60 rounded-xl border border-border text-sm text-muted-foreground"
                       modo="producto"
                     />
                   </div>
@@ -3148,6 +3148,165 @@ export function GestionProductosScreen({
     );
   }
 
+  // Piezas de una fila de producto. Las usan la tabla (desde 768 px) y las
+  // tarjetas (menos de 768 px) para mostrar exactamente los mismos botones.
+  const nombreProd = (p: Producto) => (<><span className="block truncate">
+                        {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1]
+                          ? presentacionDe(p)
+                          : p.nombre}
+                      </span>
+                      <BadgeImagenes p={p} /></>);
+  const tipoProd = (p: Producto) => (<span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p, catName(p.idCategoria)))}`}>
+                        {tipoDe(p, catName(p.idCategoria))}
+                      </span>);
+  const fichaProd = (p: Producto) => (<>{tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
+                        (fichas[p.id]?.length ?? 0) > 0 ? (
+                          <button
+                            onClick={() => {
+                              setDetailItem(p);
+                              setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
+                            }}
+                            title="Ver ficha técnica"
+                            className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors max-md:relative max-md:after:absolute max-md:after:-inset-2 max-md:after:content-['']"
+                          >
+                            v{fichas[p.id][fichas[p.id].length - 1].version}
+                          </button>
+                        ) : (
+                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                            Sin ficha
+                          </span>
+                        )
+                      ) : (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+                          No aplica
+                        </span>
+                      )}</>);
+  const precioProd = (p: Producto) => (<>{esCategoriaPizza(catName(p.idCategoria)) ? (
+                        <span className="block text-xs leading-5">
+                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
+                            <span className="text-[11px] font-normal text-muted-foreground">Mediana</span>
+                            <span className="truncate" title={fmtCOP(p.precioUnitario)}>{fmtCOP(p.precioUnitario)}</span>
+                          </span>
+                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
+                            <span className="text-[11px] font-normal text-muted-foreground">Grande</span>
+                            <span className="truncate" title={fmtCOP(p.precioGrande ?? 0)}>{fmtCOP(p.precioGrande ?? 0)}</span>
+                          </span>
+                        </span>
+                      ) : (
+                        fmtCOP(p.precioUnitario)
+                      )}</>);
+  const stockProd = (p: Producto) => (<>{esCategoriaPizza(catName(p.idCategoria)) ? (
+                        pintarStockPizza(p)
+                      ) : tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
+                        <span
+                          className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600 dark:text-red-400" : p.stockDisponible <= 15 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                        >
+                          {p.stockDisponible}
+                        </span>
+                      ) : (
+                        <span
+                          className="block"
+                          title={textoStockBebida(p)}
+                        >
+                          <span
+                            className={`block text-sm font-bold leading-5 whitespace-nowrap ${estadoStockBebida(p.stockDisponible).cls}`}
+                          >
+                            {textoStockBebida(p)}
+                          </span>
+                        </span>
+                      )}</>);
+  const estadoProd = (p: Producto) => (<>{canEdit ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label={`Acciones de estado (actual: ${p.estado}) para ${p.nombre}`}
+                              title={p.estado}
+                              className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full font-bold whitespace-nowrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 max-md:relative max-md:after:absolute max-md:after:-inset-2 max-md:after:content-['']"
+                              style={{
+                                backgroundColor: `${ESTADO_COLORES[p.estado]}1A`,
+                                color: ESTADO_COLORES[p.estado],
+                                fontSize: 13,
+                              }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ESTADO_COLORES[p.estado] }} />
+                              <span className="min-w-0 truncate">{p.estado}</span>
+                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              disabled={p.estado === "Descontinuado"}
+                              onSelect={() => setConfirmEstado({
+                                id: p.id,
+                                nombre: p.nombre,
+                                current: p.estado,
+                                next: "Descontinuado",
+                                tieneStock: false,
+                              })}
+                            >
+                              Descontinuado
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (
+                                  p.estado === "Descontinuado"
+                                  && esCategoriaPizza(catName(p.idCategoria))
+                                  && !(Number(p.precioUnitario) > 0 && Number(p.precioGrande) > Number(p.precioUnitario))
+                                ) {
+                                  toast.error("No se puede reactivar la pizza: sus precios por porción deben ser mayores a 0 y la Grande mayor que la Mediana. Primero ajusta los precios en Editar.");
+                                  return;
+                                }
+                                setConfirmEstado({
+                                  id: p.id,
+                                  nombre: p.nombre,
+                                  current: p.estado,
+                                  next: "Automático",
+                                  tieneStock: esCategoriaPizza(catName(p.idCategoria))
+                                    ? disponiblesMedianaPizza(p) > 0
+                                    : p.stockDisponible > 0,
+                                });
+                              }}
+                            >
+                              Disponible
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <EstadoBadge estado={p.estado} />
+                      )}</>);
+  const accionesProd = (p: Producto) => (<><ActionIcons
+                        onView={() => {
+                          setDetailItem(p);
+                          // Abre mostrando la versión vigente (la última).
+                          setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
+                        }}
+                        onEdit={canEdit ? () => openEdit(p) : undefined}
+                        onDelete={canDelete ? () => setDeleteId(p.id) : undefined}
+                        // Bloque 1.2: la acción es "Descontinuar", no borrar.
+                        deleteLabel="Descontinuar"
+                        deleteTitle={
+                          p.estado === "Descontinuado"
+                            ? "Ya está descontinuado"
+                            : "Descontinuar"
+                        }
+                        deleteDisabled={p.estado === "Descontinuado"}
+                      />
+                      {/* Bloque 4: la ficha vieja guardada en este navegador se
+                          sube a mano; nunca sola. */}
+                      {(fichasRespaldo[p.id]?.length ?? 0) > 0 &&
+                        (fichas[p.id]?.length ?? 0) === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => void subirFichaGuardada(p)}
+                            disabled={subiendoFicha === p.id}
+                            title="Subir a la API la ficha guardada en este navegador"
+                            className="mt-1 px-2 py-1 rounded-lg bg-card border border-border text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {subiendoFicha === p.id ? "Subiendo…" : "Subir ficha guardada"}
+                          </button>
+                        )}</>);
+
   return (
     <div className="px-4 sm:px-6 py-5">
       {/* Header */}
@@ -3163,7 +3322,7 @@ export function GestionProductosScreen({
             {productos.length} producto{productos.length === 1 ? "" : "s"} registrado{productos.length === 1 ? "" : "s"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
           {canCreate && (
             <button
@@ -3178,7 +3337,7 @@ export function GestionProductosScreen({
                 setConfirmCategoria(null);
                 setShowCreate(true);
               }}
-              className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
+              className="inline-flex items-center gap-2 px-5 py-3 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
             >
               <Plus className="w-4 h-4" /> Crear Producto
             </button>
@@ -3204,7 +3363,7 @@ export function GestionProductosScreen({
             setPage(1);
           }}
           aria-label="Filtrar por tipo"
-          className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+          className="px-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
         >
           <option value="Todos">Todos</option>
           {TIPOS_PRODUCTO.map((t) => (
@@ -3218,7 +3377,7 @@ export function GestionProductosScreen({
             setPage(1);
           }}
           aria-label="Filtrar por estado"
-          className="px-4 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+          className="px-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
         >
           <option value="Todos">Todos los estados</option>
           {ESTADOS_PRODUCTO.map((e) => (
@@ -3243,7 +3402,7 @@ export function GestionProductosScreen({
           title={`${bebidasStockBajo.length} bebida${bebidasStockBajo.length === 1 ? "" : "s"} con stock bajo: ${bebidasStockBajo
             .map((p) => `${p.nombre} (${p.stockDisponible} ${palabraStock(p, p.stockDisponible)})`)
             .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
-          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 rounded-xl border text-sm cursor-pointer transition-all ${
+          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 max-md:min-h-11 rounded-xl border text-sm cursor-pointer transition-all ${
             filtroStockBajo
               ? "bg-yellow-500 border-yellow-600 text-white shadow-md font-bold"
               : "bg-yellow-100 border-yellow-300 text-yellow-900 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-300 font-semibold hover:bg-yellow-200 dark:hover:bg-yellow-500/25"
@@ -3260,8 +3419,44 @@ export function GestionProductosScreen({
         </button>
       )}
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Menos de 768 px: cada producto como tarjeta. Reutiliza las mismas piezas y
+          botones de la tabla (nombreProd, estadoProd, accionesProd…). */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p className="text-4xl mb-3">📦</p>
+            <p>No se encontraron productos</p>
+          </div>
+        ) : (
+          paged.map((p) => (
+            <div key={p.id} className="rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 text-base font-medium text-foreground [&>span:first-child]:!whitespace-normal [&>span:first-child]:!overflow-visible [&>span:first-child]:!text-clip break-words">{nombreProd(p)}</div>
+                <div className="shrink-0">{estadoProd(p)}</div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">{tipoProd(p)}{fichaProd(p)}</div>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Categoría</dt>
+                  <dd className="mt-0.5 text-foreground break-words">{catName(p.idCategoria)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Precio de venta</dt>
+                  <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{precioProd(p)}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock</dt>
+                  <dd className="mt-0.5">{stockProd(p)}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 pt-3 border-t border-border">{accionesProd(p)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Table: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-fixed min-w-[1100px]">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -3315,41 +3510,13 @@ export function GestionProductosScreen({
                           robarle ancho al nombre de la columna fija. Las
                           bebidas muestran su presentación completa
                           ("Coca-Cola · 1.5 L · Paca x12"). */}
-                      <span className="block truncate">
-                        {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1]
-                          ? presentacionDe(p)
-                          : p.nombre}
-                      </span>
-                      <BadgeImagenes p={p} />
+                      {nombreProd(p)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${tipoPillCls(tipoDe(p, catName(p.idCategoria)))}`}>
-                        {tipoDe(p, catName(p.idCategoria))}
-                      </span>
+                      {tipoProd(p)}
                     </td>
                     <td className="px-4 py-2.5">
-                      {tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
-                        (fichas[p.id]?.length ?? 0) > 0 ? (
-                          <button
-                            onClick={() => {
-                              setDetailItem(p);
-                              setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
-                            }}
-                            title="Ver ficha técnica"
-                            className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer transition-colors"
-                          >
-                            v{fichas[p.id][fichas[p.id].length - 1].version}
-                          </button>
-                        ) : (
-                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                            Sin ficha
-                          </span>
-                        )
-                      ) : (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
-                          No aplica
-                        </span>
-                      )}
+                      {fichaProd(p)}
                     </td>
                     <td className="px-4 py-2.5 text-sm text-foreground truncate" title={catName(p.idCategoria)}>
                       {catName(p.idCategoria)}
@@ -3360,20 +3527,7 @@ export function GestionProductosScreen({
                       className={`${esCategoriaPizza(catName(p.idCategoria)) ? "px-2 overflow-hidden" : "px-4"} py-2.5 text-sm font-bold text-foreground`}
                       style={{ fontFamily: MONO }}
                     >
-                      {esCategoriaPizza(catName(p.idCategoria)) ? (
-                        <span className="block text-xs leading-5">
-                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
-                            <span className="text-[11px] font-normal text-muted-foreground">Mediana</span>
-                            <span className="truncate" title={fmtCOP(p.precioUnitario)}>{fmtCOP(p.precioUnitario)}</span>
-                          </span>
-                          <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
-                            <span className="text-[11px] font-normal text-muted-foreground">Grande</span>
-                            <span className="truncate" title={fmtCOP(p.precioGrande ?? 0)}>{fmtCOP(p.precioGrande ?? 0)}</span>
-                          </span>
-                        </span>
-                      ) : (
-                        fmtCOP(p.precioUnitario)
-                      )}
+                      {precioProd(p)}
                     </td>
                     <td
                       className="px-2 py-2.5 align-middle whitespace-nowrap"
@@ -3385,121 +3539,13 @@ export function GestionProductosScreen({
                           : textoStockBebida(p)
                       }
                     >
-                      {esCategoriaPizza(catName(p.idCategoria)) ? (
-                        pintarStockPizza(p)
-                      ) : tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? (
-                        <span
-                          className={`block text-sm font-bold leading-5 whitespace-nowrap ${p.stockDisponible <= 5 ? "text-red-600 dark:text-red-400" : p.stockDisponible <= 15 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}
-                        >
-                          {p.stockDisponible}
-                        </span>
-                      ) : (
-                        <span
-                          className="block"
-                          title={textoStockBebida(p)}
-                        >
-                          <span
-                            className={`block text-sm font-bold leading-5 whitespace-nowrap ${estadoStockBebida(p.stockDisponible).cls}`}
-                          >
-                            {textoStockBebida(p)}
-                          </span>
-                        </span>
-                      )}
+                      {stockProd(p)}
                     </td>
                     <td className="px-2 py-2.5 overflow-hidden">
-                      {canEdit ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label={`Acciones de estado (actual: ${p.estado}) para ${p.nombre}`}
-                              title={p.estado}
-                              className="inline-flex max-w-full items-center gap-1.5 px-2.5 py-1 rounded-full font-bold whitespace-nowrap cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
-                              style={{
-                                backgroundColor: `${ESTADO_COLORES[p.estado]}1A`,
-                                color: ESTADO_COLORES[p.estado],
-                                fontSize: 13,
-                              }}
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ESTADO_COLORES[p.estado] }} />
-                              <span className="min-w-0 truncate">{p.estado}</span>
-                              <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start">
-                            <DropdownMenuItem
-                              disabled={p.estado === "Descontinuado"}
-                              onSelect={() => setConfirmEstado({
-                                id: p.id,
-                                nombre: p.nombre,
-                                current: p.estado,
-                                next: "Descontinuado",
-                                tieneStock: false,
-                              })}
-                            >
-                              Descontinuado
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                if (
-                                  p.estado === "Descontinuado"
-                                  && esCategoriaPizza(catName(p.idCategoria))
-                                  && !(Number(p.precioUnitario) > 0 && Number(p.precioGrande) > Number(p.precioUnitario))
-                                ) {
-                                  toast.error("No se puede reactivar la pizza: sus precios por porción deben ser mayores a 0 y la Grande mayor que la Mediana. Primero ajusta los precios en Editar.");
-                                  return;
-                                }
-                                setConfirmEstado({
-                                  id: p.id,
-                                  nombre: p.nombre,
-                                  current: p.estado,
-                                  next: "Automático",
-                                  tieneStock: esCategoriaPizza(catName(p.idCategoria))
-                                    ? disponiblesMedianaPizza(p) > 0
-                                    : p.stockDisponible > 0,
-                                });
-                              }}
-                            >
-                              Disponible
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : (
-                        <EstadoBadge estado={p.estado} />
-                      )}
+                      {estadoProd(p)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <ActionIcons
-                        onView={() => {
-                          setDetailItem(p);
-                          // Abre mostrando la versión vigente (la última).
-                          setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
-                        }}
-                        onEdit={canEdit ? () => openEdit(p) : undefined}
-                        onDelete={canDelete ? () => setDeleteId(p.id) : undefined}
-                        // Bloque 1.2: la acción es "Descontinuar", no borrar.
-                        deleteLabel="Descontinuar"
-                        deleteTitle={
-                          p.estado === "Descontinuado"
-                            ? "Ya está descontinuado"
-                            : "Descontinuar"
-                        }
-                        deleteDisabled={p.estado === "Descontinuado"}
-                      />
-                      {/* Bloque 4: la ficha vieja guardada en este navegador se
-                          sube a mano; nunca sola. */}
-                      {(fichasRespaldo[p.id]?.length ?? 0) > 0 &&
-                        (fichas[p.id]?.length ?? 0) === 0 && (
-                          <button
-                            type="button"
-                            onClick={() => void subirFichaGuardada(p)}
-                            disabled={subiendoFicha === p.id}
-                            title="Subir a la API la ficha guardada en este navegador"
-                            className="mt-1 px-2 py-1 rounded-lg bg-card border border-border text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
-                          >
-                            {subiendoFicha === p.id ? "Subiendo…" : "Subir ficha guardada"}
-                          </button>
-                        )}
+                      {accionesProd(p)}
                     </td>
                   </tr>
                 ))
@@ -3574,7 +3620,7 @@ export function GestionProductosScreen({
               )}
               <div className="flex gap-3">
                 <button onClick={() => setConfirmEstado(null)}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
                 <button disabled={guardando} onClick={() => {
@@ -3598,7 +3644,7 @@ export function GestionProductosScreen({
                     }
                   })();
                 }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50">
+                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50">
                   {guardando ? "Guardando…" : "Confirmar"}
                 </button>
               </div>

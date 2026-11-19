@@ -583,7 +583,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
           role="tab"
           aria-selected={pestana === "todos"}
           onClick={() => setPestana("todos")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+          className={`px-4 py-2 max-md:min-h-11 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
             pestana === "todos"
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -595,7 +595,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
           role="tab"
           aria-selected={pestana === "recientes"}
           onClick={() => setPestana("recientes")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+          className={`px-4 py-2 max-md:min-h-11 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
             pestana === "recientes"
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -733,7 +733,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   <button
                     type="button"
                     onClick={() => descargarFactura(p)}
-                    className="cursor-pointer text-sm font-semibold text-primary underline"
+                    className="cursor-pointer text-sm font-semibold text-primary underline max-md:min-h-11"
                   >
                     Descargar factura
                   </button>
@@ -748,7 +748,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                     <button
                       type="button"
                       onClick={() => abrirCompletar(p.id)}
-                      className="px-4 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 active:scale-95 transition-all cursor-pointer"
+                      className="px-4 py-2 max-md:min-h-11 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 active:scale-95 transition-all cursor-pointer"
                     >
                       Enviar dinero faltante
                     </button>
@@ -776,7 +776,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       </div>
                       <button
                         onClick={() => setCancelandoId(p.id)}
-                        className="px-4 py-2 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
+                        className="px-4 py-2 max-md:min-h-11 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
                       >
                         Cancelar pedido ({segundosCancelacion(p)} s)
                       </button>
@@ -825,7 +825,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                           ) : (
                             <button
                               onClick={() => setVisorSrc(comp)}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:underline cursor-pointer"
+                              className="inline-flex items-center gap-1.5 max-md:min-h-11 text-xs font-semibold text-red-700 hover:underline cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" /> Ver comprobante de devolución
                             </button>
@@ -1001,7 +1001,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   <button
                     disabled={subiendo || enviando}
                     onClick={() => (paso === 2 ? setPaso(1) : cerrarCompletar())}
-                    className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground text-sm font-semibold"
+                    className="flex items-center gap-1.5 p-1.5 max-md:min-h-11 max-md:px-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground text-sm font-semibold"
                   >
                     <ArrowLeft className="w-4 h-4" /> Volver
                   </button>
@@ -1011,7 +1011,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   <button
                     disabled={subiendo || enviando}
                     onClick={cerrarCompletar}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3 max-md:-m-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                     aria-label="Cerrar"
                   >
                     <X className="w-4 h-4" />
@@ -1024,16 +1024,16 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                     Revisamos tu comprobante y el valor recibido no cubre el total del pedido.
                     Para continuar, envía el valor faltante.
                   </p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border">
+                  <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3">
+                    <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Total del pedido</p>
                       <p className="text-base font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(total)}</p>
                     </div>
-                    <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border">
+                    <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
                       <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Pagado</p>
                       <p className="text-base font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(pagado)}</p>
                     </div>
-                    <div className="bg-violet-50 rounded-xl px-3 py-2 border border-violet-200">
+                    <div className="bg-violet-50 rounded-xl px-3 py-2 border border-violet-200 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
                       <p className="text-[11px] text-violet-700 uppercase tracking-wide">Faltante</p>
                       <p className="text-base font-bold text-violet-800" style={{ fontFamily: MONO }}>{fmtCOP(faltante)}</p>
                     </div>
@@ -1120,14 +1120,14 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                       <button
                         disabled={subiendo || enviando}
                         onClick={() => setPaso(1)}
-                        className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                        className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                       >
                         Atrás
                       </button>
                       <button
                         onClick={enviarFaltante}
                         disabled={!listoParaEnviar}
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors active:scale-95 ${
+                        className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors active:scale-95 ${
                           listoParaEnviar
                             ? "bg-primary hover:bg-red-700 cursor-pointer"
                             : "bg-primary/50 opacity-50 cursor-not-allowed"
@@ -1140,7 +1140,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                     <button
                       onClick={() => setPaso(2)}
                       disabled={!metodo}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors active:scale-95 ${
+                      className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors active:scale-95 ${
                         metodo ? "bg-primary hover:bg-red-700 cursor-pointer" : "bg-primary/50 opacity-50 cursor-not-allowed"
                       }`}
                     >
@@ -1168,7 +1168,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   </p>
                   <button
                     onClick={() => setCancelandoId(null)}
-                    className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
+                    className="p-1.5 max-md:p-3 max-md:-m-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                     aria-label="Cerrar"
                   >
                     <X className="w-4 h-4" />
@@ -1196,7 +1196,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                 <div className="flex gap-2 px-5 pb-5">
                   <button
                     onClick={() => setCancelandoId(null)}
-                    className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     Volver
                   </button>

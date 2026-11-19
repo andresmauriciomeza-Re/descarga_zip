@@ -199,7 +199,7 @@ export function CambiarContrasenaModal({
             </button>
             <button
               onClick={onClose}
-              className="w-full py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
               Cancelar
             </button>

@@ -308,7 +308,7 @@ export function CargaComprobanteCheckout({
             type="button"
             onClick={abrirSelector}
             disabled={subiendo}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-foreground hover:border-primary hover:bg-primary/5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 max-md:min-h-11 text-xs font-semibold text-foreground hover:border-primary hover:bg-primary/5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Upload className="h-4 w-4 text-primary" />
             {subiendo ? "Subiendo…" : "Subir comprobante"}

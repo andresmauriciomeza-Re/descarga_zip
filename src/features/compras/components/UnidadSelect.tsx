@@ -100,7 +100,7 @@ export function UnidadSelect({
         aria-label={ariaLabel}
         title={listaUnidades.find((unidad) => unidad.valor === value)?.ayuda}
         data-producto-insumo-campo={dataField}
-        className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${fieldClassName} ${
+        className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 max-md:min-h-11 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${fieldClassName} ${
           disabled ? "cursor-not-allowed" : "cursor-pointer"
         }`}
       >

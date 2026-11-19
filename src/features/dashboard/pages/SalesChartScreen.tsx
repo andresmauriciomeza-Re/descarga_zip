@@ -204,8 +204,8 @@ function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras
           </span>
         ) : <span />}
         <div className="flex gap-3">
-          {!noData && <button onClick={onVentas} className="text-xs font-semibold text-primary hover:underline cursor-pointer">Ver ventas →</button>}
-          {hasCom && <button onClick={onCompras} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer">Ver compras →</button>}
+          {!noData && <button onClick={onVentas} className="text-xs font-semibold text-primary hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver ventas →</button>}
+          {hasCom && <button onClick={onCompras} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver compras →</button>}
         </div>
       </div>
     </div>
@@ -218,14 +218,14 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onBack} className="p-2 max-md:p-3 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ventas · {week.range}</p>
           <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
         </div>
-        <div className="text-right">
+        <div className="text-right max-md:basis-full max-md:text-left">
           <p className="text-2xl font-bold text-foreground">{week.totalUnidades} <span className="text-sm font-normal text-muted-foreground">unidades</span> · {week.totalPorciones} <span className="text-sm font-normal text-muted-foreground">porciones</span></p>
           <p className="text-sm font-semibold text-emerald-600">{fmtCOP(week.totalRevenue)} COP</p>
         </div>
@@ -271,7 +271,7 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
           <p className="text-sm font-semibold text-foreground">Detalle por día</p>
         </div>
         {week.days.map((d, i) => (
-          <div key={i} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
+          <div key={i} className="flex items-center gap-4 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1 px-5 py-3 border-b border-border last:border-0">
             <span className={`w-16 shrink-0 text-sm font-semibold ${d.isToday ? "text-primary" : d.isFuture ? "text-muted-foreground/50" : "text-foreground"}`}>
               {d.label}
             </span>
@@ -281,7 +281,7 @@ function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void })
                 <span className="h-full bg-orange-500" style={{ width: `${d.unidades + d.porciones > 0 ? (d.porciones / (d.unidades + d.porciones)) * 100 : 0}%` }} />
               </div>
             </div>
-            <span className="w-28 text-right text-sm shrink-0">
+            <span className="w-28 max-md:w-full max-md:pl-[4.75rem] max-md:text-left text-right text-sm shrink-0">
               {d.isFuture ? <span className="text-muted-foreground/40">—</span> : (
                 <><span className="font-bold text-foreground">{d.unidades} und · {d.porciones} porc.</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
               )}
@@ -298,7 +298,7 @@ function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items:
   return (
     <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
       <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <button onClick={onBack} className="p-2 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={onBack} className="p-2 max-md:p-3 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -468,7 +468,7 @@ export function SalesChartScreen({
   };
 
   const TAB_CLS = (t: "ventas" | "compras") =>
-    `px-5 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${tab === t ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"}`;
+    `px-5 py-2 max-md:min-h-11 rounded-xl text-sm font-semibold transition-all cursor-pointer ${tab === t ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"}`;
 
   return (
     <div className="px-4 sm:px-6 py-6">
@@ -477,7 +477,7 @@ export function SalesChartScreen({
           <motion.div key={`month-${key}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
             {/* Back + title */}
             <div className="mb-6">
-              <button onClick={onBack} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer mb-2">
+              <button onClick={onBack} className="flex items-center gap-1 max-md:min-h-11 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer mb-2">
                 <ChevronLeft className="w-3.5 h-3.5" /> Dashboard
               </button>
               <div className="flex items-start justify-between flex-wrap gap-4">
@@ -497,11 +497,11 @@ export function SalesChartScreen({
             {/* Month navigation — wrap para no desbordar en móvil */}
             <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <button onClick={() => changeMonth(-1)} disabled={idxMes === 0} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes anterior">
+                <button onClick={() => changeMonth(-1)} disabled={idxMes === 0} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes anterior">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <h2 className="text-lg font-bold text-foreground min-w-36 text-center">{label}</h2>
-                <button onClick={() => changeMonth(1)} disabled={idxMes === mesesDisponibles.length - 1} className="p-2 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes siguiente">
+                <button onClick={() => changeMonth(1)} disabled={idxMes === mesesDisponibles.length - 1} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes siguiente">
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>

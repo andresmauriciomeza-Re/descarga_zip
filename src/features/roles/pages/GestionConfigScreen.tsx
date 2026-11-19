@@ -306,7 +306,31 @@ export function PermisosTablaDetalle({ accesos }: { accesos: AccesosMap }) {
   }
 
   return (
-    <table className="w-full border-separate border-spacing-0">
+    <>
+    {/* Menos de 768 px: lista por sub-módulo con sus privilegios (la tabla de 5 columnas no cabe). */}
+    <div className="md:hidden space-y-3">
+      {grupos.map(({ modulo, subs }) => (
+        <div key={modulo}>
+          <p className="px-2 py-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground bg-muted rounded-lg">{modulo}</p>
+          <div className="divide-y divide-border">
+            {subs.map(({ sub, perms }) => (
+              <div key={sub} className="px-2 py-2.5">
+                <p className="text-sm font-medium text-foreground">{sub}</p>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {ACCIONES.filter(accion => perms.includes(accion)).map(accion => (
+                    <span key={accion} className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${accionColors[accion]}`}>{accion}</span>
+                  ))}
+                  {perms.includes(ACCION_EXCEL) && (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${accionColors[ACCION_EXCEL]}`}>{ACCION_EXCEL}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+    <table className="w-full border-separate border-spacing-0 max-md:hidden">
       <thead>
         <tr>
           <th className="sticky top-0 z-10 bg-card px-2 py-2 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
@@ -354,6 +378,7 @@ export function PermisosTablaDetalle({ accesos }: { accesos: AccesosMap }) {
         </tbody>
       ))}
     </table>
+    </>
   );
 }
 
@@ -420,7 +445,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     setErrors(p => ({ ...p, nombre: undefined }));
   };
 
-  const iCls = "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
   const isSubOn = (m: string, s: string) => {
     const k = KEY(m, s);
@@ -459,7 +484,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
       onClick={() => toggleAccion(m, s, accion)}
       aria-pressed={(accesos[KEY(m, s)] ?? []).includes(accion)}
       title={`${(accesos[KEY(m, s)] ?? []).includes(accion) ? "Desactivar" : "Activar"} privilegio ${accion}`}
-      className={`${compacto ? "text-[10px] px-1.5 py-0" : "text-xs px-2.5 py-1"} inline-flex items-center font-semibold rounded-lg border cursor-pointer transition-all active:scale-95 ${(accesos[KEY(m, s)] ?? []).includes(accion) ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"}`}
+      className={`${compacto ? "text-[10px] px-1.5 py-0" : "text-xs px-2.5 py-1"} inline-flex items-center max-md:min-h-11 max-md:px-3.5 font-semibold rounded-lg border cursor-pointer transition-all active:scale-95 ${(accesos[KEY(m, s)] ?? []).includes(accion) ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"}`}
     >
       {accion}
     </button>
@@ -519,7 +544,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                     role="checkbox"
                     aria-checked={allSel}
                     onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? [] : disponibles.filter(a => puedeAsignar(celda.modulo, sub, a)) }))}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-11 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
                       allSel
                         ? "bg-red-100 text-red-700 border-red-200"
                         : "bg-muted text-muted-foreground border-border hover:bg-primary/30"
@@ -538,7 +563,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                     <button key={accion} type="button" disabled={!permitido}
                       title={permitido ? undefined : "No tienes este privilegio para asignarlo"}
                       onClick={() => toggleAccion(celda.modulo, sub, accion)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${!permitido ? "opacity-40 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 max-md:min-h-11 max-md:px-3.5 rounded-lg text-xs font-semibold border transition-all ${!permitido ? "opacity-40 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
                         }`}
                     >
                       {on && <Check className="w-3 h-3" />}{accion}
@@ -559,9 +584,9 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
       <div className="divide-y divide-border px-2">
         {assignedSubs.map(sub => {
           return (
-            <div key={sub} className="flex items-center justify-between gap-3 py-2">
+            <div key={sub} className="flex items-center justify-between gap-3 py-2 max-md:flex-col max-md:items-start">
               <span className="text-xs font-medium text-foreground">{sub}</span>
-              <div className="flex gap-1 flex-wrap justify-end">
+              <div className="flex gap-1 flex-wrap justify-end max-md:justify-start">
                 {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion, true))}
               </div>
             </div>
@@ -578,9 +603,9 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
         {assignedSubs.map(sub => {
           return (
             <div key={sub} className="py-2.5">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
                 <span className="text-sm font-semibold text-foreground">{sub}</span>
-                <div className="flex gap-1.5 flex-wrap justify-end">
+                <div className="flex gap-1.5 flex-wrap justify-end max-md:justify-start">
                   {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion))}
                 </div>
               </div>
@@ -601,7 +626,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
           <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
 
         {/* Two-column body — cada columna tiene su propio scroll.
@@ -609,11 +634,11 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
             grilla de 3 columnas empujaba a la columna izquierda más allá del
             50% y el desborde partía el modal en dos. */}
         <div
-          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-hidden"
+          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-hidden max-md:overflow-y-auto"
         >
 
           {/* ── LEFT 50%: Información + Módulos, con scroll propio ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border overflow-y-auto">
+          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border overflow-y-auto max-md:overflow-visible max-md:shrink-0">
 
             {/* TOP: Información del rol */}
             <div className="px-5 py-3 space-y-2.5 shrink-0">
@@ -634,7 +659,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                       <button
                         type="button"
                         onClick={aplicarSugerencia}
-                        className="mt-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-border bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
+                        className="mt-1.5 px-2.5 py-1 max-md:min-h-11 max-md:px-3.5 text-[11px] font-semibold rounded-lg border border-border bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
                       >
                         Usar «{sugerida}»
                       </button>
@@ -674,7 +699,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
               <button
                 type="button"
                 onClick={() => { setMostrarResumen(true); setModuloResumen(null); setModuloActivo(null); }}
-                className={`w-full mb-3 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
+                className={`w-full mb-3 inline-flex items-center justify-center gap-2 px-3 py-2 max-md:min-h-11 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
                   mostrarResumen
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-border hover:bg-muted text-foreground"
@@ -683,7 +708,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 Ver permisos
               </button>
               <div
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+                className="grid grid-cols-2 md:grid-cols-3"
                 style={{ display: "grid", gap: "12px", gridAutoRows: "1fr", boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
               >
                 {CELDAS.map(celda => {
@@ -722,7 +747,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                         aria-checked={allOn}
                         onClick={event => { event.stopPropagation(); toggleCelda(celda); }}
                         style={{ position: "absolute", top: "8px", right: "8px" }}
-                        className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center transition-colors ${
+                        className={`w-[18px] h-[18px] max-md:after:absolute max-md:after:-inset-3.5 max-md:after:content-[''] rounded-[5px] border flex items-center justify-center transition-colors ${
                           allOn
                             ? "bg-primary border-primary"
                             : someOn
@@ -747,7 +772,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
           </div>
 
           {/* ── RIGHT 50%: Permisos CRUD — scroll independiente ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
+          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-y-auto max-md:overflow-visible max-md:shrink-0">
            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
              Asignar permisos al rol
            </p>
@@ -757,7 +782,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                    isSomeMod(celda.modulo, subsDeCelda(celda))
                  );
                  return (
-                    <div className="flex-1 min-h-0 space-y-3 overflow-y-auto pr-1">
+                    <div className="flex-1 min-h-0 space-y-3 overflow-y-auto max-md:overflow-visible pr-1">
                      {asignados.length === 0 ? (
                        <div className="flex flex-col items-center justify-center text-center min-h-40">
                          <p className="text-sm font-semibold text-foreground mb-1">Sin permisos asignados</p>
@@ -778,7 +803,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                                  <button
                                    type="button"
                                    onClick={() => setModuloResumen(abierto ? null : celda.nombre)}
-                                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 bg-muted/40 hover:bg-muted text-left cursor-pointer"
+                                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 max-md:min-h-11 bg-muted/40 hover:bg-muted text-left cursor-pointer"
                                  >
                                     <span className="text-sm font-semibold text-foreground">{celda.nombre}</span>
                                     <span className="text-xs font-semibold text-primary">
@@ -806,7 +831,7 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
                 </p>
               </div>
             ) : (
-               <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+               <div className="flex-1 min-h-0 overflow-y-auto max-md:overflow-visible pr-1 space-y-4">
                  {(() => {
                   // Solo la celda abierta. Antes se iteraba todo MENU_TREE
                   // filtrando por isSubOn, así que un módulo sin permisos no
@@ -832,13 +857,13 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
 
         {/* Footer */}
         <div className="flex justify-end gap-3 px-6 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="px-5 py-2 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
+          <button onClick={onClose} className="px-5 py-2 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
           <button onClick={handleSave}
             // P3: bloqueado mientras el nombre sea inválido o duplicado
             // ("Este rol ya existe"), o falte elegir módulos tras un intento.
             disabled={guardarNombreBloqueado}
             title={guardarNombreBloqueado ? "Corrige el nombre del rol para guardarlo" : undefined}
-            className={`px-6 py-2 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${guardarNombreBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>Guardar rol</button>
+            className={`px-6 py-2 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${guardarNombreBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>Guardar rol</button>
         </div>
       </motion.div>
     </div>
@@ -1030,6 +1055,65 @@ export function GestionConfigScreen({
     }
   };
 
+  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
+  // 768 px) para mostrar exactamente los mismos controles y handlers.
+  const estadoRol = (r: Rol) => (
+    <span
+      title={
+        esRolBase(r)
+          ? "Rol base: no se puede desactivar"
+          : r.id === loggedInRolId
+            ? "No puedes modificar tu propio rol"
+            : undefined
+      }
+    >
+      <EstadoSelect
+        value={r.activo ? "activo" : "inactivo"}
+        disabled={!canEdit || r.id === loggedInRolId || esRolBase(r) || estadoEnCurso === r.id}
+        onChange={nuevoEstado => {
+          if ((nuevoEstado === "activo") === r.activo) return;
+          const nuevo = nuevoEstado === "activo";
+          void aplicarEstado(r, nuevo);
+        }}
+        options={[
+          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
+          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
+        ]}
+      />
+    </span>
+  );
+  const accionesRol = (r: Rol) => (
+    <ActionIcons
+      onView={() => setDetailItem(r)}
+      onEdit={canEdit ? () => setEditItem(r) : undefined}
+      editDisabled={esRolBase(r) || r.activo}
+      editTitle={esRolBase(r)
+        ? "Rol base: no se puede editar"
+        : r.activo
+          ? "Desactiva el rol para poder editarlo"
+          : "Editar"}
+      onDelete={
+        r.id === loggedInRolId
+          ? () => {}
+          : canDelete ? () => handleDelete(r.id) : undefined
+      }
+      deleteDisabled={
+        r.id === loggedInRolId ||
+        esRolBase(r) ||
+        (r.usuariosAsignados ?? 0) > 0
+      }
+      deleteTitle={
+        r.id === loggedInRolId
+          ? "No puedes modificar tu propio rol"
+          : esRolBase(r)
+            ? "No se puede eliminar un rol base"
+            : (r.usuariosAsignados ?? 0) > 0
+              ? `No se puede eliminar: ${r.usuariosAsignados} usuario(s) asignado(s)`
+              : "Eliminar"
+      }
+    />
+  );
+
   if (!canVer) {
     return (
       <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
@@ -1062,7 +1146,35 @@ export function GestionConfigScreen({
         placeholder="Buscar por nombre o descripción..."
       />
 
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      {/* Menos de 768 px: cada rol como tarjeta (Estado y Acciones quedan fuera de vista en la tabla).
+          Reutiliza estadoRol y accionesRol, los mismos controles de la tabla. */}
+      <div className="md:hidden space-y-3 mb-2">
+        {cargando ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando roles…</div>
+        ) : errorCarga ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
+            <p role="alert">{errorCarga}</p>
+            <button onClick={() => void cargarRoles()} className="mt-2 underline text-primary max-md:min-h-11 max-md:px-3">Reintentar</button>
+          </div>
+        ) : paged.length === 0 ? (
+          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">🔐</p><p>No se encontraron roles</p></div>
+        ) : paged.map(r => (
+          <div key={r.id} className="bg-card border border-border rounded-2xl p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-mono font-semibold text-muted-foreground">ID {r.id.replace("ROL-", "")}</p>
+                <p className="text-base font-semibold text-foreground break-words">{r.nombre}</p>
+              </div>
+              <div className="shrink-0">{estadoRol(r)}</div>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2 line-clamp-3 break-words">{r.descripcion || "—"}</p>
+            <div className="mt-3 pt-3 border-t border-border">{accionesRol(r)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabla: desde 768 px */}
+      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
@@ -1076,7 +1188,7 @@ export function GestionConfigScreen({
               ) : errorCarga ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
                   <p role="alert">{errorCarga}</p>
-                  <button onClick={() => void cargarRoles()} className="mt-2 underline text-primary">Reintentar</button>
+                  <button onClick={() => void cargarRoles()} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-2 underline text-primary">Reintentar</button>
                 </td></tr>
               ) : paged.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
@@ -1089,60 +1201,10 @@ export function GestionConfigScreen({
                   <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
                   <td className="px-4 py-3.5">
                    {/* El backend verifica en transacción las invariantes del estado. */}
-                       <span
-                       title={
-                         esRolBase(r)
-                           ? "Rol base: no se puede desactivar"
-                           : r.id === loggedInRolId
-                             ? "No puedes modificar tu propio rol"
-                             : undefined
-                       }
-                     >
-                       <EstadoSelect
-                         value={r.activo ? "activo" : "inactivo"}
-                         disabled={!canEdit || r.id === loggedInRolId || esRolBase(r) || estadoEnCurso === r.id}
-                         onChange={nuevoEstado => {
-                           if ((nuevoEstado === "activo") === r.activo) return;
-                           const nuevo = nuevoEstado === "activo";
-                           void aplicarEstado(r, nuevo);
-                         }}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                      />
-                    </span>
+                   {estadoRol(r)}
                   </td>
                   <td className="px-4 py-3.5">
-                     <ActionIcons
-                       onView={() => setDetailItem(r)}
-                       onEdit={canEdit ? () => setEditItem(r) : undefined}
-                       editDisabled={esRolBase(r) || r.activo}
-                       editTitle={esRolBase(r)
-                         ? "Rol base: no se puede editar"
-                         : r.activo
-                           ? "Desactiva el rol para poder editarlo"
-                           : "Editar"}
-                      onDelete={
-                        r.id === loggedInRolId
-                          ? () => {}
-                          : canDelete ? () => handleDelete(r.id) : undefined
-                      }
-                      deleteDisabled={
-                        r.id === loggedInRolId ||
-                        esRolBase(r) ||
-                         (r.usuariosAsignados ?? 0) > 0
-                      }
-                      deleteTitle={
-                        r.id === loggedInRolId
-                          ? "No puedes modificar tu propio rol"
-                          : esRolBase(r)
-                            ? "No se puede eliminar un rol base"
-                            : (r.usuariosAsignados ?? 0) > 0
-                              ? `No se puede eliminar: ${r.usuariosAsignados} usuario(s) asignado(s)`
-                              : "Eliminar"
-                      }
-                    />
+                     {accionesRol(r)}
                   </td>
                 </tr>
               ))}
@@ -1185,10 +1247,10 @@ export function GestionConfigScreen({
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale:.95,opacity:0 }} animate={{ scale:1,opacity:1 }}
               exit={{ scale:.95,opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-2xl max-h-[calc(100vh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
+              className="bg-card rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               {/* Todo el cuerpo (datos + tabla) vive en el área con scroll
                   interno; el pie queda fuera, así "Editar rol" y "Cerrar"
@@ -1227,7 +1289,7 @@ export function GestionConfigScreen({
               <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
                 {canEdit && rolEditable(detailItem) && !detailItem.activo && (
                 <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
-                  className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Editar rol
                 </button>
                 )}
@@ -1236,18 +1298,18 @@ export function GestionConfigScreen({
                 {rolEditable(detailItem) && detailItem.activo ? (
                   <button disabled
                     title="Desactiva el rol para poder editarlo"
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
                     Editar rol
                   </button>
                 ) : !rolEditable(detailItem) ? (
                   <button disabled
                     title="Rol base: no se puede editar"
-                    className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
+                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
                     Editar rol
                   </button>
                 ) : null}
                 <button onClick={() => setDetailItem(null)}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
+                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
                   Cerrar
                 </button>
               </div>

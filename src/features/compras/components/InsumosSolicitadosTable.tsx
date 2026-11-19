@@ -168,7 +168,7 @@ export function InsumosSolicitadosTable({
         <tr>
           <td
             colSpan={columnCount}
-            className={"text-center text-xs text-muted-foreground px-3 " + (enPagina ? "py-6" : "py-8")}
+            className={"text-center max-md:text-left text-xs text-muted-foreground px-3 max-md:px-4 " + (enPagina ? "py-6" : "py-8")}
           >
             {enPagina ? (
               <span className="inline-flex items-center gap-2">
@@ -372,11 +372,11 @@ export function InsumosSolicitadosTable({
             // `sinScrollX`: la tabla se queda en el ancho del panel (sin
             // desplazamiento horizontal); los demás usos conservan el
             // `overflow-auto` de siempre con su `min-width`.
-            (sinScrollX ? "overflow-y-auto overflow-x-hidden" : "overflow-auto")
+            (sinScrollX ? "overflow-y-auto overflow-x-hidden max-md:overflow-x-auto" : "overflow-auto")
           }
         >
           <table
-            className="table-fixed w-full text-sm [&_td]:py-2"
+            className="table-fixed w-full text-sm max-md:min-w-[500px] [&_td]:py-2"
             style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
           >
             {colgroup}
@@ -434,12 +434,12 @@ export function InsumosSolicitadosTable({
       <div
         className={
           "flex-1 min-h-0 " +
-          (sinScrollX ? "overflow-y-auto overflow-x-hidden" : "overflow-auto") +
+          (sinScrollX ? "overflow-y-auto overflow-x-hidden max-md:overflow-x-auto" : "overflow-auto") +
           (enPagina && items.length === 0 ? " flex items-center" : "")
         }
       >
         <table
-          className={"table-fixed w-full text-sm " + (enPagina ? "[&_td]:py-2" : "")}
+          className={"table-fixed w-full text-sm max-md:min-w-[500px] " + (enPagina ? "[&_td]:py-2" : "")}
           style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
         >
           {colgroup}
