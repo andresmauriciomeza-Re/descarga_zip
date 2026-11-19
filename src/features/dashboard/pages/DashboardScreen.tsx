@@ -1425,7 +1425,7 @@ export function DashboardScreen({
         <div className="flex items-center justify-between p-5 border-b border-border">
             <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Últimas ventas</h2>
             <button
-              onClick={() => navigate("orders")}
+              onClick={() => navigate("ventas-pedidos")}
               className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1 max-md:min-h-11 max-md:px-2 max-md:-mr-2"
             >
               Ver todos <ArrowRight className="w-3.5 h-3.5" />

@@ -56,7 +56,6 @@ const tipoAFront = (tipo: string): string =>
 const tipoAApi = (tipo: string): string =>
   tipo === "ProductoInsumo" ? "Producto insumo" : "Insumo";
 
-export const idInsumoFrontDesdeApi = idInsumoFront;
 
 export const mapearCategoriaApi = (c: CategoriaInsumoApi): CategoriaInsumo => ({
   id: String(c.id_categoria_insumo),

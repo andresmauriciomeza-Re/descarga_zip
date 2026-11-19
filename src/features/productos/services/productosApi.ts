@@ -211,27 +211,3 @@ export const cambiarEstadoProducto = async (
   }
   throw new Error("El producto se actualizó, pero no apareció en la respuesta del servidor.");
 };
-
-export const entradaCompra = async (id: string, payload: EntradaCompraApi): Promise<Producto> => {
-  const { data } = await api.post<ProductoApi | { producto: ProductoApi }>(
-    `/productos/${encodeURIComponent(id)}/entrada-compra`,
-    payload,
-  );
-  return productoDeRespuesta(data);
-};
-
-export const reversaCompra = async (id: string, unidades: number): Promise<Producto | null> => {
-  const { data } = await api.post<ProductoApi | { producto: ProductoApi } | { mensaje?: string }>(
-    `/productos/${encodeURIComponent(id)}/reversa-compra`,
-    { unidades },
-  );
-  if (pareceProductoApi(data) || (data && "producto" in data)) return productoDeRespuesta(data as ProductoApi | { producto: ProductoApi });
-  try {
-    const listado = await listarGestion();
-    return listado.find((p) => p.id === id) ?? null;
-  } catch {
-    // El POST ya confirmó la reversa. No se reporta como fallida solo porque
-    // el GET de refresco no respondió, para evitar repetir el descuento.
-    return null;
-  }
-};

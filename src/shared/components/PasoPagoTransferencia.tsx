@@ -117,15 +117,10 @@ export function PasoPagoTransferencia({
   subiendo,
   fileRef,
   onFileChange,
-}: {
+}: PropsComprobantePago & {
   payment: string;
   subtotal: number;
   qrDataUrl: string;
-  comprobante: string;
-  onQuitarComprobante: () => void;
-  subiendo: boolean;
-  fileRef: RefObject<HTMLInputElement | null>;
-  onFileChange: (file: File) => void;
 }) {
   const info = PAYMENT_INFO[payment];
   return (
@@ -156,60 +151,171 @@ export function PasoPagoTransferencia({
         <BloqueQrPago payment={payment} monto={subtotal} qrDataUrl={qrDataUrl} />
       </div>
 
-      {/* RIGHT: subir comprobante */}
-      <div>
-        <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
-          <Upload className="w-4 h-4 text-primary" />
-          Comprobante de pago *
-        </p>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          className="sr-only"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onFileChange(file);
-            e.target.value = "";
-          }}
-        />
-        {comprobante ? (
-          <div className="relative rounded-xl overflow-hidden border border-border">
-            {esComprobantePdf(comprobante) ? (
-              <a href={comprobante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-4 pr-12 text-sm text-foreground">
-                <FileText className="w-4 h-4" /> Abrir comprobante (PDF)
-              </a>
-            ) : (
-              <img src={comprobante} alt="Comprobante" className="w-full max-h-48 object-contain bg-muted" />
-            )}
-            <button
-              onClick={onQuitarComprobante}
-              className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 cursor-pointer transition-colors"
-              aria-label="Quitar comprobante"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
+      <CargaComprobantePago
+        comprobante={comprobante}
+        onQuitarComprobante={onQuitarComprobante}
+        subiendo={subiendo}
+        fileRef={fileRef}
+        onFileChange={onFileChange}
+      />
+    </div>
+  );
+}
+
+type PropsComprobantePago = {
+  comprobante: string;
+  onQuitarComprobante: () => void;
+  subiendo: boolean;
+  fileRef: RefObject<HTMLInputElement | null>;
+  onFileChange: (file: File) => void;
+};
+
+function CargaComprobantePago({
+  comprobante,
+  onQuitarComprobante,
+  subiendo,
+  fileRef,
+  onFileChange,
+}: PropsComprobantePago) {
+  return (
+    <div>
+      <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+        <Upload className="w-4 h-4 text-primary" />
+        Comprobante de pago *
+      </p>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFileChange(file);
+          e.target.value = "";
+        }}
+      />
+      {comprobante ? (
+        <div className="relative rounded-xl overflow-hidden border border-border">
+          {esComprobantePdf(comprobante) ? (
+            <a href={comprobante} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-4 pr-12 text-sm text-foreground">
+              <FileText className="w-4 h-4" /> Abrir comprobante (PDF)
+            </a>
+          ) : (
+            <img src={comprobante} alt="Comprobante" className="w-full max-h-48 object-contain bg-muted" />
+          )}
           <button
-            onClick={() => fileRef.current?.click()}
-            disabled={subiendo}
-            className="w-full flex flex-col items-center justify-center gap-3 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 cursor-pointer transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={onQuitarComprobante}
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80 cursor-pointer transition-colors"
+            aria-label="Quitar comprobante"
           >
-            <div className="w-12 h-12 rounded-xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-              <ImageIcon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">
-                {subiendo ? "Subiendo..." : "Haz clic para subir"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                JPG, PNG, WEBP o PDF · máx 5 MB
-              </p>
-            </div>
+            <X className="w-3.5 h-3.5" />
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={subiendo}
+          className="w-full flex flex-col items-center justify-center gap-3 py-8 rounded-xl border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 cursor-pointer transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <div className="w-12 h-12 rounded-xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors">
+            <ImageIcon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">
+              {subiendo ? "Subiendo..." : "Haz clic para subir"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              JPG, PNG, WEBP o PDF · máx 5 MB
+            </p>
+          </div>
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function CargaComprobanteCheckout({
+  comprobante,
+  onQuitarComprobante,
+  subiendo,
+  fileRef,
+  onFileChange,
+  monto,
+}: Omit<PropsComprobantePago, "comprobante"> & {
+  comprobante: { url: string; nombre: string } | null;
+  monto: number;
+}) {
+  const abrirSelector = () => fileRef.current?.click();
+
+  return (
+    <div>
+      <p className="mb-1.5 text-sm font-semibold text-foreground">Comprobante de pago *</p>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Realiza la transferencia por el valor exacto de{" "}
+        <strong className="text-foreground">{fmt(monto)}</strong> y sube el comprobante.
+      </p>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        disabled={subiendo}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFileChange(file);
+          e.target.value = "";
+        }}
+      />
+      {comprobante ? (
+        <div className="flex min-w-0 items-center gap-2 text-sm">
+          <a
+            href={comprobante.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir vista previa del comprobante"
+            className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground hover:text-primary"
+          >
+            {esComprobantePdf(comprobante.nombre) ? (
+              <FileText className="h-4 w-4" />
+            ) : (
+              <img src={comprobante.url} alt="" className="h-full w-full object-cover" />
+            )}
+          </a>
+          <span className="min-w-0 flex-1 truncate" title={comprobante.nombre}>
+            {comprobante.nombre}
+          </span>
+          <button
+            type="button"
+            onClick={abrirSelector}
+            disabled={subiendo}
+            className="shrink-0 cursor-pointer text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {subiendo ? "Subiendo…" : "Cambiar"}
+          </button>
+          <button
+            type="button"
+            onClick={onQuitarComprobante}
+            disabled={subiendo}
+            className="shrink-0 cursor-pointer text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Quitar
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={abrirSelector}
+            disabled={subiendo}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-2 max-md:min-h-11 text-xs font-semibold text-foreground hover:border-primary hover:bg-primary/5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Upload className="h-4 w-4 text-primary" />
+            {subiendo ? "Subiendo…" : "Subir comprobante"}
+          </button>
+          <span className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx 5 MB</span>
+        </div>
+      )}
     </div>
   );
 }

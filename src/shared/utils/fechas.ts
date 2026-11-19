@@ -41,8 +41,6 @@ export const hoyISO = (): FechaISO => fechaISO(hoyBogota());
 export const esFechaISO = (f: string | undefined | null): f is FechaISO =>
   typeof f === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f);
 
-/** Comparación lexicográfica = cronológica para "YYYY-MM-DD". */
-export const cmpFecha = (a: FechaISO, b: FechaISO): number => a.localeCompare(b);
 
 /** true si `f` está dentro de [desde, hasta] inclusive (comparación lexicográfica). */
 export const enRango = (f: FechaISO, desde: FechaISO, hasta: FechaISO): boolean =>
@@ -62,8 +60,6 @@ export const lunesDe = (d: Date): Date => {
   return agregarDias(c, -desdeLunes);
 };
 
-/** Domingo (inclusive) de la semana que contiene a `d`. */
-export const domingoDe = (d: Date): Date => agregarDias(lunesDe(d), 6);
 
 export const inicioDeMes = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), 1);
 export const finDeMes = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() + 1, 0);
@@ -105,11 +101,7 @@ export const enPeriodo = (
 export const semanaDelMes = (fecha: FechaISO): number =>
   Math.ceil(Number(fecha.slice(8, 10)) / 7);
 
-/** "2026-10" — clave de mes de una fecha ISO. */
-export const mesDe = (fecha: FechaISO): string => fecha.slice(0, 7);
 
-/** "2026" — clave de año de una fecha ISO. */
-export const anioDe = (fecha: FechaISO): string => fecha.slice(0, 4);
 
 /** Texto bajo cada número del Dashboard según el periodo activo. */
 export const etiquetaPeriodo = (periodo: Periodo): string =>

@@ -117,10 +117,6 @@ export function filtrarNumeroDocumento(valor: string): string {
   return valor.replace(/\D/g, "").slice(0, DOCUMENTO_MAX);
 }
 
-/** DV al escribir: solo dígitos y UNO solo (el DV de la DIAN es de 1 dígito). */
-export function filtrarDv(valor: string): string {
-  return valor.replace(/\D/g, "").slice(0, 1);
-}
 
 /** Pesos oficiales de la DIAN para el dígito de verificación, aplicados del
  *  dígito MENOS significativo (derecha) al más significativo (izquierda). */
