@@ -66,8 +66,8 @@ export async function obtenerMiContratacion(): Promise<MiContratacionResponse> {
   return data;
 }
 
-/** PUT /empleados/:idEmpleado: datos de la persona y, si se envían, cargos y
- *  fechas de la contratación abierta. `idEmpleado` = id_empleado, NO el documento. */
+/** PUT /empleados/:idEmpleado: SOLO cargos, estado y fecha final, y únicamente
+ *  de un empleado inactivo. `idEmpleado` = id_empleado, NO el documento. */
 export async function editarEmpleado(
   idEmpleado: number,
   datos: EditarEmpleadoRequest,
