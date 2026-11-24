@@ -164,21 +164,21 @@ export interface MiContratacionResponse {
   contrataciones: ContratacionApi[];
 }
 
-/** PUT /empleados/:idEmpleado. Los cargos viajan como NOMBRES de rol. `cargos`,
- *  `fechaInicio` y `fechaFinal` se aplican a la contratación abierta: si no se
- *  envían, solo se editan los datos de la persona. El documento no se edita. */
+/** PUT /empleados/:idEmpleado. Lista blanca: SOLO cargos, estado y fecha final,
+ *  y únicamente de un empleado INACTIVO (si está activo el backend responde 403).
+ *  Los cargos viajan como NOMBRES de rol. `cargos` y `fechaFinal` se aplican a la
+ *  contratación abierta; si no hay contratación abierta se guardan al activar al
+ *  empleado (el backend crea la contratación con inicio = hoy). Los datos de la
+ *  persona y el documento NO se editan por esta vía (cada quien usa su perfil). */
 export interface EditarEmpleadoRequest {
-  nombre: string;
-  correo: string;
-  telefono: string;
+  estado?: boolean;
   cargos?: string[];
-  fechaInicio?: string;
   fechaFinal?: string;
 }
 
 export interface EditarEmpleadoResponse {
   mensaje: string;
-  /** null = no hubo invitación nueva; boolean = resultado del envío al correo nuevo. */
+  /** null (hoy siempre): la edición ya no cambia el correo ni reenvía invitación. */
   correoEnviado: boolean | null;
 }
 

@@ -140,14 +140,10 @@ export function GestionUsuariosScreen({
   canVer = true,
   canEdit = true,
   canDelete = true,
-  onEditarCliente,
-  onEditarEmpleado,
 }: {
   canVer?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
-  onEditarCliente: (usuario: UsuarioGestion) => void;
-  onEditarEmpleado: (usuario: UsuarioGestion) => boolean;
 }) {
   const [usuarios, setUsuarios] = useState<UsuarioGestion[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -189,15 +185,6 @@ export function GestionUsuariosScreen({
   const paginaActual = Math.min(page, paginas);
   const paginados = filtrados.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
 
-  const editar = (u: UsuarioGestion) => {
-    if (u.esEmpleado) {
-      if (!onEditarEmpleado(u)) toast.info("Este empleado se podrá editar cuando Gestión de Empleados esté conectada a la base");
-      return;
-    }
-    if (u.esCliente) { onEditarCliente(u); return; }
-    toast.info("Este usuario no tiene una ficha editable en Clientes o Empleados.");
-  };
-
   const cambiarEstado = async (u: UsuarioGestion, nuevoEstado: boolean) => {
     if (nuevoEstado === u.estado) return;
     setActualizando(u.id);
@@ -227,7 +214,7 @@ export function GestionUsuariosScreen({
   // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
   // 768 px) para mostrar exactamente los mismos controles y handlers.
   const estadoUsuario = (u: UsuarioGestion) => (canEdit ? <EstadoSelect value={u.estado ? "activo" : "inactivo"} disabled={Boolean(u.esSuperAdmin) || actualizando === u.id} onChange={v => void cambiarEstado(u, v === "activo")} options={[{ value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR }, { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR }]} /> : <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${u.estado ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{u.estado ? "Activo" : "Inactivo"}</span>);
-  const accionesUsuario = (u: UsuarioGestion) => (<ActionIcons onView={() => setDetail(u)} onEdit={canEdit ? () => editar(u) : undefined} editDisabled={Boolean(u.esSuperAdmin)} editTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Editar en Clientes o Empleados"} onDelete={canDelete ? () => setDeleteItem(u) : undefined} deleteDisabled={Boolean(u.esSuperAdmin)} deleteTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Eliminar usuario"} />);
+  const accionesUsuario = (u: UsuarioGestion) => (<ActionIcons onView={() => setDetail(u)} onDelete={canDelete ? () => setDeleteItem(u) : undefined} deleteDisabled={Boolean(u.esSuperAdmin)} deleteTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Eliminar usuario"} />);
 
   const inputClass = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer max-md:w-full max-md:min-h-11";
   if (!canVer) return <div className="flex flex-col items-center justify-center py-32 px-6 text-center"><div className="text-6xl mb-4">🔒</div><h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2><p className="text-muted-foreground">No tienes permiso para ver Gestión Usuarios. Pide acceso al administrador.</p></div>;
@@ -283,7 +270,6 @@ export function GestionUsuariosScreen({
         <div className="flex items-center justify-between px-5 py-4 border-b border-border"><div><h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detail.nombre}</h3><p className="text-xs font-mono text-muted-foreground">{fmtDoc(detail.tipo_documento, String(detail.id_usuario))}</p></div><button onClick={() => setDetail(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button></div>
         <div className="p-5 space-y-4"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{ label: "Correo", value: detail.correo }, { label: "Teléfono", value: detail.telefono }, { label: "Estado de cuenta", value: detail.estado ? "Activo" : "Inactivo" }, { label: "Roles", value: "" }].map(item => <div key={item.label}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{item.label}</p>{item.label === "Roles" ? <RolesChipsDetalle usuario={detail} /> : <p className="text-sm font-semibold text-foreground break-words">{item.value || "—"}</p>}</div>)}</div>
           {canEdit && <button disabled={Boolean(detail.esSuperAdmin) || actualizando === detail.id} onClick={() => void cambiarEstado(detail, !detail.estado)} className="w-full flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted disabled:opacity-50"><RefreshCw className="w-4 h-4" />{detail.estado ? "Desactivar usuario" : "Activar usuario"}</button>}
-          {canEdit && <button onClick={() => { const target = detail; setDetail(null); editar(target); }} disabled={Boolean(detail.esSuperAdmin)} className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-red-700 disabled:opacity-50">Editar en Clientes o Empleados</button>}
           <button onClick={() => setDetail(null)} className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border hover:bg-muted">Cerrar</button>
         </div>
       </motion.div></div></div>}</AnimatePresence>

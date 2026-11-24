@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, UserPlus } from "lucide-react";
 import { toast } from "sonner";
@@ -13,11 +13,10 @@ import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { DOC_TIPOS, fmtDoc } from "@/features/usuarios/pages/GestionUsuariosScreen";
-import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
-import { cambiarEstadoCliente, crearCliente, editarCliente, listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
+import { cambiarEstadoCliente, crearCliente, listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -51,7 +50,7 @@ export interface Cliente {
   activo: boolean;
 }
 
-export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, usuarios, roles = [], sesionCorreo = "", clienteAAbrirDesdeUsuarios = null, onClienteAbiertoDesdeUsuarios }: {
+export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, usuarios, roles = [], sesionCorreo = "" }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
@@ -60,8 +59,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   roles?: Rol[];
   /** Correo de la cuenta con la que se abrió la sesión (su propio cliente). */
   sesionCorreo?: string;
-  clienteAAbrirDesdeUsuarios?: { tipoDocumento: string; numeroDocumento: string } | null;
-  onClienteAbiertoDesdeUsuarios?: () => void;
 }) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -82,8 +79,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   const [sortBy,       setSortBy]     = useState("id");
   const [page,         setPage]       = useState(1);
   const [detailItem,   setDetailItem] = useState<Cliente | null>(null);
-  const edicionExternaConsumida = useRef<string | null>(null);
-  const [editItem,     setEditItem]   = useState<Cliente | null>(null);
   const [showCreate,   setShowCreate] = useState(false);
   const [newNombre,    setNewNombre]  = useState("");
   const [newCorreo,    setNewCorreo]  = useState("");
@@ -92,8 +87,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   const [newDocumento, setNewDocumento] = useState("");
   const [newActivo,    setNewActivo]  = useState(true);
   const [createErrors, setCreateErrors] = useState<{ nombre?: string; correo?: string; tipoDocumento?: string; numeroDocumento?: string; telefono?: string }>({});
-  const [editErrors,   setEditErrors] = useState<{ nombre?: string; correo?: string; telefono?: string }>({});
-  const [editPrevCorreo, setEditPrevCorreo] = useState<string | null>(null);
 
   const total   = clientes.length;
   const activos = clientes.filter(c => c.activo).length;
@@ -174,56 +167,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
       await cargarClientes();
       toast.success("Estado del cliente actualizado");
     } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado."); }
-  };
-
-  const handleEdit = async () => {
-    if (!editItem) return;
-    // Si el formulario tocó el estado, se comprueba aquí la misma regla que
-    // en la lista: el administrador y la cuenta propia no se inactivan.
-    const original = clientes.find(c => c.id === editItem.id);
-    if (original && original.activo !== editItem.activo) {
-      const motivo = bloqueoEstado(original);
-      if (motivo) { toast.error(motivo); return; }
-    }
-    const errs: { nombre?: string; correo?: string; telefono?: string } = {};
-    if (!editItem.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else { const v = validarNombre(editItem.nombre); if (v) errs.nombre = v; }
-    if (!editItem.correo.trim()) errs.correo = "El correo es obligatorio";
-    else {
-      const v = validarCorreoBasico(editItem.correo);
-      if (v) errs.correo = v;
-      if (!errs.correo) {
-        const em = editItem.correo.trim().toLowerCase();
-        const otro = (correo: string) => correo.trim().toLowerCase() !== (editPrevCorreo ?? "").trim().toLowerCase();
-        // Correo vacío nunca coincide con otro vacío (aunque `em` aquí ya es
-        // no vacío por la validación de arriba).
-        const duplicado =
-          clientes.some(c => c.id !== editItem.id && otro(c.correo) && c.correo.trim() !== "" && c.correo.trim().toLowerCase() === em) ||
-          usuarios.some(u => otro(u.correo) && u.correo.trim() !== "" && u.correo.trim().toLowerCase() === em);
-        if (duplicado) errs.correo = "Este correo ya está registrado";
-      }
-    }
-    const telefonoError = validarTelefono(editItem.telefono);
-    if (telefonoError) errs.telefono = telefonoError;
-    if (Object.keys(errs).length) { setEditErrors(errs); return; }
-    try {
-      await editarCliente(editItem.numeroDocumento, { nombre: normalizarNombre(editItem.nombre), correo: editItem.correo.trim(), telefono: editItem.telefono });
-      const original = clientes.find(c => c.id === editItem.id);
-      if (original && original.activo !== editItem.activo) {
-        const motivo = bloqueoEstado(original);
-        if (motivo) { toast.error(motivo); return; }
-        await cambiarEstadoCliente(editItem.numeroDocumento, editItem.activo);
-      }
-      await cargarClientes();
-      setEditItem(null); setEditPrevCorreo(null); setEditErrors({});
-      toast.success("Cliente actualizado correctamente");
-    } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo actualizar el cliente."; if (mensaje.toLowerCase().includes("correo ya está registrado")) setEditErrors(p => ({ ...p, correo: "Este correo ya está registrado" })); else toast.error(mensaje); }
-  };
-
-  const abrirEdicion = (c: Cliente) => {
-    setEditItem({ ...c });
-    setEditPrevCorreo(c.correo);
-    setEditErrors({});
   };
 
   const resetCreate = () => {
@@ -307,17 +250,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo crear el cliente."; if (mensaje.toLowerCase().includes("correo ya está registrado")) setCreateErrors(p => ({ ...p, correo: "Este correo ya está registrado" })); else toast.error(mensaje); }
   };
 
-  useEffect(() => {
-    if (!clienteAAbrirDesdeUsuarios || cargando) return;
-    const clave = `${clienteAAbrirDesdeUsuarios.tipoDocumento}||${clienteAAbrirDesdeUsuarios.numeroDocumento}`;
-    if (edicionExternaConsumida.current === clave) return;
-    edicionExternaConsumida.current = clave;
-    const cliente = clientes.find(c => c.numeroDocumento === clienteAAbrirDesdeUsuarios.numeroDocumento);
-    if (cliente) abrirEdicion(cliente);
-    else toast.error("No se encontró el registro de cliente en la base de datos.");
-    onClienteAbiertoDesdeUsuarios?.();
-  }, [clienteAAbrirDesdeUsuarios, cargando, clientes]);
-
   // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
   // 768 px) para mostrar exactamente los mismos controles y handlers.
   const estadoCliente = (c: Cliente) => (
@@ -342,7 +274,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
   const accionesCliente = (c: Cliente) => (
     <ActionIcons
       onView={() => setDetailItem(c)}
-      onEdit={canEdit ? () => abrirEdicion(c) : undefined}
     />
   );
 
@@ -674,107 +605,6 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </button>
                 </div>
               </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Editar cliente */}
-      <AnimatePresence>
-        {editItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
-              exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar Cliente</h3>
-                <button onClick={() => setEditItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-                  <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-6 gap-x-6 gap-y-4">
-                  <div className="sm:col-span-6 flex items-center gap-3 pb-2">
-                  <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
-                    {editItem.nombre.trim().split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
-                  </div>
-                </div>
-                  <div className="sm:col-span-6 flex max-md:flex-col gap-3 items-start">
-                  <div className="w-56 max-md:w-full shrink-0">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
-                    <input
-                      type="text"
-                      value={etiquetaTipoDocumento(editItem.tipoDocumento)}
-                      disabled
-                      className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0 max-md:w-full">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
-                    <input
-                      type="text"
-                      value={editItem.numeroDocumento}
-                      disabled
-                      autoComplete="off"
-                      className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-                 <p className="sm:col-span-6 text-xs text-muted-foreground -mt-1">No se puede modificar el documento de un cliente registrado.</p>
-                {[
-                  { label: "Nombre completo", field: "nombre" as const, type: "text"  },
-                  { label: "Correo",          field: "correo" as const, type: "email" },
-                ].map(({ label, field, type }) => (
-                   <div key={field} className={field === "nombre" ? "sm:col-span-6" : "sm:col-span-4"}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} value={editItem[field]} autoComplete="off"
-                       onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: undefined })); }}
-                      onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
-                  </div>
-                ))}
-                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Teléfono <MarcaObligatorio /></label>
-                    <input type="tel" inputMode="numeric" value={editItem.telefono} autoComplete="off"
-                      onChange={e => { const v = soloDigitos(e.target.value); setEditItem(x => x && ({ ...x, telefono: v })); setEditErrors(p => ({ ...p, telefono: validarTelefono(v) ?? undefined })); }}
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.telefono}</p>}
-                  </div>
-                  <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Pedidos</label>
-                  <input type="number" value={editItem.pedidos} disabled
-                    className="w-full px-3 py-2.5 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed" />
-                  <p className="text-xs text-muted-foreground mt-1">Los pedidos se actualizan automáticamente. No se puede modificar.</p>
-                </div>
-                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                  {/* Punto 3.2: 2 opciones → control segmentado */}
-                  <SegmentadoButtons
-                    valor={editItem.activo ? "activo" : "inactivo"}
-                    onChange={valor => setEditItem(x => x && ({ ...x, activo: valor === "activo" }))}
-                    opciones={[
-                      { valor: "activo", etiqueta: "Activo" },
-                      { valor: "inactivo", etiqueta: "Inactivo" },
-                    ]}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 px-5 py-4 border-t border-border">
-                <button onClick={() => setEditItem(null)}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={handleEdit}
-                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                  Guardar cambios
-                </button>
-              </div>
-            </motion.div>
             </div>
           </div>
         )}

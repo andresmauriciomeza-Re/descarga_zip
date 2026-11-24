@@ -22,7 +22,8 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/campo";
+import { hoyISO } from "@/shared/utils/fechas";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
 import { DOC_TIPOS, fmtDoc } from "@/features/usuarios/pages/GestionUsuariosScreen";
@@ -125,12 +126,8 @@ const TITULO_SUPER_ADMIN = "Cuenta de super administrador";
 
 export function GestionEmpleadosScreen({
   clientes,
-  empleadoAAbrirDesdeUsuarios = null,
-  onEmpleadoAbiertoDesdeUsuarios,
 }: {
   clientes: Cliente[];
-  empleadoAAbrirDesdeUsuarios?: { tipoDocumento: string; numeroDocumento: string } | null;
-  onEmpleadoAbiertoDesdeUsuarios?: () => void;
 }) {
   const [search,      setSearch]    = useState("");
   const [filterEstado,setFiltro]    = useState("todos");
@@ -199,19 +196,6 @@ export function GestionEmpleadosScreen({
   useEffect(() => {
     setDetailItem(d => (d ? empleados.find(x => x.id === d.id) ?? d : d));
   }, [empleados]);
-
-  useEffect(() => {
-    if (!empleadoAAbrirDesdeUsuarios || cargando) return;
-    const empleado = empleados.find(e =>
-      e.numeroDocumento === empleadoAAbrirDesdeUsuarios.numeroDocumento &&
-      e.tipoDocumento === empleadoAAbrirDesdeUsuarios.tipoDocumento
-    );
-    if (empleado) {
-      setEditItem({ ...empleado });
-      setEditErrors({});
-    }
-    onEmpleadoAbiertoDesdeUsuarios?.();
-  }, [empleadoAAbrirDesdeUsuarios, empleados, cargando]);
 
   // Modal "Nueva contratación": registra una entrada más en el historial del
   // empleado elegido y, con esos mismos datos, actualiza su contratación vigente.
@@ -356,56 +340,58 @@ export function GestionEmpleadosScreen({
   // como los recibe el backend.
   const cargosParaApi = (rolIds: string[]) => extrasDe(rolIds);
 
+  // ── Edición de empleado (solo INACTIVO) ─────────────────────────────────
+  // Los datos de la persona (nombre, correo, teléfono, documento y fecha de
+  // inicio) son de solo lectura: aquí solo se editan cargos, estado y fecha
+  // final. Cargos y fecha final se guardan si hay contratación abierta o si el
+  // guardado deja al empleado Activo (en ese caso el backend crea una
+  // contratación nueva con inicio = hoy, hora de Bogotá).
+  const puedeEditarContrato = (e: Empleado) => !!e.contratoAbierto || e.activo;
+
+  // Validación en tiempo real del formulario, recalculada en cada cambio de
+  // `editItem` (pintada bajo cada campo y bloqueando "Guardar cambios").
+  const erroresDeEdicion = (e: Empleado): Record<string, string | undefined> => {
+    const errs: Record<string, string | undefined> = {};
+    if (e.activo) {
+      // Para quedar Activo hace falta al menos un cargo…
+      if (extrasDe(e.rolIds).length === 0) errs.cargo = "Debe tener al menos un cargo para quedar activo.";
+      // …y la fecha final no puede quedar en el pasado.
+      if (e.fechaFinal && e.fechaFinal < hoyISO()) errs.fechaFinal = "La fecha final no puede ser anterior a hoy.";
+    }
+    // Solo la contratación abierta tiene fecha de inicio editable-visible con
+    // la que comparar (la regla del formulario no cambia respecto de antes).
+    if (e.contratoAbierto && e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
+      errs.fechaFinal = errs.fechaFinal ?? "La fecha final no puede ser anterior a la fecha de inicio";
+    return errs;
+  };
+
   const handleEdit = async () => {
     if (!editItem || guardando) return;
-    const e = { ...editItem, nombre: normalizarNombre(editItem.nombre) };
-    const errs: Record<string, string> = {};
-    if (!e.nombre.trim()) errs.nombre = "El nombre es obligatorio";
-    else { const v = validarNombre(e.nombre); if (v) errs.nombre = v; }
-    if (!e.correo.trim()) errs.correo = "El correo es obligatorio";
-    else { const v = validarCorreo(e.correo); if (v) errs.correo = v; }
-    // Teléfono opcional: vacío vale, con valor aplica la regla única del
-    // sistema (solo números, 7 a 15 dígitos).
-    if (e.telefono.trim()) {
-      const et = validarTelefono(e.telefono);
-      if (et) errs.telefono = et;
-    }
-    // Las fechas solo se validan si hay una contratación abierta que editar.
-    if (e.contratoAbierto) {
-      if (!e.fechaInicio) errs.fechaInicio = "La fecha de inicio es obligatoria";
-      if (e.fechaInicio && e.fechaFinal && e.fechaFinal < e.fechaInicio)
-        errs.fechaFinal = "La fecha final no puede ser anterior a la fecha de inicio";
-    }
-
+    const e = editItem;
+    const errs = erroresDeEdicion(e);
     if (Object.values(errs).some(Boolean)) { setEditErrors(errs); return; }
 
-    const original = empleados.find(x => x.id === e.id);
     setGuardando(true);
     try {
-      // Cargos y fechas solo viajan si hay contratación abierta; el documento no
-      // se edita. El backend decide los duplicados de correo (409).
+      // Solo cargos, estado y fecha final; sin PATCH extra: el estado viaja
+      // dentro del mismo PUT. Cargos/fechaFinal solo cuando hay contratación
+      // abierta o cuando el guardado deja al empleado Activo.
+      const enviarContrato = puedeEditarContrato(e);
       const res = await editarEmpleado(Number(e.id), {
-        nombre: e.nombre,
-        correo: e.correo.trim(),
-        telefono: e.telefono.trim(),
-        ...(e.contratoAbierto
-          ? { cargos: cargosParaApi(e.rolIds), fechaInicio: e.fechaInicio, fechaFinal: e.fechaFinal }
+        estado: e.activo,
+        ...(enviarContrato
+          ? { cargos: cargosParaApi(e.rolIds), fechaFinal: e.fechaFinal }
           : {}),
       });
-      // El estado es otra ruta: solo se llama si cambió (y nunca para el super admin).
-      if (original && !esSuperAdmin(e) && original.activo !== e.activo) {
-        await cambiarEstadoEmpleado(Number(e.id), e.activo);
-      }
       setEditItem(null);
       setEditErrors({});
-      if (res.correoEnviado === false) toast.error("Empleado actualizado, pero no se pudo enviar la invitación al correo nuevo");
-      else if (res.correoEnviado === true) toast.success("Empleado actualizado. Enviamos la invitación al correo nuevo");
+      if (res.correoEnviado === false) toast.error("Empleado actualizado, pero no se pudo enviar el correo");
+      else if (res.correoEnviado === true) toast.success("Empleado actualizado. Enviamos un correo de aviso");
       else toast.success("Empleado actualizado correctamente");
     } catch (error) {
       const err = error as ApiErrorConEstado;
       const mensaje = mensajeError(error, "No se pudo actualizar el empleado.");
-      if (err.status === 409 && /correo/i.test(mensaje)) setEditErrors(p => ({ ...p, correo: mensaje }));
-      else if (err.status === 400 && /fecha/i.test(mensaje)) {
+      if (err.status === 400 && /fecha/i.test(mensaje)) {
         setEditErrors(p => ({ ...p, [/fecha final no puede/i.test(mensaje) ? "fechaFinal" : "fechaInicio"]: mensaje }));
       }
       else if (err.status === 400 && /rol|cargo/i.test(mensaje)) setEditErrors(p => ({ ...p, cargo: mensaje }));
@@ -643,7 +629,7 @@ export function GestionEmpleadosScreen({
                         )}
                         <ActionIcons
                           onView={() => setDetailItem(e)}
-                          onEdit={() => { setEditItem({ ...e }); setEditErrors({}); }}
+                          onEdit={e.activo ? undefined : () => { setEditItem({ ...e }); setEditErrors({}); }}
                         />
                       </div>);
 
@@ -1143,7 +1129,13 @@ export function GestionEmpleadosScreen({
 
       {/* Modal: Editar empleado */}
       <AnimatePresence>
-        {editItem && (
+        {editItem && (() => {
+          // Errores visibles: los del servidor (editErrors) más los del tiempo
+          // real, que tienen la última palabra; el botón se bloquea con estos.
+          const errs = { ...editErrors, ...erroresDeEdicion(editItem) };
+          const bloqueado = Object.values(erroresDeEdicion(editItem)).some(Boolean);
+          const editaContrato = puedeEditarContrato(editItem);
+          return (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
             <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
@@ -1175,30 +1167,28 @@ export function GestionEmpleadosScreen({
                       className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
                       {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                     </select>
-                    {editErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.tipoDocumento}</p>}
                   </div>
                   <div className="flex-1 min-w-0 max-md:basis-full">
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
                     <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento} autoComplete="off"
                       placeholder="12345678"
                       className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
-                    {editErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.numeroDocumento}</p>}
                   </div>
                 </div>
+                {/* Datos de la persona: de solo lectura. Cada quien los edita
+                    desde su perfil (el backend rechaza estos campos en PUT). */}
                 {[
                   { label: "Nombre completo", field: "nombre" as const, type: "text", full: true  },
                   { label: "Correo",          field: "correo" as const, type: "email" },
-                  { label: "Teléfono",        field: "telefono" as const, type: "tel", numeric: true },
-                ].map(({ label, field, type, numeric, full }) => (
+                  { label: "Teléfono",        field: "telefono" as const, type: "tel" },
+                ].map(({ label, field, type, full }) => (
                   <div key={field} className={full ? "sm:col-span-6" : field === "correo" ? "sm:col-span-4" : "sm:col-span-2"}>
                     <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input type={type} inputMode={numeric ? "numeric" : undefined} value={editItem[field]} autoComplete="off"
-                        onChange={e => { const v = field === "correo" ? filtrarCorreo(e.target.value) : field === "nombre" ? filtrarNombre(e.target.value) : numeric ? soloDigitos(e.target.value) : e.target.value; setEditItem(x => x && ({ ...x, [field]: v })); setEditErrors(p => ({ ...p, [field]: field === "correo" ? validarCorreo(v) ?? undefined : undefined })); }}
-                        onBlur={() => { if (field === "nombre") setEditItem(x => x && ({ ...x, nombre: normalizarNombre(x.nombre) })); }}
-                      className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors[field] ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                    {editErrors[field] && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors[field]}</p>}
+                    <input readOnly type={type} value={editItem[field]} autoComplete="off"
+                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
                   </div>
                 ))}
+                <p className="sm:col-span-6 text-xs text-muted-foreground -mt-1">Los datos de la persona no se pueden editar aquí: cada quien los actualiza desde su perfil.</p>
                 <div className="sm:col-span-6">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">
                      Cargo <MarcaObligatorio />
@@ -1206,17 +1196,19 @@ export function GestionEmpleadosScreen({
                   <SelectorRoles
                     roles={roles}
                     value={editItem.rolIds ?? []}
-                    disabled={!editItem.contratoAbierto}
+                    disabled={!editaContrato}
                     onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
-                    error={editErrors.cargo}
+                    error={errs.cargo}
                   />
+                  {!editaContrato && (
+                    <p className="text-xs text-muted-foreground mt-1 leading-tight">Sin contratación abierta: los cargos y la fecha final se guardan al activar al empleado.</p>
+                  )}
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
                   {/* P7: el estado de Gloria no se puede cambiar desde el
-                      modal de edición tampoco (el resto de sus datos sí se
-                      puede editar). El tooltip explica el motivo.
-                      Punto 3.2: 2 opciones → control segmentado. */}
+                      modal de edición tampoco. Punto 3.2: 2 opciones → control
+                      segmentado. */}
                   <SegmentadoButtons
                     disabled={esSuperAdmin(editItem)}
                     title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
@@ -1230,17 +1222,17 @@ export function GestionEmpleadosScreen({
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>
-                  <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaInicio}
-                    onChange={e => { setEditItem(x => x && ({ ...x, fechaInicio: e.target.value })); if (editErrors.fechaInicio) setEditErrors(p => ({ ...p, fechaInicio: undefined })); }}
-                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaInicio ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                  {editErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaInicio}</p>}
+                  <input readOnly type="date" value={editItem.fechaInicio}
+                    className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
+                  <p className="text-xs text-muted-foreground mt-1 leading-tight">No se modifica aquí.</p>
+                  {errs.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{errs.fechaInicio}</p>}
                 </div>
                 <div className="sm:col-span-3">
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
-                  <input type="date" disabled={!editItem.contratoAbierto} value={editItem.fechaFinal}
+                  <input type="date" disabled={!editaContrato} value={editItem.fechaFinal}
                     onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
-                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${editErrors.fechaFinal ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`} />
-                  {editErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{editErrors.fechaFinal}</p>}
+                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errs.fechaFinal ? "border-red-400 bg-red-50/30" : editaContrato ? "bg-muted border-border" : "bg-muted/60 border-border text-muted-foreground cursor-not-allowed"}`} />
+                  {errs.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{errs.fechaFinal}</p>}
                 </div>
               </div>
               <div className="flex gap-3 px-4 py-3 border-t border-border">
@@ -1248,7 +1240,7 @@ export function GestionEmpleadosScreen({
                   className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Cancelar
                 </button>
-                <button onClick={() => void handleEdit()} disabled={guardando}
+                <button onClick={() => void handleEdit()} disabled={guardando || bloqueado}
                   className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
                   {guardando ? "Guardando..." : "Guardar cambios"}
                 </button>
@@ -1256,7 +1248,8 @@ export function GestionEmpleadosScreen({
             </motion.div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
     </div>

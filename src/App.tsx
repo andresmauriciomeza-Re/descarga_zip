@@ -7745,8 +7745,6 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(
     facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : sesionActiva ? "inicio" : "landing",
   );
-  const [clienteAAbrirDesdeUsuarios, setClienteAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
-  const [empleadoAAbrirDesdeUsuarios, setEmpleadoAAbrirDesdeUsuarios] = useState<{ tipoDocumento: string; numeroDocumento: string } | null>(null);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -10424,8 +10422,6 @@ export default function App() {
                       usuarios={usuarios}
                       roles={roles}
                       sesionCorreo={correoSesion}
-                      clienteAAbrirDesdeUsuarios={clienteAAbrirDesdeUsuarios}
-                      onClienteAbiertoDesdeUsuarios={() => setClienteAAbrirDesdeUsuarios(null)}
                     />
                   )}
                   {screen === "users" && (
@@ -10433,24 +10429,11 @@ export default function App() {
                       canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Usuarios")] ?? []).includes("Ver")}
                       canEdit={getPerms("users").canEdit}
                       canDelete={getPerms("users").canDelete}
-                      onEditarCliente={u => {
-                        setClienteAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                        navigate("clientes");
-                      }}
-                      onEditarEmpleado={u => {
-                        // La ficha vive en la base: la pantalla de Empleados la
-                        // busca por documento cuando termina de cargar.
-                        setEmpleadoAAbrirDesdeUsuarios({ tipoDocumento: u.tipo_documento ?? "", numeroDocumento: String(u.id_usuario) });
-                        navigate("empleados");
-                        return true;
-                      }}
                     />
                   )}
                   {screen === "empleados" && (
                     <GestionEmpleadosScreen
                       clientes={clientes}
-                      empleadoAAbrirDesdeUsuarios={empleadoAAbrirDesdeUsuarios}
-                      onEmpleadoAbiertoDesdeUsuarios={() => setEmpleadoAAbrirDesdeUsuarios(null)}
                     />
                   )}
                   {screen === "production-orders" && (
