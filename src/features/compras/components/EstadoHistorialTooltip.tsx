@@ -139,7 +139,7 @@ export function EstadoHistorialTooltip({
             style={{ top: pos.top, left: pos.left }}
             className="fixed z-[110] w-72 max-w-[calc(100vw-16px)] bg-card text-foreground rounded-xl shadow-lg border border-border p-4 max-h-[60vh] overflow-y-auto"
           >
-            <p className="text-xs font-bold text-muted-foreground mb-3 uppercase tracking-wider">
+            <p className="text-base font-bold text-muted-foreground mb-3 uppercase tracking-wider">
               Historial de estados
             </p>
             <div className="space-y-0">
@@ -157,11 +157,11 @@ export function EstadoHistorialTooltip({
                     </div>
                     {/* Contenido */}
                     <div className="pb-3 -mt-0.5">
-                      <p className="text-xs font-semibold text-foreground">{entry.estado}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-base font-semibold text-foreground">{entry.estado}</p>
+                      <p className="text-base text-muted-foreground">
                         {formatearFechaHora(entry.fechaHora)}
                         {entry.motivo && (
-                          <span className="block text-[11px] text-red-600 dark:text-red-400 mt-0.5 break-words">
+                          <span className="block text-base text-red-600 dark:text-red-400 mt-0.5 break-words">
                             Motivo: {entry.motivo}
                           </span>
                         )}

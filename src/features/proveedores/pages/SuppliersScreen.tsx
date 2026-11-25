@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, Search, Eye, Pencil, Trash2, X, AlertCircle, ArrowLeft, User, Building2, Phone, FileText } from "lucide-react";
+import { Plus, X, AlertCircle, ArrowLeft, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
@@ -24,7 +24,17 @@ import {
   eliminarProveedor,
   mensajeErrorProveedores,
 } from "@/features/proveedores/services/proveedoresApi";
-import { Paginador } from "@/shared/components/Paginador";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 
 const SERIF = "var(--font-titulo)";
 
@@ -160,158 +170,102 @@ const emptySupplier = (): ProveedorFormValues => ({
 });
 
 /**
- * Cuerpo de "Ver detalle": pinta EXACTAMENTE los campos que pide cada tipo de
- * persona (misma sección y mismo orden que el formulario, decisión 6.1), así
- * lo que se guardó es lo que se ve. Los campos sin columna en la BD (teléfono
- * y email del representante, nombre comercial y teléfono fijo) hoy salen "—".
- * Los proveedores antiguos sin tipo siguen mostrando el bloque de contacto
- * viejo (asesor/teléfono/email/dirección). El Estado vive en la sección
- * "Configuración" del propio modal, así que no se repite aquí.
+ * Cuerpo del detalle: pinta EXACTAMENTE los campos que pide cada tipo de
+ * persona (misma sección y mismo orden que el formulario), así lo que se guardó
+ * es lo que se ve. Los campos sin dato salen "—". Los proveedores antiguos sin
+ * tipo siguen mostrando el bloque de contacto viejo.
  */
-function DetalleContenido({ s, cls }: { s: Supplier; cls: string }) {
+function DetalleContenido({ s }: { s: Supplier }) {
   const esNatural = s.tipoPersona === "Persona Natural";
   const esJuridica = s.tipoPersona === "Persona Jurídica";
-  const gridDetalleCls = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2.5";
-
-  const seccion = (titulo: string, icono: React.ReactNode) => (
-    <div className="flex items-center gap-2 text-sm font-bold text-foreground mb-3 pb-2 border-b border-border">
-      <span className="text-primary shrink-0">{icono}</span>
-      <span>{titulo}</span>
-    </div>
-  );
-
-  /** Celda de la rejilla: valor vacío o sin registrar → "—". */
-  const celda = (label: string, valor?: string, contenido?: React.ReactNode) => (
-    <div>
-      <p className="text-sm font-semibold text-muted-foreground mb-1">{label}</p>
-      <div className={cls}>{contenido ?? ((valor ?? "").trim() || "—")}</div>
-    </div>
-  );
-
-  const celdaEstado = () => (
-    <div>
-      <p className="text-sm font-semibold text-muted-foreground mb-1">Estado</p>
-      <EstadoSelect
-        value={s.estado}
-        options={[
-          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-        ]}
-        disabled
-      />
-    </div>
-  );
-
-  /** El formulario guarda UN solo campo "Nombre completo": aquí se une lo que
-      el modelo trae partido (nombres + apellidos) y, si no hay, el `nombre`. */
+  const v = (x?: string) => (x ?? "").trim() || "—";
   const nombreCompleto = [s.nombres ?? "", s.apellidos ?? ""]
     .map(x => x.trim())
     .filter(Boolean)
     .join(" ") || (s.nombre ?? "");
+  const documento = (tipo?: string, numero?: string) =>
+    [tipo, numero].map(x => (x ?? "").trim()).filter(Boolean).join(" ") || "—";
 
   return (
-    <div className="space-y-6 mx-auto max-w-4xl">
-      {/* ── Persona Natural: los 7 campos del formulario, SIN NIT y SIN DV ── */}
+    <div className="grid gap-5">
       {esNatural && (
-        <div>
-          {seccion("Datos del proveedor", <User className="w-4 h-4" />)}
-          <div className={gridDetalleCls}>
-            {celda("Tipo de documento", s.tipoDocumento)}
-            {celda("Número de documento", s.numeroDocumento)}
-            {celda("Nombre completo", nombreCompleto)}
-            {celda("Teléfono", s.telefono)}
-            {celda("Email", s.email)}
-            {celda("Dirección", s.direccion)}
-            {celdaEstado()}
-          </div>
-        </div>
+        <>
+          <SeccionFormulario titulo="Datos del proveedor">
+            <DatosDetalle datos={[
+              { etiqueta: "Nombre completo", valor: v(nombreCompleto) },
+              { etiqueta: "Documento", valor: documento(s.tipoDocumento, s.numeroDocumento) },
+            ]} />
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Con quién hablar para pedir">
+            <DatosDetalle datos={[
+              { etiqueta: "Teléfono", valor: v(s.telefono) },
+              { etiqueta: "Correo", valor: v(s.email) },
+              { etiqueta: "Dirección", valor: v(s.direccion) },
+            ]} />
+          </SeccionFormulario>
+        </>
       )}
 
-      {/* ── Persona Jurídica: las 4 secciones apiladas del formulario ─────── */}
       {esJuridica && (
         <>
-          <div>
-            {seccion("Representante legal", <User className="w-4 h-4" />)}
-            <div className={gridDetalleCls}>
-              {celda("Tipo de documento", s.repLegalTipoDocumento)}
-              {celda("Número de documento", s.repLegalNumeroDocumento)}
-              {celda(
-                "Nombre completo",
-                [s.repLegalNombres ?? "", s.repLegalApellidos ?? ""]
-                  .map(x => x.trim())
-                  .filter(Boolean)
-                  .join(" "),
-              )}
-              {celda("Teléfono", s.repLegalTelefono)}
-              {celda("Email", s.repLegalEmail)}
-            </div>
-          </div>
-
-          <div>
-            {seccion("Razón social", <Building2 className="w-4 h-4" />)}
-            <div className={gridDetalleCls}>
-              {/* En Jurídica el nombre guardado ES la razón social. */}
-              {celda("Nombre o razón social", s.nombre)}
-              {celda("Nombre comercial", s.nombreComercial)}
-              {celda("NIT", formatoNit(s.nit))}
-              {celda("Tipo de sociedad", s.tipoSociedad)}
-            </div>
-          </div>
-
-          <div>
-            {seccion("Contacto comercial", <Phone className="w-4 h-4" />)}
-            <div className={gridDetalleCls}>
-              {celda("Email", s.contactoEmail || s.email)}
-              {celda("Teléfono celular", s.contactoTelefono || s.telefono)}
-              {celda("Teléfono fijo", s.contactoTelefonoFijo)}
-              {celda("Dirección comercial", s.direccion)}
-              {celda("Nombre del contacto", s.contactoNombre || s.asesorComercial)}
-            </div>
-          </div>
-
-          <div>
-            {seccion("Cámara de Comercio", <FileText className="w-4 h-4" />)}
-            <div className={gridDetalleCls}>
-              {celda(
-                "Cámara de Comercio",
-                s.camaraComercioNombre,
-                s.camaraComercioArchivo
-                  ? (
-                    <a
-                      href={s.camaraComercioArchivo}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline break-all hover:text-red-700"
-                      title={s.camaraComercioNombre}
-                    >
-                      {s.camaraComercioNombre}
-                    </a>
-                  )
-                  : undefined,
-              )}
-            </div>
-          </div>
-
-          {/* Estado: último elemento en fila propia sin barra de título */}
-          <div className={gridDetalleCls}>
-            {celdaEstado()}
-          </div>
+          <SeccionFormulario titulo="Datos de la empresa">
+            <DatosDetalle datos={[
+              /* En Jurídica el nombre guardado ES la razón social. */
+              { etiqueta: "Razón social", valor: v(s.nombre) },
+              { etiqueta: "Nombre comercial", valor: v(s.nombreComercial) },
+              { etiqueta: "NIT", valor: formatoNit(s.nit) || "—" },
+              { etiqueta: "Tipo de sociedad", valor: v(s.tipoSociedad) },
+              {
+                etiqueta: "Cámara de Comercio",
+                valor: s.camaraComercioArchivo ? (
+                  <a
+                    href={s.camaraComercioArchivo}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary underline break-all"
+                    title={s.camaraComercioNombre}
+                  >
+                    {s.camaraComercioNombre || "Ver el archivo"}
+                  </a>
+                ) : v(s.camaraComercioNombre),
+              },
+              { etiqueta: "Fecha de la Cámara de Comercio", valor: v(s.fechaExpedicionCamara) },
+            ]} />
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Representante legal">
+            <DatosDetalle datos={[
+              {
+                etiqueta: "Nombre",
+                valor: v([s.repLegalNombres ?? "", s.repLegalApellidos ?? ""].map(x => x.trim()).filter(Boolean).join(" ")),
+              },
+              { etiqueta: "Documento", valor: documento(s.repLegalTipoDocumento, s.repLegalNumeroDocumento) },
+              { etiqueta: "Celular", valor: v(s.repLegalTelefono) },
+              { etiqueta: "Correo", valor: v(s.repLegalEmail) },
+            ]} />
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Con quién hablar para pedir">
+            <DatosDetalle datos={[
+              { etiqueta: "Asesor", valor: v(s.contactoNombre || s.asesorComercial) },
+              { etiqueta: "Teléfono", valor: v(s.contactoTelefono || s.telefono) },
+              { etiqueta: "Teléfono fijo", valor: v(s.contactoTelefonoFijo) },
+              { etiqueta: "Correo", valor: v(s.contactoEmail || s.email) },
+              { etiqueta: "Dirección", valor: v(s.direccion) },
+            ]} />
+          </SeccionFormulario>
         </>
       )}
 
       {/* Proveedor antiguo sin tipo de persona registrado. */}
       {!esNatural && !esJuridica && (
-        <div>
-          {seccion("Datos del proveedor", <User className="w-4 h-4" />)}
-          <div className={gridDetalleCls}>
-            {celda("Nombre", s.nombre)}
-            {celda("Asesor Comercial", s.asesorComercial)}
-            {celda("Teléfono", s.telefono)}
-            {celda("Email", s.email)}
-            {celda("Dirección", s.direccion)}
-            {celdaEstado()}
-          </div>
-        </div>
+        <SeccionFormulario titulo="Datos del proveedor">
+          <DatosDetalle datos={[
+            { etiqueta: "Nombre", valor: v(s.nombre) },
+            { etiqueta: "Asesor", valor: v(s.asesorComercial) },
+            { etiqueta: "Teléfono", valor: v(s.telefono) },
+            { etiqueta: "Correo", valor: v(s.email) },
+            { etiqueta: "Dirección", valor: v(s.direccion) },
+          ]} />
+        </SeccionFormulario>
       )}
     </div>
   );
@@ -421,12 +375,14 @@ export function SuppliersScreen({
   // Proveedor con órdenes/compras: en vez de la alerta de borrado se muestra
   // esta alerta informativa con un solo botón.
   const [bloqueoItem, setBloqueoItem] = useState<Supplier | null>(null);
+  /** Mensaje del servidor cuando no deja borrar (tiene historial). */
+  const [bloqueoMensaje, setBloqueoMensaje] = useState("");
   const [confirmToggleId, setConfirmToggleId] = useState<string | null>(null);
   const [form, setForm] = useState(emptySupplier());
 
   const [page, setPage] = useState(1);
   // 5 proveedores por página (unificado con el resto de listados).
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   // Nota: La lógica anterior que consultaba si el proveedor tenía compras u
   // órdenes asociadas para decidir si se podían editar el NIT y el nombre fue
@@ -588,8 +544,10 @@ export function SuppliersScreen({
       await eliminarProveedor(s.id);
     } catch (error) {
       // Con historial el servidor responde 409: "…tiene historial. Desactívalo."
-      toast.error(mensajeErrorProveedores(error, "No se pudo eliminar el proveedor."));
+      // Se explica en un diálogo con la opción de desactivarlo.
+      setBloqueoMensaje(mensajeErrorProveedores(error, "No se pudo eliminar el proveedor."));
       setDeleteItem(null);
+      setBloqueoItem(s);
       return;
     }
     setSuppliers(p => p.filter(x => !(x.id === s.id && x.nombre === s.nombre)));
@@ -699,49 +657,81 @@ export function SuppliersScreen({
   const enPantalla = enAlta || editItem !== null;
   const salirDePantalla = () => { if (enAlta) setShowCreate(false); else setEditItem(null); };
 
-  if (enPantalla) {
-    const clsBase = "flex-1 h-10 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
-    // Formulario activo (alta o edición): el selector del encabezado lee y
-    // escribe su tipo de persona.
-    const formActivo = enAlta || !editItem ? proveedorForm : editForm;
-    const btnCls = "px-5 h-10 max-md:min-h-11 rounded-xl text-sm font-semibold transition-colors active:scale-95 inline-flex items-center justify-center gap-2";
-    return (
-      // Contenedor centrado (max-w-4xl, mx-auto) y SIN scroll interno: usa el
-      // scroll único de `<main>` en App.tsx (prohibido el scroll doble).
-      <div className="w-full max-w-4xl mx-auto px-4 py-4">
-        {/* Encabezado: ← + título + subtítulo y, a la derecha, el selector
-            Persona Natural / Persona Jurídica. */}
-        <div className="flex flex-wrap items-center gap-3 pb-3 border-b border-border">
-          <button
-            onClick={salirDePantalla}
-            title="Volver"
-            className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-              {enAlta ? "Crear Proveedor" : `Editar — ${editItem?.nombre ?? ""}`}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              {enAlta
-                ? "Registra la identificación, el contacto y la configuración del proveedor."
-                : "Actualiza los datos del proveedor. El NIT no se modifica."}
-            </p>
-          </div>
-          <TipoPersonaSelector
-            className="ml-auto shrink-0"
-            valor={formActivo.values.tipoPersona}
-            disabled={!enAlta}
-            onChange={(tipo) => {
-              formActivo.marcarTocado("tipoPersona");
-              formActivo.setCampo("tipoPersona", tipo);
-            }}
-            error={formActivo.obtenerError("tipoPersona")}
-          />
-        </div>
+  const tonoOrden: Record<string, TonoPill> = { Borrador: "gris", Enviado: "azul", Completado: "verde", Anulado: "rojo" };
+  const borrarDesdeDetalle = async (s: Supplier) => {
+    await handleDelete(s);
+    setDetailItem(cur => (cur?.id === s.id ? null : cur));
+  };
 
-        <div className="py-5">
+  // Confirmaciones (se pintan en el detalle y en la lista).
+  const supToggle = confirmToggleId ? suppliers.find(s => s.id === confirmToggleId) ?? null : null;
+  const dialogos = (
+    <>
+      <DialogoConfirmacion
+        abierto={!!supToggle}
+        onCambiarAbierto={a => { if (!a) setConfirmToggleId(null); }}
+        titulo={supToggle?.estado === "activo" ? `¿Desactivar a ${supToggle?.nombre}?` : `¿Activar a ${supToggle?.nombre ?? ""}?`}
+        queVaAPasar={supToggle?.estado === "activo"
+          ? ["Ya no va a salir para hacerle pedidos", "Sus órdenes y facturas quedan guardadas", "Lo puedes volver a activar"]
+          : ["Vuelve a salir para hacerle pedidos", "Sus órdenes y facturas siguen igual"]}
+        textoSeguro={supToggle?.estado === "activo" ? "No, dejarlo como está" : "No, dejarlo desactivado"}
+        textoAccion={supToggle?.estado === "activo" ? "Sí, desactivar" : "Sí, activar"}
+        onConfirmar={() => { if (confirmToggleId) void applyToggleEstado(confirmToggleId); }}
+      />
+      {bloqueoItem ? (
+        <DialogoConfirmacion
+          variante="bloqueo"
+          abierto
+          onCambiarAbierto={a => { if (!a) { setBloqueoItem(null); setBloqueoMensaje(""); } }}
+          titulo={`No se puede borrar a ${bloqueoItem.nombre}`}
+          porQueNo={[
+            bloqueoMensaje || "Tiene pedidos o compras registrados",
+            "Lo que ya tiene historial no se borra: se desactiva y queda guardado",
+          ]}
+          textoAlternativa={bloqueoItem.estado === "activo" ? "Desactivarlo" : undefined}
+          onAlternativa={() => setConfirmToggleId(bloqueoItem.id)}
+        />
+      ) : (
+        <DialogoConfirmacion
+          abierto={!!deleteItem}
+          onCambiarAbierto={a => { if (!a) setDeleteItem(null); }}
+          titulo={`¿Borrar a ${deleteItem?.nombre ?? ""}?`}
+          queVaAPasar={["Se borra para siempre", "No se puede deshacer"]}
+          textoAccion="Sí, borrar"
+          onConfirmar={() => { if (deleteItem) void borrarDesdeDetalle(deleteItem); }}
+        />
+      )}
+    </>
+  );
+
+  // ── Formulario: agregar o cambiar (pantalla completa) ──
+  if (enPantalla) {
+    // Formulario activo (alta o edición): el selector del paso 1 lee y escribe su tipo de persona.
+    const formActivo = enAlta || !editItem ? proveedorForm : editForm;
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={salirDePantalla}>Salir sin guardar</BotonAccion>
+        </BotonRuta>
+        <EncabezadoPagina
+          titulo={enAlta ? "Agregar un proveedor" : `Cambiar datos de ${editItem?.nombre ?? ""}`}
+          descripcion={enAlta
+            ? "Anota quién es, cómo se le llama y con quién se habla para pedirle."
+            : "Aquí cambias los datos del proveedor. El documento o NIT no se puede cambiar."}
+        />
+        <div className="grid gap-5">
+          <SeccionFormulario numero={1} titulo="¿Es empresa o persona?">
+            <TipoPersonaSelector
+              valor={formActivo.values.tipoPersona}
+              disabled={!enAlta}
+              onChange={(tipo) => {
+                formActivo.marcarTocado("tipoPersona");
+                formActivo.setCampo("tipoPersona", tipo);
+              }}
+              error={formActivo.obtenerError("tipoPersona")}
+            />
+          </SeccionFormulario>
+
           {enAlta || !editItem ? (
             <ProveedorFormCampos form={proveedorForm} />
           ) : (
@@ -752,343 +742,145 @@ export function SuppliersScreen({
               nitLectura={editItem.nit}
             />
           )}
-        </div>
 
-        {/* Botones Cancelar / Guardar alineados a la derecha al final del formulario. */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-border">
-          <button
-            onClick={salirDePantalla}
-            className={`${btnCls} border border-border text-foreground hover:bg-muted cursor-pointer`}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
-            disabled={guardando}
-            className={`${btnCls} bg-primary text-white hover:bg-red-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary`}
-          >
-            {guardando ? "Guardando…" : enAlta ? "Crear" : "Guardar"}
-          </button>
+          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+            <BotonAccion variante="normal" onClick={salirDePantalla}>Cancelar</BotonAccion>
+            <BotonAccion
+              variante="principal"
+              disabled={guardando}
+              onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
+            >
+              {guardando ? "Guardando…" : enAlta ? "Agregar el proveedor" : "Guardar cambios"}
+            </BotonAccion>
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="px-4 py-3 h-full min-h-0 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión Proveedor</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{suppliers.length} proveedores registrados</p>
+  // ── Detalle de un proveedor ──
+  if (detailItem) {
+    const s = detailItem;
+    const apagado = s.estado === "inactivo";
+    const pedidos = ordenes
+      .filter(o => o.proveedor === s.nombre)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .slice(0, 5);
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{s.nombre}</h1>
+          <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
+          <TipoPersonaSelector comoEtiqueta valor={s.tipoPersona ?? ""} />
         </div>
-        <div className="flex items-center gap-2">
-          {canCreate && (
-            <button onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
-              <Plus className="w-4 h-4" /> Crear Proveedor
-            </button>
+
+        <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
+          {canEdit && (
+            <BotonAccion variante="principal" onClick={() => setEditItem({ ...s })}>Cambiar datos</BotonAccion>
+          )}
+          {canEdit && (
+            <BotonAccion variante={apagado ? "bien" : "normal"} onClick={() => setConfirmToggleId(s.id)}>
+              {apagado ? "Activar" : "Desactivar"}
+            </BotonAccion>
+          )}
+          {canDelete && (
+            <BotonAccion variante="peligro" onClick={() => alPedirEliminar(s)}>Borrar</BotonAccion>
           )}
         </div>
-      </div>
 
-      {/* Search */}
-      <div className="relative mb-4 shrink-0 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por NIT, nombre, asesor o email..."
-          className="w-full pl-10 pr-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
-      </div>
+        <DetalleContenido s={s} />
 
-      {/* Punto 2.5: la card medía todo el alto restante (`flex-1 min-h-0`) y,
-          con la raíz locked en `h-dvh`, se estiraba hasta el fondo dejando un
-          hueco vacío bajo la última fila. Ahora mide su contenido y el
-          paginador queda pegado debajo. La tabla se pagina en filas fijas de 5;
-          sólo queda scroll horizontal en tablet y scroll vertical en móvil
-          (tarjetas). `table-fixed` con anchos % por <th> reparte las columnas;
-          la columna Teléfono sólo existe desde 1440px (debajo va bajo
-          Contacto). */}
-      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
-        <div className="overflow-x-auto">
-          {cargando ? (
-            <div className="px-4 py-14 text-center text-muted-foreground">
-              Cargando proveedores…
-            </div>
-          ) : errorCarga ? (
-            <div className="px-4 py-14 text-center text-muted-foreground">
-              <p className="font-semibold text-foreground">{errorCarga}</p>
-              {onReintentar && (
-                <button
-                  type="button"
-                  onClick={onReintentar}
-                  className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
-                >
-                  Reintentar
-                </button>
-              )}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="px-4 py-14 text-center text-muted-foreground">
-              <p className="text-4xl mb-3">🚛</p>
-              <p>No se encontraron proveedores</p>
-            </div>
-          ) : (
-            <table className="hidden md:table w-full table-fixed md:min-w-[800px]">
-              <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[24%] min-[1440px]:w-[22%]">Nombre</th>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[12%] min-[1440px]:w-[11%]">Tipo</th>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[15%] min-[1440px]:w-[13%]">Contacto</th>
-                  <th className="hidden min-[1440px]:table-cell px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[12%]">Teléfono</th>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[19%] min-[1440px]:w-[16%]">Email</th>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[15%] min-[1440px]:w-[12%]">Estado</th>
-                  <th className="px-3 py-2 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[15%] min-[1440px]:w-[14%]">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {paged.map(s => (
-                  <tr key={s.id} className="group hover:bg-muted/20 transition-colors">
-                    <td className="px-3 py-2 overflow-hidden sticky left-0 z-10 bg-card group-hover:bg-muted/20">
-                      <p className="text-sm font-medium text-foreground truncate" title={s.nombre}>{s.nombre}</p>
-                      <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${formatoNit(s.nit)}`}>NIT {formatoNit(s.nit)}</p>
-                    </td>
-                    {/* Punto 12 (PR #111): el tipo de persona también se ve en el
-                        listado; los proveedores antiguos sin dato muestran "-". */}
-                    <td
-                      className="px-3 py-2 text-sm text-muted-foreground truncate"
-                      title={s.tipoPersona || "Sin registrar"}
-                    >
-                      {s.tipoPersona || "-"}
-                    </td>
-                    <td className="px-3 py-2 overflow-hidden">
-                      <p className="text-sm text-foreground truncate" title={s.asesorComercial}>{s.asesorComercial || "—"}</p>
-                      {/* Sólo hasta 1439px: el teléfono va bajo el contacto */}
-                      <p className="text-[11px] text-muted-foreground truncate min-[1440px]:hidden" title={s.telefono}>{s.telefono}</p>
-                    </td>
-                    <td className="hidden min-[1440px]:table-cell px-3 py-2 text-sm text-muted-foreground truncate" title={s.telefono}>{s.telefono}</td>
-                    {/* El email largo se corta con "…" y el `title` muestra el
-                        texto completo al pasar el cursor. */}
-                    <td className="px-3 py-2 text-sm text-muted-foreground truncate" title={s.email}>{s.email}</td>
-                    <td className="px-3 py-2 overflow-hidden">
-                      <EstadoSelect
-                        value={s.estado}
-                        onChange={(nuevoEstado) => {
-                          if (nuevoEstado === s.estado) return;
-                          setConfirmToggleId(s.id);
-                        }}
-                        options={[
-                          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                        ]}
-                      />
-                    </td>
-                    <td className="px-3 py-2 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                          className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {canEdit && (
-                          <button onClick={() => setEditItem({ ...s })} title="Editar"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+        {pedidos.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <SeccionFormulario titulo="Últimos pedidos">
+              <div className="pn-permisos">
+                {pedidos.map(o => (
+                  <div key={o.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(120px,1fr) minmax(0,1fr) auto auto" }}>
+                    <strong>Orden #{o.id.replace(/^\D+-?/, "") || o.id}</strong>
+                    <span>{o.fecha}</span>
+                    <span>{o.total != null ? `$${o.total.toLocaleString("es-CO")}` : ""}</span>
+                    <EstadoPill tono={tonoOrden[o.estado] ?? "gris"}>{o.estado}</EstadoPill>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          )}
-
-      {/* Celular (<768px): cada proveedor como tarjeta. */}
-      {filtered.length > 0 && (
-        <div className="md:hidden divide-y divide-border">
-          {paged.map(s => (
-            <div key={s.id} className="p-4">
-              {/* Nombre, NIT y estado arriba */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground break-words">{s.nombre}</p>
-                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">NIT {formatoNit(s.nit)}</p>
-                </div>
-                <EstadoSelect
-                  value={s.estado}
-                  onChange={(nuevoEstado) => {
-                    if (nuevoEstado === s.estado) return;
-                    setConfirmToggleId(s.id);
-                  }}
-                  options={[
-                    { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                    { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                  ]}
-                  className="shrink-0"
-                />
               </div>
-
-              {/* Contacto con teléfono y email */}
-              <div className="mt-2 space-y-0.5">
-                <p className="text-sm text-foreground">{s.asesorComercial || "—"}</p>
-                <p className="text-xs text-muted-foreground" title={s.telefono}>{s.telefono}</p>
-                <p className="text-xs text-muted-foreground truncate" title={s.email}>{s.email}</p>
-              </div>
-
-              {/* Acciones abajo — mismas reglas y permisos que la tabla. */}
-              <div className="mt-2.5 flex items-center gap-1.5">
-                <button onClick={() => setDetailItem(s)} title="Ver detalle"
-                  className="p-2 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                  <Eye className="w-4 h-4" />
-                </button>
-                {canEdit && (
-                  <button onClick={() => setEditItem({ ...s })} title="Editar"
-                    className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                )}
-                {canDelete && (
-                  <button onClick={() => alPedirEliminar(s)} title="Eliminar"
-                    className="p-2 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-        </div>
-      </div>
-
-      {/* Paginador fuera y debajo de la card (unificado). */}
-      {filtered.length > 0 && (
-        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
-      )}
-
-      {/* ── Modal: Ver detalle ── */}
-      <AnimatePresence>
-        {detailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
-            >
-              <div className="flex flex-wrap items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-                <h3 className="text-lg font-bold text-foreground min-w-0 flex-1 truncate" style={{ fontFamily: SERIF }}>
-                  Detalle — {detailItem.nombre}
-                </h3>
-                <TipoPersonaSelector
-                  comoEtiqueta
-                  valor={detailItem.tipoPersona ?? ""}
-                  className="ml-auto shrink-0"
-                />
-                <button
-                  onClick={() => setDetailItem(null)}
-                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="px-6 py-5 overflow-y-auto flex-1 min-h-0">
-                <DetalleContenido s={detailItem} cls={disabledCls} />
-              </div>
-              <div className="flex justify-end px-6 py-4 border-t border-border shrink-0">
-                <button
-                  onClick={() => setDetailItem(null)}
-                  className="px-5 h-10 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
+            </SeccionFormulario>
           </div>
         )}
-      </AnimatePresence>
+        {dialogos}
+      </div>
+    );
+  }
 
-      {/* ── Confirmar cambio de estado ── */}
-      <AnimatePresence>
-        {confirmToggleId && (() => {
-          const sup = suppliers.find(s => s.id === confirmToggleId);
-          if (!sup) return null;
-          const nuevoEstado = sup.estado === "activo" ? "Inactivo" : "Activo";
-          return (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-              <motion.div
-                initial={{ scale: 0.94, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.94, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-border"
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                    <AlertCircle className="w-5 h-5 text-amber-600" />
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Proveedores"
+        descripcion="Las empresas y personas que le venden a La Sirena, con su teléfono para llamarlos"
+        acciones={canCreate && (
+          <BotonAccion variante="principal" icono={Plus} onClick={() => { setForm(emptySupplier()); setShowCreate(true); }}>
+            Agregar un proveedor
+          </BotonAccion>
+        )}
+      />
+
+      <div style={{ marginBottom: 24 }}>
+        <BuscadorGrande
+          etiqueta="Buscar un proveedor"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre, el NIT o el nombre del asesor"
+        />
+      </div>
+
+      {cargando ? (
+        <p role="status" className="pn-nota">Cargando los proveedores…</p>
+      ) : errorCarga ? (
+        <AvisoBanner
+          titulo="No pudimos cargar los proveedores"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : filtered.length === 0 ? (
+        <VacioEstado icono={Truck} titulo="No encontramos ningún proveedor">
+          Revisa cómo lo escribiste o agrega uno nuevo con «Agregar un proveedor».
+        </VacioEstado>
+      ) : (
+        <div className="pn-prov-grid">
+          {paged.map(s => {
+            const apagado = s.estado === "inactivo";
+            return (
+              <article key={s.id} className="pn-tarjeta">
+                <div>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <h2 className="pn-tarjeta__nombre">{s.nombre}</h2>
+                    <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
                   </div>
-                  <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                    ¿Cambiar el estado a {nuevoEstado}?
-                  </h3>
+                  <p className="pn-tarjeta__sub">
+                    {s.tipoPersona === "Persona Jurídica" ? "Empresa" : s.tipoPersona === "Persona Natural" ? "Persona" : "Proveedor"} · NIT {formatoNit(s.nit)}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                  El proveedor "{sup.nombre}" pasará de {sup.estado === "activo" ? "Activo" : "Inactivo"} a {nuevoEstado}.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setConfirmToggleId(null)}
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => applyToggleEstado(confirmToggleId)}
-                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
-                  >
-                    Confirmar
-                  </button>
+                <dl className="pn-tarjeta__datos">
+                  <div><dt>Correo</dt><dd>{s.email || (s as Supplier).contactoEmail || "—"}</dd></div>
+                  <div><dt>Hablar con</dt><dd>{s.asesorComercial || (s as Supplier).contactoNombre || "—"}</dd></div>
+                  <div><dt>Teléfono</dt><dd>{s.telefono || (s as Supplier).contactoTelefono || "—"}</dd></div>
+                </dl>
+                <div className="pn-tarjeta__botones">
+                  <BotonAccion variante="normal" onClick={() => setDetailItem(s)}>Ver todos los datos</BotonAccion>
                 </div>
-              </motion.div>
-            </div>
-          );
-        })()}
-      </AnimatePresence>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
-      {/* ── Proveedor con órdenes/compras: alerta informativa (un solo botón)
-             en lugar de la de eliminar ── */}
-      <AnimatePresence>
-        {bloqueoItem && (
-          <ConfirmDeleteModal
-            informativo
-            title="No se puede eliminar"
-            message={
-              <>
-                No se puede eliminar {bloqueoItem.nombre} porque tiene órdenes de
-                compra o compras registradas. Puedes cambiar su estado a Inactivo.
-              </>
-            }
-            onCancel={() => setBloqueoItem(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Confirmar eliminación (siempre con el nombre, nunca con el id) ── */}
-      <AnimatePresence>
-        {deleteItem && (
-          <ConfirmDeleteModal
-            title="Eliminar proveedor"
-            message={`¿Seguro que deseas eliminar al proveedor ${deleteItem.nombre}? Esta acción no se puede deshacer.`}
-            onConfirm={() => handleDelete(deleteItem)}
-            onCancel={() => setDeleteItem(null)}
-          />
-        )}
-      </AnimatePresence>
+      <PaginadorGrande pagina={pageActual} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+      {dialogos}
     </div>
   );
 }

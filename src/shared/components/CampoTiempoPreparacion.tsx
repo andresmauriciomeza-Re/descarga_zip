@@ -18,12 +18,12 @@ export function CampoTiempoPreparacion({ valor, onChange, deshabilitado }: {
   const invalido = !minutosPreparacionValidos(valor);
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-semibold text-muted-foreground">
-        Tiempo de preparación (minutos)
+      <label htmlFor={id} className="pn-etiqueta">
+        ¿Cuántos minutos se demora?
       </label>
       <input
         id={id}
-        className="w-full rounded-xl border border-border bg-muted px-3 py-2 max-md:min-h-11 text-sm"
+        className="w-full rounded-[14px] border-2 border-[var(--borde-campo)] bg-white px-4 min-h-[56px] text-lg"
         type="number"
         min={MINIMO}
         max={MAXIMO}
@@ -35,7 +35,7 @@ export function CampoTiempoPreparacion({ valor, onChange, deshabilitado }: {
         aria-invalid={invalido}
         aria-describedby={invalido ? id + "-error" : undefined}
       />
-      {invalido && <p id={id + "-error"} className="mt-1 text-xs text-red-600" role="alert">{MENSAJE}</p>}
+      {invalido && <p id={id + "-error"} style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }} role="alert">{MENSAJE}</p>}
     </div>
   );
 }

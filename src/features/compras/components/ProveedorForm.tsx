@@ -1,8 +1,7 @@
 import type { ChangeEvent, ReactNode } from "react";
-import { Building2, Check, ChevronDown, FileText, Phone, User } from "lucide-react";
+import { AlertCircle, Check, ChevronDown } from "lucide-react";
 import * as RadixSelect from "@radix-ui/react-select";
-import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
-import { MensajeError } from "@/shared/components/campo";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
 import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
 import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
 import {
@@ -43,34 +42,31 @@ import {
 const inputCls =
   "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
-const lecturaCls =
-  "w-full px-3 py-2 max-md:min-h-11 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
-
-const seccionCls =
-  "flex items-center gap-2 text-sm font-bold text-foreground mb-3 pb-2 border-b border-border";
+const lecturaCls = "pn-lectura";
 
 /** Rejilla de cada bloque: 2 columnas del mismo ancho en >= 768px y 1 en
     móvil. Con cantidad impar, el último campo queda solo a la izquierda. */
-const gridCls = "grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2.5";
+const gridCls = "pn-grilla";
 
 /** Label de cada campo: 14px (Poppins heredado del body). */
-const labelCls = "block text-sm font-semibold text-muted-foreground mb-1";
+const labelCls = "pn-etiqueta";
 
 /** Texto de ayuda bajo un campo (solo lectura, placeholders secundarios). */
-const ayudaCls = "text-[11px] text-muted-foreground mt-1";
+const ayudaCls = "pn-campo__ayuda";
 
 /** Aviso general (sin caja con borde: solo una línea lateral, como pide el
     estilo de "sin cards con borde"). */
-const avisoCls = "text-sm text-muted-foreground border-l-2 border-primary/40 pl-3 py-1";
+const avisoCls = "text-lg text-muted-foreground border-l-4 border-primary/40 pl-3 py-1";
 
-const req = <span className="text-red-500">*</span>;
+// Sin asteriscos: lo que no es obligatorio dice «(opcional)».
+const req = null;
 
 /** Campos de texto (todo menos el select de Estado). */
 type CampoTexto = Exclude<keyof ProveedorFormValues, "estado">;
 
-const OPCIONES_ESTADO: EstadoOption<"activo" | "inactivo">[] = [
-  { value: "activo", label: "Activo", color: "bg-emerald-100 text-emerald-800" },
-  { value: "inactivo", label: "Inactivo", color: "bg-red-100 text-red-700" },
+const OPCIONES_ESTADO = [
+  { valor: "activo", etiqueta: "Activo" },
+  { valor: "inactivo", etiqueta: "Inactivo" },
 ];
 
 // OJO: `Campo` debe vivir FUERA del componente. Si se define dentro, cada
@@ -94,10 +90,15 @@ function Campo({
   return (
     // `data-prov-campo` es el ancla que usa `enfocarPrimeroInvalido` del hook
     // para poner el foco en el PRIMER campo con error en orden visual.
-    <div className={className} data-prov-campo={campo}>
+    <div className={`pn-campo ${form.obtenerError(campo) ? "pn-campo--error" : ""} ${className}`} data-prov-campo={campo}>
       <label className={labelCls}>{label}</label>
       {children}
-      <MensajeError err={form.obtenerError(campo)} />
+      {form.obtenerError(campo) && (
+        <p className="pn-campo__error" role="alert">
+          <AlertCircle size={20} aria-hidden="true" />
+          <span>{form.obtenerError(campo)}</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -109,23 +110,20 @@ function Campo({
  */
 function Bloque({
   titulo,
-  icono,
   children,
   className = "",
 }: {
   titulo: ReactNode;
+  /** Ya no se usa (las secciones llevan número, no ícono); se acepta por compatibilidad. */
   icono?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={className}>
-      <div className={seccionCls}>
-        {icono && <span className="text-primary shrink-0">{icono}</span>}
-        <span>{titulo}</span>
-      </div>
+    <section className={`pn-seccion ${className}`}>
+      <h2 style={{ marginBottom: 16 }}>{titulo}</h2>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -135,7 +133,7 @@ const SELECT_VACIO = "__vacio__";
 
 /** Clases de cada opción del menú, idénticas en tono a las de `UnidadSelect`. */
 const itemCls =
-  "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-2 max-md:min-h-11 text-sm outline-none transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10";
+  "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3 py-3 min-h-12 text-lg outline-none transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10";
 
 /**
  * Select genérico: mismo estilo y misma validación en vivo que un input.
@@ -193,7 +191,7 @@ function SelectCampo({
           className={`${inputCls} flex w-full cursor-pointer items-center justify-between gap-2 text-left transition-colors ${form.campoCls(campo)}`}
         >
           <RadixSelect.Value placeholder={vacio} />
-          <ChevronDown className="w-4 h-4 shrink-0 text-muted-foreground" />
+          <ChevronDown className="w-5 h-5 shrink-0 text-muted-foreground" />
         </RadixSelect.Trigger>
 
         <RadixSelect.Portal>
@@ -214,7 +212,7 @@ function SelectCampo({
                   <RadixSelect.Item key={op} value={op} className={itemCls}>
                     <RadixSelect.ItemText>{etiquetaDe(op)}</RadixSelect.ItemText>
                     {seleccionada && (
-                      <Check className="w-4 h-4 ml-auto shrink-0 text-primary" />
+                      <Check className="w-5 h-5 ml-auto shrink-0 text-primary" />
                     )}
                   </RadixSelect.Item>
                 );
@@ -310,10 +308,10 @@ export function ProveedorFormCampos({
     //
     // El selector "Tipo de persona" vive en el ENCABEZADO de cada pantalla/modal
     // con `TipoPersonaSelector` (misma fila del título).
-    <div className="space-y-6 mx-auto max-w-4xl">
+    <div className="grid gap-5 mx-auto max-w-4xl">
       {!hayTipo && (
         <p className={avisoCls}>
-          Selecciona el tipo de persona (arriba a la derecha) para ver los datos que se piden.
+          Escoge arriba si es empresa o persona natural para ver las preguntas.
         </p>
       )}
 
@@ -322,7 +320,8 @@ export function ProveedorFormCampos({
               octavo campo (Estado) queda solo en su fila, a la izquierda, con
               el mismo ancho que los demás (así lo pinta el grid). ─────────── */}
           {esNatural && (
-            <Bloque titulo="Datos del proveedor" icono={<User className="w-4 h-4" />}>
+            <>
+            <Bloque titulo="2 · Datos de la persona">
               <div className={gridCls}>
                 {pideNit ? (
                   <>
@@ -394,6 +393,10 @@ export function ProveedorFormCampos({
                     </p>
                   </div>
                 )}
+              </div>
+            </Bloque>
+            <Bloque titulo="3 · ¿Con quién hablamos para pedir?">
+              <div className={gridCls}>
                 {/* 4. Teléfono */}
                 <Campo form={form} label={<>Teléfono {req}</>} campo="telefono">
                   <input
@@ -428,17 +431,19 @@ export function ProveedorFormCampos({
                     className={`${inputCls} transition-colors ${form.campoCls("direccion")}`}
                   />
                 </Campo>
-                {/* 7. Estado (píldora, mismo control del listado). */}
+                {/* 7. Estado */}
                 <div>
-                  <label className={labelCls}>Estado</label>
-                  <EstadoSelect
-                    value={v.estado}
-                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
-                    options={OPCIONES_ESTADO}
+                  <p className={labelCls}>¿El proveedor está activo?</p>
+                  <OpcionesBotones
+                    etiqueta="Estado del proveedor"
+                    valor={v.estado}
+                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado as "activo" | "inactivo")}
+                    opciones={OPCIONES_ESTADO}
                   />
                 </div>
               </div>
             </Bloque>
+            </>
           )}
 
           {/* ── Persona Jurídica: secciones APILADAS (Representante legal,
@@ -447,8 +452,80 @@ export function ProveedorFormCampos({
               pasan a 1 columna. ─────────────────────────────────────────── */}
           {esJuridica && (
             <>
+                {/* Sección 2 — Razón social */}
+                <Bloque titulo="2 · Datos de la empresa">
+                  <div className={gridCls}>
+                    {pideNit ? (
+                      <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
+                        <input
+                          value={v.razonSocial ?? ""}
+                          onChange={alEscribir("razonSocial", (x) => x)}
+                          onBlur={alTocar("razonSocial")}
+                          placeholder="Ej: Quesos del Norte S.A.S."
+                          className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
+                        />
+                      </Campo>
+                    ) : (
+                      <div>
+                        <label className={labelCls}>Nombre o razón social</label>
+                        <div className={lecturaCls}>{(v.razonSocial || v.nombre || "").trim() || "—"}</div>
+                        <p className={ayudaCls}>
+                          La razón social no se puede modificar después de creado el proveedor
+                        </p>
+                      </div>
+                    )}
+                    <Campo form={form} label={<>Nombre comercial <span className="font-normal">(opcional)</span></>} campo="nombreComercial">
+                      <input
+                        value={v.nombreComercial ?? ""}
+                        onChange={alEscribir("nombreComercial", (x) => x)}
+                        onBlur={alTocar("nombreComercial")}
+                        placeholder="Nombre con el que te conocen"
+                        className={`${inputCls} transition-colors ${form.campoCls("nombreComercial")}`}
+                      />
+                    </Campo>
+                    {/* Alta: input de NIT. Edición: NIT congelado (el módulo no
+                        lo permite modificar después de creado). */}
+                    {pideNit ? (
+                      <Campo form={form} label={<>NIT {req}</>} campo="nit">
+                        <input
+                          value={v.nit}
+                          onChange={alEscribir("nit", filtrarNit)}
+                          onBlur={alTocar("nit")}
+                          placeholder="Ej: 9001234561 (sin el número de verificación)"
+                          inputMode="numeric"
+                          // Sin maxLength: truncaría un NIT pegado con formato
+                          // ("900.123.456-1" → "900.123.45") ANTES de poder
+                          // quitarle los signos. El tope de 10 lo aplica filtrarNit.
+                          className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
+                        />
+                      </Campo>
+                    ) : (
+                      nitLectura !== undefined && nitLectura.trim() !== "" && (
+                        <div>
+                          <label className={labelCls}>NIT</label>
+                          <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
+                          <p className={ayudaCls}>
+                            El NIT no se puede modificar después de creado el proveedor
+                          </p>
+                        </div>
+                      )
+                    )}
+                    {/* DV: fuera del diseño (decisión). Su valor sigue viajando
+                        en el payload desde el estado, sin pintarse ni validarse. */}
+                    <SelectCampo
+                      form={form}
+                      label={<>Tipo de sociedad {req}</>}
+                      campo="tipoSociedad"
+                      valor={v.tipoSociedad ?? ""}
+                      opciones={TIPOS_SOCIEDAD}
+                      vacio="Selecciona el tipo de sociedad"
+                      ariaLabel="Tipo de sociedad"
+                    />
+                  </div>
+                </Bloque>
+
                 {/* Sección 1 — Representante legal */}
-                <Bloque titulo="Representante legal" icono={<User className="w-4 h-4" />}>
+                <Bloque titulo="3 · Representante legal">
                   <div className={gridCls}>
                     <SelectCampo
                       form={form}
@@ -508,80 +585,8 @@ export function ProveedorFormCampos({
                   </div>
                 </Bloque>
 
-                {/* Sección 2 — Razón social */}
-                <Bloque titulo="Razón social" icono={<Building2 className="w-4 h-4" />}>
-                  <div className={gridCls}>
-                    {pideNit ? (
-                      <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
-                        <input
-                          value={v.razonSocial ?? ""}
-                          onChange={alEscribir("razonSocial", (x) => x)}
-                          onBlur={alTocar("razonSocial")}
-                          placeholder="Ej: Quesos del Norte S.A.S."
-                          className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
-                        />
-                      </Campo>
-                    ) : (
-                      <div>
-                        <label className={labelCls}>Nombre o razón social</label>
-                        <div className={lecturaCls}>{(v.razonSocial || v.nombre || "").trim() || "—"}</div>
-                        <p className={ayudaCls}>
-                          La razón social no se puede modificar después de creado el proveedor
-                        </p>
-                      </div>
-                    )}
-                    <Campo form={form} label={<>Nombre comercial <span className="font-normal">(opcional)</span></>} campo="nombreComercial">
-                      <input
-                        value={v.nombreComercial ?? ""}
-                        onChange={alEscribir("nombreComercial", (x) => x)}
-                        onBlur={alTocar("nombreComercial")}
-                        placeholder="Nombre con el que te conocen"
-                        className={`${inputCls} transition-colors ${form.campoCls("nombreComercial")}`}
-                      />
-                    </Campo>
-                    {/* Alta: input de NIT. Edición: NIT congelado (el módulo no
-                        lo permite modificar después de creado). */}
-                    {pideNit ? (
-                      <Campo form={form} label={<>NIT {req}</>} campo="nit">
-                        <input
-                          value={v.nit}
-                          onChange={alEscribir("nit", filtrarNit)}
-                          onBlur={alTocar("nit")}
-                          placeholder="9001234561"
-                          inputMode="numeric"
-                          // Sin maxLength: truncaría un NIT pegado con formato
-                          // ("900.123.456-1" → "900.123.45") ANTES de poder
-                          // quitarle los signos. El tope de 10 lo aplica filtrarNit.
-                          className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
-                        />
-                      </Campo>
-                    ) : (
-                      nitLectura !== undefined && nitLectura.trim() !== "" && (
-                        <div>
-                          <label className={labelCls}>NIT</label>
-                          <div className={lecturaCls}>{formatoNit(nitLectura)}</div>
-                          <p className={ayudaCls}>
-                            El NIT no se puede modificar después de creado el proveedor
-                          </p>
-                        </div>
-                      )
-                    )}
-                    {/* DV: fuera del diseño (decisión). Su valor sigue viajando
-                        en el payload desde el estado, sin pintarse ni validarse. */}
-                    <SelectCampo
-                      form={form}
-                      label={<>Tipo de sociedad {req}</>}
-                      campo="tipoSociedad"
-                      valor={v.tipoSociedad ?? ""}
-                      opciones={TIPOS_SOCIEDAD}
-                      vacio="Selecciona el tipo de sociedad"
-                      ariaLabel="Tipo de sociedad"
-                    />
-                  </div>
-                </Bloque>
-
                 {/* Sección 3 — Contacto comercial */}
-                <Bloque titulo="Contacto comercial" icono={<Phone className="w-4 h-4" />}>
+                <Bloque titulo="4 · ¿Con quién hablamos para pedir?">
                   <div className={gridCls}>
                     <Campo form={form} label={<>Email {req}</>} campo="contactoEmail">
                       <input
@@ -639,11 +644,11 @@ export function ProveedorFormCampos({
                 </Bloque>
 
               {/* Sección 4 — Cámara de Comercio */}
-              <Bloque titulo="Cámara de Comercio" icono={<FileText className="w-4 h-4" />}>
+              <Bloque titulo="5 · Cámara de Comercio">
                 <div className={gridCls}>
                   <Campo
                     form={form}
-                    label={<>Cámara de Comercio <span className="font-normal">(adjunto, opcional)</span></>}
+                    label={<>Archivo de la Cámara de Comercio <span className="font-normal">(opcional)</span></>}
                     campo="camaraComercioArchivo"
                   >
                     <input
@@ -651,19 +656,20 @@ export function ProveedorFormCampos({
                       accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={alAdjuntar}
                       disabled={subiendo}
-                      className={`${inputCls} file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:bg-muted file:text-xs file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`${inputCls} file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-muted file:text-base file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
                     <div className="flex items-center justify-between gap-2 mt-1.5">
-                      <span className="text-[10px] text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
+                      <span className="text-base text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
                         {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG, WEBP) hasta 5 MB")}
                       </span>
                       {v.camaraComercioNombre && (
                         <button
                           type="button"
                           onClick={quitarAdjunto}
-                          className="text-[10px] font-semibold text-red-500 hover:text-red-600 cursor-pointer shrink-0 max-md:min-h-11 max-md:px-2"
+                          className="pn-boton pn-boton--peligro shrink-0"
+                          style={{ minHeight: 46 }}
                         >
-                          Quitar
+                          Quitar el archivo
                         </button>
                       )}
                     </div>
@@ -674,11 +680,12 @@ export function ProveedorFormCampos({
               {/* Estado: último elemento del formulario en fila propia sin barra de título */}
               <div className={gridCls}>
                 <div>
-                  <label className={labelCls}>Estado</label>
-                  <EstadoSelect
-                    value={v.estado}
-                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado)}
-                    options={OPCIONES_ESTADO}
+                  <p className={labelCls}>¿El proveedor está activo?</p>
+                  <OpcionesBotones
+                    etiqueta="Estado del proveedor"
+                    valor={v.estado}
+                    onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado as "activo" | "inactivo")}
+                    opciones={OPCIONES_ESTADO}
                   />
                 </div>
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Eye, X, ArrowLeft,
-  Plus, Check, Ban, CheckCircle2, Pencil, Trash2,
+  Plus, Check, Ban, CheckCircle2, Pencil, Trash2, Download, Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
@@ -29,11 +29,23 @@ import { CrearProductoModal } from "@/features/productos/components/CrearProduct
 import type { CategoriaProducto } from "@/features/categoria-productos/pages/CategoriaProductoScreen";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import {
   NuevoProveedorModal,
   ConfirmModal,
@@ -129,8 +141,6 @@ const campoLargoCls = "max-w-xs"; // Proveedor (búsqueda)
 
 /** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
  *  que el formulario Nuevo Proveedor. */
-const seccionCls =
-  "text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground pb-1.5 border-b border-border";
 
 /** Labels de las guías: 13px en gris oscuro (pantalla completa). */
 const labelPaginaCls = "block text-[13px] leading-tight font-medium text-foreground/70 mb-1";
@@ -232,6 +242,7 @@ function TablaItemsFactura({
   enPagina = false,
   rowEditando = null,
   className = "",
+  soloLectura = false,
 }: {
   items: ItemFactura[];
   /** Lápiz: carga la fila en el formulario de la izquierda. */
@@ -242,6 +253,8 @@ function TablaItemsFactura({
   /** Fila cargada en el formulario (se resalta suavemente). */
   rowEditando?: string | null;
   className?: string;
+  /** Detalle de una factura: sin los botones «Cambiar» y «Quitar». */
+  soloLectura?: boolean;
 }) {
   // Fórmula única (`iva.ts`): cada línea usa su propio `modoIva`; las líneas
   // viejas sin modo se leen como 'incluido' (mismo fallback que el backend).
@@ -266,7 +279,7 @@ function TablaItemsFactura({
     IVA: 58,
     Subtotal: 66,
   };
-  const ANCHO_ACCIONES = 76;
+  const ANCHO_ACCIONES = 112;
   const columnCount = headers.length + 1;
   const td = "align-middle px-1 " + (enPagina ? "py-1.5" : "py-2.5");
   /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
@@ -284,7 +297,7 @@ function TablaItemsFactura({
     >
       {!enPagina && (
         <div className="px-3 py-2 border-b border-border bg-muted/30 shrink-0">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <p className="text-base font-bold uppercase tracking-wider text-muted-foreground">
             Ítems de la factura
           </p>
         </div>
@@ -296,23 +309,23 @@ function TablaItemsFactura({
           // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
           // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
           // pegado a la cabecera.
-          "flex-1 min-h-0 overflow-y-auto overflow-x-hidden max-md:overflow-x-auto"
+          "flex-1 min-h-0 overflow-auto"
         }
       >
         {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
             `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
-          className="table-fixed w-full text-sm max-md:min-w-[480px]"
+          className="pn-tabla-compra w-full"
         >
           <colgroup>
             {headers.map((h) => (
               <col key={h} style={{ width: ANCHOS[h] }} />
             ))}
-            <col style={{ width: ANCHO_ACCIONES }} />
+            {!soloLectura && <col style={{ width: ANCHO_ACCIONES }} />}
           </colgroup>
           <thead
             className={
-              "text-[10px] uppercase tracking-wider " +
+              "text-base uppercase tracking-wider " +
               (enPagina
                 ? "sticky top-0 z-10 border-b border-border bg-muted text-muted-foreground"
                 : "bg-muted/50 text-muted-foreground")
@@ -335,7 +348,7 @@ function TablaItemsFactura({
                   ) : h}
                 </th>
               ))}
-              <th className={"px-1 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />
+              {!soloLectura && <th className={"px-1 " + (enPagina ? "py-1.5 bg-muted" : "py-2.5")} />}
             </tr>
           </thead>
 
@@ -344,7 +357,7 @@ function TablaItemsFactura({
               <tr>
                 <td
                   colSpan={columnCount}
-                  className="text-center max-md:text-left text-[11px] font-medium text-muted-foreground/80 px-3 max-md:px-4 py-6"
+                  className="text-center max-md:text-left text-base font-medium text-muted-foreground/80 px-3 max-md:px-4 py-6"
                 >
                   {enPagina ? "Aún no has agregado ítems" : "Sin ítems agregados"}
                 </td>
@@ -360,62 +373,64 @@ function TablaItemsFactura({
                       editandoFila ? "bg-primary/5" : ""
                     }`}
                   >
-                    <td className={td + " min-w-0 text-sm font-medium text-foreground"}>
+                    <td className={td + " min-w-0 text-lg font-medium text-foreground"}>
                       <div className="truncate" title={row.nombre}>
                         {row.nombre}
                       </div>
-                      <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
+                      <div className="text-base font-normal text-muted-foreground mt-0.5 break-words">
                         {(row.tipoItem ?? "insumo") === "producto" && "Producto · "}
                         {etiquetaModoIvaSimple(resolverModoIva(row, null))}
                       </div>
                     </td>
-                    <td className={td + " text-right"}>
-                      <div className="text-sm text-foreground">{row.cantidad}</div>
-                      <div className="text-[11px] text-muted-foreground break-words">
+                    <td data-etiqueta="Cantidad" className={td + " text-right"}>
+                      <div className="text-lg text-foreground">{row.cantidad}</div>
+                      <div className="text-base text-muted-foreground break-words">
                         {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase, row.pesoMedida, row.tamanoUnidad)}
                       </div>
                     </td>
-                    <td className={td + " text-sm text-right whitespace-nowrap"}>
+                    <td data-etiqueta="Monto unitario" className={td + " text-lg text-right whitespace-nowrap"}>
                       {fmtCOP(row.precioUnitario)}
                     </td>
-                    <td className={td + " text-right"}>
+                    <td data-etiqueta="IVA" className={td + " text-right"}>
                       <span
-                        className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-muted text-muted-foreground border border-border"
+                        className="inline-block px-1.5 py-0.5 rounded-full text-base font-semibold whitespace-nowrap bg-muted text-muted-foreground border border-border"
                       >
                         {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                       </span>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      <p className="text-base text-muted-foreground mt-0.5 truncate">
                         {fmtCOP(l.montoIva)}
                       </p>
                     </td>
-                    <td className={td + " text-sm font-semibold text-foreground text-right whitespace-nowrap"}>
+                    <td data-etiqueta="Subtotal" className={td + " text-lg font-semibold text-foreground text-right whitespace-nowrap"}>
                       {fmtCOP(l.subtotalConIva)}
                     </td>
+                    {!soloLectura && (
                     <td className={td + " whitespace-nowrap"}>
                       {/* Mientras la fila está cargada en el formulario se
                           ocultan sus acciones (sin mover la columna). */}
                       <div
-                        className={`flex items-center gap-1${editandoFila ? " invisible" : ""}`}
+                        className={`flex flex-wrap items-center gap-2${editandoFila ? " invisible" : ""}`}
                         aria-hidden={editandoFila || undefined}
                       >
                         <button
                           type="button"
                           onClick={() => onEdit(row)}
                           title="Editar ítem"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          className="pn-boton pn-boton--normal"
                         >
-                          <Pencil className="w-4 h-4" />
+                          Cambiar
                         </button>
                         <button
                           type="button"
                           onClick={() => onRemove(row.rowId)}
                           title="Eliminar ítem"
-                          className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                          className="pn-boton pn-boton--peligro"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          Quitar
                         </button>
                       </div>
                     </td>
+                    )}
                   </tr>
                 );
               })
@@ -434,20 +449,20 @@ function TablaItemsFactura({
               "flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 px-3 py-2 border-t border-border"
             }
           >
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Subtotal sin IVA
+            <span className="text-base font-bold text-muted-foreground">
+              Sin IVA
             </span>
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-lg font-semibold text-foreground">
               {fmtCOP(totales.totalSinIva)}
             </span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-base font-bold text-muted-foreground">
               IVA
             </span>
-            <span className="text-sm font-semibold text-foreground">{fmtCOP(totales.totalIva)}</span>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Total
+            <span className="text-lg font-semibold text-foreground">{fmtCOP(totales.totalIva)}</span>
+            <span className="text-base font-bold text-muted-foreground">
+              Total pagado
             </span>
-            <span className="text-lg font-bold text-foreground">{fmtCOP(totales.totalPagado)}</span>
+            <span style={{ font: "700 28px var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
           </div>
         )}
       </div>
@@ -1163,20 +1178,20 @@ function CompraForm({
                   <button
                     onClick={salir}
                     title="Volver"
-                    className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                    className="pn-boton pn-boton--normal shrink-0"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver
                   </button>
                 )}
                 <div className="min-w-0">
                   <h3
-                    className={`${isPage ? "text-lg" : "text-base"} font-bold text-foreground`}
+                    className={`${isPage ? "text-3xl" : "text-2xl"} font-bold text-foreground`}
                     style={{ fontFamily: SERIF }}
                   >
-                    {isView ? "Detalle de Compra" : "Nueva Compra"}
+                    {isView ? "Detalle de Compra" : "Anotar una factura"}
                   </h3>
                   {subtitulo && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
+                    <p className="text-base text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
                   )}
                 </div>
               </div>
@@ -1187,7 +1202,7 @@ function CompraForm({
                     onClick={salir}
                     className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4" aria-hidden="true" /> Cerrar
                   </button>
                 )}
               </div>
@@ -1224,7 +1239,7 @@ function CompraForm({
               {/* Franja de anulación: motivo + fecha (trazabilidad de la
                   anulación), en vez del aviso genérico de antes. */}
               {isView && compra?.estado === "Anulado" && (
-                <div className="shrink-0 flex items-start gap-2.5 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                <div className="shrink-0 flex items-start gap-2.5 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-base text-red-800">
                   <Ban className="w-4 h-4 shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <p className="font-semibold">Esta compra ha sido anulada.</p>
@@ -1234,7 +1249,7 @@ function CompraForm({
                       </p>
                     )}
                     {compra?.fechaAnulacion && (
-                      <p className="text-xs text-red-700/80 mt-0.5">
+                      <p className="text-base text-red-700/80 mt-0.5">
                         Anulada el {compra.fechaAnulacion}
                       </p>
                     )}
@@ -1248,7 +1263,7 @@ function CompraForm({
               <section
                 className={`flex flex-col ${isPage ? "gap-2 shrink-0" : "gap-5"}`}
               >
-                {isPage && <p className={seccionCls}>Datos de la factura</p>}
+                {!isView && <h2 className="text-xl font-bold">1 · ¿De qué es la factura?</h2>}
 
                 {/* Detalle (vista): rejilla compacta de resumen — 4 columnas
                     en escritorio, 2 en móvil. Creación en pantalla completa:
@@ -1273,7 +1288,7 @@ function CompraForm({
                         <>
                           <p className={valorDatoCls} title={provQuery}>{provQuery}</p>
                           {compra?.proveedorNit && (
-                            <p className="text-[11px] text-muted-foreground font-mono mt-0.5 break-words">
+                            <p className="text-base text-muted-foreground font-mono mt-0.5 break-words">
                               NIT {compra.proveedorNit}
                             </p>
                           )}
@@ -1307,7 +1322,7 @@ function CompraForm({
                       Número de factura {!isView && <span className="text-red-500">*</span>}
                     </label>
                     {isView ? (
-                      <p className="text-sm font-semibold text-foreground py-2">{numeroFactura || "—"}</p>
+                      <p className="text-base font-semibold text-foreground py-2">{numeroFactura || "—"}</p>
                     ) : (
                       <input
                         value={numeroFactura}
@@ -1322,7 +1337,7 @@ function CompraForm({
                       />
                     )}
                     {!isView && (tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura && (
-                      <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorNumeroFactura}</p>
+                      <p className={isPage ? "absolute left-0 top-full text-base text-red-500" : "text-base text-red-500 mt-1 ml-0.5"}>{errorNumeroFactura}</p>
                     )}
                   </div>
 
@@ -1331,7 +1346,7 @@ function CompraForm({
                       Proveedor <span className="text-muted-foreground/70 font-normal">(opcional)</span>
                     </label>
                     {isView ? (
-                      <p className="text-sm font-semibold text-foreground py-2">{provQuery || "—"}</p>
+                      <p className="text-base font-semibold text-foreground py-2">{provQuery || "—"}</p>
                     ) : (
                       <div className="relative" ref={provRef}>
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -1362,7 +1377,7 @@ function CompraForm({
                                 setProvSugAbierto(false);
                                 setMostrarNuevoProveedor(true);
                               }}
-                              className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                              className="w-full text-left px-3 py-2.5 text-base font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               Crear proveedor {provQuery.trim() && `“${provQuery.trim()}”`}
@@ -1374,7 +1389,7 @@ function CompraForm({
                                 key={p.nit}
                                 type="button"
                                 onMouseDown={() => seleccionarProveedor(p)}
-                                className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                                className="w-full text-left px-3 py-2.5 text-base hover:bg-muted cursor-pointer border-b border-border last:border-0"
                               >
                                 <p className="font-semibold text-foreground">{p.nombre}</p>
                                 <p className="text-muted-foreground">
@@ -1384,12 +1399,12 @@ function CompraForm({
                               </button>
                             ))}
                             {provSugs.length === 0 && (
-                              <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
+                              <div className="px-3 py-2.5 text-base text-muted-foreground text-center border-b border-border">
                                 Sin resultados
                               </div>
                             )}
                             {provSugs.length > 3 && (
-                              <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                              <div className="px-3 py-2 text-base text-muted-foreground text-center">
                                 +{provSugs.length - 3} más...
                               </div>
                             )}
@@ -1413,7 +1428,7 @@ function CompraForm({
                           onBlur={() => marcarTocado("fechaFactura")}
                         />
                         {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
-                          <p className="absolute left-0 top-full text-xs text-red-500">{errorFechaFactura}</p>
+                          <p className="absolute left-0 top-full text-base text-red-500">{errorFechaFactura}</p>
                         )}
                       </div>
 
@@ -1441,7 +1456,7 @@ function CompraForm({
                           onBlur={() => marcarTocado("fechaFactura")}
                         />
                         {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
-                          <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
+                          <p className="text-base text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
                         )}
                       </div>
 
@@ -1467,11 +1482,11 @@ function CompraForm({
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
                   <CompactInsumoForm
                     containerRef={itemRef}
-                    titulo="Agregar ítem"
+                    titulo="2 · ¿Qué llegó?"
                     headerExtra={
                       isPage ? (
                       <div className="flex items-center gap-2">
-                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                        <label className="block text-base font-semibold text-muted-foreground">
                           Tipo
                         </label>
                         <SegmentadoButtons
@@ -1607,7 +1622,7 @@ function CompraForm({
                     compacto={isPage}
                     // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
                     // de una fila existente ocurre en línea, en la tabla.
-                    buttonLabel={editando ? "Guardar cambios" : "Agregar"}
+                    buttonLabel={editando ? "Guardar cambios" : "+ Agregar otra línea"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Fase 4: Presentación SIEMPRE visible. Para PRODUCTOS es
@@ -1638,7 +1653,7 @@ function CompraForm({
                     campoExtra={
                       isPage ? undefined : (
                       <div className="min-w-[118px]">
-                        <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                        <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>
                         <SegmentadoButtons
@@ -1666,7 +1681,7 @@ function CompraForm({
                       debajo de la fila (solo empuja la tabla al aparecer); en
                       el modal, con el mismo margen de 20px de antes. */}
                   {(errorItems || errorTotal) && (algunoTocado || intentoGuardar) && (
-                    <p className={`text-xs text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
+                    <p className={`text-base text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
                       {errorItems ?? errorTotal}
                     </p>
                   )}
@@ -1688,12 +1703,12 @@ function CompraForm({
                 {isPage && !isView && (
                   <div className="shrink-0">
                     <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
-                      <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
+                      <p className="text-base leading-none font-bold uppercase tracking-widest text-muted-foreground">
                         Ítems de la factura
                       </p>
                       {/* P14: el contador desglosa por tipo para que se vea
                           de insumos y de cuántos productos se trata. */}
-                      <span className="text-xs font-medium text-muted-foreground">
+                      <span className="text-base font-medium text-muted-foreground">
                         {items.length} {items.length === 1 ? "ítem" : "ítems"}
                         {nProductos > 0 &&
                           ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${
@@ -1710,10 +1725,10 @@ function CompraForm({
                       (antes había "solicitados" / "no solicitados" / "recibidos"
                       por separado). */}
                   <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
-                    <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
+                    <p className="text-base leading-none font-bold uppercase tracking-widest text-muted-foreground">
                       Ítems de la factura
                     </p>
-                    <span className="text-xs font-medium text-muted-foreground">
+                    <span className="text-base font-medium text-muted-foreground">
                       {items.length} {items.length === 1 ? "ítem" : "ítems"}
                       {nProductos > 0 &&
                         ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${
@@ -1732,8 +1747,8 @@ function CompraForm({
                       (items.length > 6 ? "max-h-[340px] overflow-y-auto" : "")
                     }
                   >
-                    <table className="table-fixed w-full text-sm">
-                      <thead className="text-[10px] uppercase tracking-wider bg-muted/50 text-muted-foreground">
+                    <table className="table-fixed w-full text-base">
+                      <thead className="text-base uppercase tracking-wider bg-muted/50 text-muted-foreground">
                         <tr>
                           <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-16">Tipo</th>
@@ -1748,7 +1763,7 @@ function CompraForm({
                       <tbody className="divide-y divide-border">
                         {items.length === 0 ? (
                           <tr>
-                            <td colSpan={8} className="text-center text-[11px] font-medium text-muted-foreground/80 px-3 py-6">
+                            <td colSpan={8} className="text-center text-base font-medium text-muted-foreground/80 px-3 py-6">
                               Sin ítems agregados
                             </td>
                           </tr>
@@ -1771,16 +1786,16 @@ function CompraForm({
                             return (
                               <tr key={row.rowId} className="hover:bg-muted/20 transition-colors">
                                 <td className="align-middle px-2 py-2.5 min-w-0">
-                                  <div className="truncate text-sm font-medium text-foreground" title={row.nombre}>
+                                  <div className="truncate text-base font-medium text-foreground" title={row.nombre}>
                                     {row.nombre}
                                   </div>
                                   <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="md:hidden text-[11px] text-muted-foreground">
+                                    <span className="md:hidden text-base text-muted-foreground">
                                       {esProducto ? "Producto" : "Insumo"}
                                     </span>
                                     {etiqueta && (
                                       <span
-                                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                        className={`text-base font-semibold px-1.5 py-0.5 rounded-full ${
                                           etiqueta === "Solicitado"
                                             ? "bg-emerald-100 text-emerald-700"
                                             : "bg-amber-100 text-amber-700"
@@ -1791,30 +1806,30 @@ function CompraForm({
                                     )}
                                   </div>
                                 </td>
-                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-base text-muted-foreground">
                                   {esProducto ? "Producto" : "Insumo"}
                                 </td>
-                                <td className="align-middle px-2 py-2.5 text-sm text-right">
+                                <td className="align-middle px-2 py-2.5 text-base text-right">
                                   {row.cantidad}
                                   {esEmpaque(row.unidad) && (
-                                    <div className="text-[11px] text-muted-foreground break-words">
+                                    <div className="text-base text-muted-foreground break-words">
                                       {etiquetaPresentacion(row.unidad, row.factorPresentacion, row.unidadBase ?? insumos.find((i) => i.id === row.idInsumo)?.unidadMedida, insumos.find((i) => i.id === row.idInsumo)?.pesoMedida, tamanoDeFila(row))}
                                     </div>
                                   )}
                                 </td>
-                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-muted-foreground">
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-base text-muted-foreground">
                                   {!esEmpaque(row.unidad) && row.unidad}
                                 </td>
-                                <td className="align-middle px-2 py-2.5 text-sm text-right whitespace-nowrap">
+                                <td className="align-middle px-2 py-2.5 text-base text-right whitespace-nowrap">
                                   {fmtCOP(row.precioUnitario)}
                                 </td>
-                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground">
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-base text-right text-muted-foreground">
                                   {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                                 </td>
-                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-xs text-right text-muted-foreground whitespace-nowrap">
+                                <td className="hidden md:table-cell align-middle px-2 py-2.5 text-base text-right text-muted-foreground whitespace-nowrap">
                                   {fmtCOP(l.montoIva)}
                                 </td>
-                                <td className="align-middle px-2 py-2.5 text-sm font-semibold text-foreground text-right whitespace-nowrap">
+                                <td className="align-middle px-2 py-2.5 text-base font-semibold text-foreground text-right whitespace-nowrap">
                                   {fmtCOP(l.subtotalConIva)}
                                 </td>
                               </tr>
@@ -1827,19 +1842,19 @@ function CompraForm({
 
                   {/* Totales pegados debajo de la tabla, a la derecha. */}
                   <div className="ml-auto w-fit grid grid-cols-[auto_7rem] gap-x-3 gap-y-1.5 pt-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
+                    <span className="text-base font-bold uppercase tracking-wider text-muted-foreground text-right">
                       Subtotal sin IVA
                     </span>
-                    <span className="text-sm font-semibold text-foreground text-right">
+                    <span className="text-base font-semibold text-foreground text-right">
                       {fmtCOP(subtotalSinIva)}
                     </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
+                    <span className="text-base font-bold uppercase tracking-wider text-muted-foreground text-right">
                       IVA
                     </span>
-                    <span className="text-sm font-semibold text-foreground text-right">
+                    <span className="text-base font-semibold text-foreground text-right">
                       {fmtCOP(totalIva)}
                     </span>
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground text-right">
+                    <span className="text-base font-bold uppercase tracking-wider text-muted-foreground text-right">
                       Total pagado
                     </span>
                     <span className="text-base font-bold text-foreground text-right">
@@ -1870,20 +1885,20 @@ function CompraForm({
                 {/* Acciones: en pantalla completa van al final de ESTA columna
                     (siempre visibles); en el modal siguen en el pie general. */}
                 {isPage && !isView && (
-                  <div className="flex gap-3 shrink-0 mt-auto pt-2">
+                  <div className="flex flex-wrap gap-3 shrink-0 mt-auto pt-2">
                     <button
                       onClick={salir}
-                      className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                      className="pn-boton pn-boton--normal flex-1"
                     >
                       Cancelar
                     </button>
                     <button
                       onClick={guardar}
                       disabled={!botonGuardarOk}
-                      className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                      className="pn-boton pn-boton--principal flex-1"
                     >
                       <Check className="w-4 h-4" />
-                      Guardar
+                      Guardar y sumar a la bodega
                     </button>
                   </div>
                 )}
@@ -1896,17 +1911,17 @@ function CompraForm({
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
                   onClick={salir}
-                  className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="pn-boton pn-boton--normal flex-1"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={guardar}
                   disabled={!botonGuardarOk}
-                  className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="pn-boton pn-boton--principal flex-1"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar
+                  Guardar y sumar a la bodega
                 </button>
               </div>
             )}
@@ -1975,18 +1990,14 @@ function CompraForm({
 
       <AnimatePresence>
         {showGuardarConf && (
-          <ConfirmModal
-            title="¿Está seguro de los cambios?"
-            detail="Una vez guardado no se podrá modificar."
-            confirmLabel="Confirmar"
-            loading={guardandoCompra}
-            icon={
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              </div>
-            }
-            onConfirm={confirmarGuardar}
-            onCancel={() => setShowGuardarConf(false)}
+          <DialogoConfirmacion
+            abierto
+            onCambiarAbierto={a => { if (!a && !guardandoCompra) setShowGuardarConf(false); }}
+            titulo="¿Guardar la factura y sumar lo que llegó a la bodega?"
+            queVaAPasar={["Lo que llegó se suma a lo que hay en bodega", "Una vez guardada, la factura ya no se puede cambiar", "Si te equivocas, se puede anular"]}
+            textoSeguro="No, volver a revisar"
+            textoAccion={guardandoCompra ? "Guardando…" : "Sí, guardar y sumar"}
+            onConfirmar={() => { void confirmarGuardar(); }}
           />
         )}
       </AnimatePresence>
@@ -2142,6 +2153,8 @@ export function GestionCompraScreen({
    *  este módulo (el select de estado se reemplazó por el ícono de anular). */
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoGestion } | null>(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
+  /** Botones de filtro de la lista: todas, recibidas o anuladas. */
+  const [chipEstado, setChipEstado] = useState("todas");
 
   // Se declara antes del `useMemo` de abajo porque la fábrica lo invoca durante
   // el render; como `const`, usarla desde allí la lanzaba en TDZ
@@ -2159,19 +2172,21 @@ export function GestionCompraScreen({
 
   const filtered = useMemo(() =>
     ordenarPorIdDescendente(gestiones.filter(g => {
+      if (chipEstado !== "todas" && g.estado !== chipEstado) return false;
       const q = search.toLowerCase();
       if (!q) return true;
       // Proveedor vacío ⇒ cadena vacía: el `?? ""` evita el `undefined`.
       const proveedor = g.proveedor ?? "";
       return proveedor.toLowerCase().includes(q)
         || g.numeroFactura.toLowerCase().includes(q)
+        || (g.ordenId ?? "").toLowerCase().includes(q)
         || g.estado.toLowerCase().includes(q);
     }), (gestion) => gestion.id),
-    [gestiones, search]);
+    [gestiones, search, chipEstado]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
   // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
@@ -2298,277 +2313,166 @@ export function GestionCompraScreen({
     toast.success("Excel descargado");
   };
 
-  return (
-    <div className="px-4 md:px-6 pt-5 pb-4 h-full min-h-0 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-4 mb-4 shrink-0 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Gestión de Compras
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Registro de facturas vinculadas a órdenes completadas
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
-          {canCreate && (
-            <button
-              onClick={onNuevaCompra}
-              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Crear Compra
-            </button>
-          )}
-        </div>
-      </div>
+  const numeroOrden = (id: string) => id.replace(/^\D+-?0*/, "") || id;
+  const origenDe = (g: GestionCompra) =>
+    g.ordenId ? `Llegó por la orden de compra #${numeroOrden(g.ordenId)}` : "Compra directa, sin orden";
+  const estadoCompraConfirm = estadoConfirm ? gestiones.find((g) => g.id === estadoConfirm.id) ?? null : null;
 
-      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <SearchInput
+  /** Confirmación de anular (se pinta en el detalle). */
+  const dialogoAnular = estadoConfirm && (
+    <DialogoConfirmacion
+      abierto
+      onCambiarAbierto={a => { if (!a) { setEstadoConfirm(null); setMotivoAnulacion(""); } }}
+      titulo={`¿Anular la factura ${estadoCompraConfirm?.numeroFactura || numeroOrden(estadoConfirm.id)}?`}
+      queVaAPasar={[
+        "Lo que se sumó a la bodega con esta factura se resta otra vez",
+        "Queda guardada como anulada",
+        ...(estadoOrdenConfirm ? [`La orden #${numeroOrden(estadoOrdenConfirm)} también queda anulada y no podrá recibir más facturas`] : []),
+        "No se puede deshacer",
+      ]}
+      pedirMotivo
+      etiquetaMotivo="¿Por qué se anula?"
+      motivoObligatorio
+      textoAccion="Sí, anular la factura"
+      onConfirmar={(motivo) => { setMotivoAnulacion(motivo); void handleCambiarEstado(estadoConfirm.id, motivo); }}
+    />
+  );
+
+  // ── Detalle de una factura ──
+  const det = detail ? gestiones.find((g) => g.id === detail.id) ?? detail : null;
+  if (det) {
+    const itemsDetalle: ItemFactura[] = (det.items ?? []).map(item => ({
+      rowId: item.rowId,
+      idInsumo: item.idInsumo,
+      nombre: item.nombre,
+      unidad: item.unidad,
+      cantidad: item.cantidad,
+      costoUnitario: item.costoUnitario,
+      precioUnitario: item.precioUnitario,
+      iva: item.iva,
+      modoIva: item.modoIva ?? "incluido",
+      baseSinIva: item.baseSinIva,
+      montoIva: item.montoIva,
+      tipoItem: item.tipoItem,
+      precioVenta: item.precioVenta,
+      factorPresentacion: item.factorPresentacion,
+      unidadBase: item.unidadBase,
+    }));
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 1100 }}>
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+        <div className="flex flex-wrap items-center gap-3 mb-1">
+          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Factura {det.numeroFactura || "sin número"}</h1>
+          <EstadoPill tono={det.estado === "Recibido" ? "verde" : "rojo"}>{det.estado === "Recibido" ? "Recibida" : "Anulada"}</EstadoPill>
+        </div>
+        <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>
+          {det.proveedor || "Sin proveedor"} · {det.fechaFactura || "sin fecha"} · {origenDe(det).replace("Llegó por la orden de compra", "llegó por la orden").replace("Compra directa, sin orden", "compra directa, sin orden")}
+        </p>
+        {det.estado === "Anulado" && (
+          <div className="pn-dialogo__caja pn-dialogo__caja--ambar">
+            <strong>Por qué se anuló:</strong>
+            {det.motivoAnulacion || "No se anotó el motivo"}
+          </div>
+        )}
+        <SeccionFormulario titulo="Qué llegó">
+          <TablaItemsFactura items={itemsDetalle} soloLectura onEdit={() => {}} onRemove={() => {}} />
+        </SeccionFormulario>
+        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+          {det.estado === "Recibido" && canEdit && (
+            <BotonAccion variante="peligro" onClick={() => pedirCambiarEstado(det.id)}>Anular la factura</BotonAccion>
+          )}
+          <BotonAccion variante="oscuro" onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
+        </div>
+        {dialogoAnular}
+      </div>
+    );
+  }
+
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Compra"
+        descripcion="Las facturas de lo que llegó. Al guardarlas, lo comprado se suma solo a la bodega"
+        acciones={
+          <>
+            {canExportExcel && <BotonAccion icono={Download} onClick={handleDownload}>Descargar en Excel</BotonAccion>}
+            {canCreate && <BotonAccion variante="principal" icono={Plus} onClick={onNuevaCompra}>Anotar una factura</BotonAccion>}
+          </>
+        }
+      />
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar una factura"
           value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por ID, OC o N° Factura..."
-          wrapperClassName="w-full max-w-sm shrink-0"
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el número de factura, de la orden o el proveedor"
+        />
+        <FiltrosChips
+          valor={chipEstado}
+          onChange={v => { setChipEstado(v); setPage(1); }}
+          opciones={[
+            { valor: "todas", etiqueta: "Todas" },
+            { valor: "Recibido", etiqueta: "Recibidas" },
+            { valor: "Anulado", etiqueta: "Anuladas" },
+          ]}
         />
       </div>
 
-      {/* Carga desde la API y su error con "Reintentar": nunca datos de
-          ejemplo cuando falla. */}
       {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
-          Cargando compras…
-        </div>
+        <p role="status" className="pn-nota">Cargando las facturas…</p>
       ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
-          <p className="font-semibold text-foreground">{errorCarga}</p>
-          {onReintentar && (
-            <button
-              type="button"
-              onClick={onReintentar}
-              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
-            >
-              Reintentar
-            </button>
-          )}
-        </div>
+        <AvisoBanner
+          titulo="No pudimos cargar las facturas"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={Package} titulo="Todavía no hay facturas">
+          Se anotan cuando llega mercancía: desde una orden de compra o con «Anotar una factura».
+        </VacioEstado>
       ) : (
-      <div className="flex flex-col bg-card border border-border rounded-2xl overflow-hidden shrink-0">
-        <div className="overflow-x-auto">
-          {/* Escritorio/tablet (>=768px): tabla. La columna Fecha sólo existe
-              desde 1440px; por debajo va bajo el N° de Factura. */}
-          <table className="hidden md:table w-full table-fixed md:min-w-[720px]">
-            <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 left-0 z-30 bg-muted w-[17%] min-[1440px]:w-[13%]">N° Factura</th>
-                <th className="hidden min-[1440px]:table-cell px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[10%]">Fecha</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[30%] min-[1440px]:w-[28%]">Nombre</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[18%] min-[1440px]:w-[15%]">Total</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-muted w-[20%] min-[1440px]:w-[19%]">Estado</th>
-                <th className="px-4 py-3 text-left font-semibold whitespace-nowrap sticky top-0 right-0 z-30 bg-muted w-[15%] min-[1440px]:w-[15%]">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0
-                ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-14 text-center text-muted-foreground">
-                      <p className="text-4xl mb-3">📦</p>
-                      <p className="font-medium">No hay gestiones de compra aún</p>
-                      <p className="text-xs mt-1">
-                        Se crean al recibir una Orden de Compra o manualmente con «+ Crear Compra»
-                      </p>
-                    </td>
-                  </tr>
-                )
-                : paged.map(g => {
-                  // El proveedor viene YA resuelto del backend (LEFT JOIN a
-                  // tb_proveedores): sin búsqueda difusa por nombre, que con
-                  // el campo vacío asignaba el PRIMER proveedor de la lista.
-                  const nombreMostrar = g.proveedor || "";
-                  const nit = g.proveedorNit || "";
-                  return (
-                    <tr key={g.id} className="group hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3.5 text-xs sticky left-0 z-10 bg-card group-hover:bg-muted/20">
-                        {g.numeroFactura
-                          ? <span className="font-mono font-semibold text-foreground">{g.numeroFactura}</span>
-                          : <span className="text-muted-foreground">—</span>}
-                        {/* Sólo hasta 1439px: la fecha va bajo el N° de factura */}
-                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap min-[1440px]:hidden">
-                          {g.fechaFactura || "—"}
-                        </p>
-                      </td>
-                      <td className="hidden min-[1440px]:table-cell px-4 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
-                        {g.fechaFactura || "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm overflow-hidden">
-                        {nombreMostrar
-                          ? <p className="text-sm text-foreground break-words" title={nombreMostrar}>{nombreMostrar}</p>
-                          : <p className="text-sm text-muted-foreground">—</p>}
-                        {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
-                      </td>
-                      <td className="px-3 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">
-                        {g.valorTotal > 0
-                          ? fmtCOP(g.valorTotal)
-                          : <span className="text-muted-foreground font-normal">—</span>}
-                      </td>
-                      <td className="px-4 py-3.5 overflow-hidden">
-                        <EstadoBadge e={g.estado} />
-                      </td>
-                      <td className="px-4 py-3.5 sticky right-0 z-10 bg-card group-hover:bg-muted/20">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setDetail(g)}
-                            title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {g.estado === "Recibido" && canEdit && (
-                            <button
-                              onClick={() => pedirCambiarEstado(g.id)}
-                              title="Anular compra"
-                              aria-label="Anular compra"
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
-                            >
-                              <Ban className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-
-          {/* Celular (<768px): cada compra como tarjeta. */}
-          <div className="md:hidden divide-y divide-border">
-            {paged.length === 0
-              ? (
-                <div className="px-4 py-12 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">📦</p>
-                  <p className="font-medium">No hay gestiones de compra aún</p>
-                  <p className="text-xs mt-1">
-                    Se crean al recibir una Orden de Compra o manualmente con «+ Crear Compra»
-                  </p>
+        <div className="pn-lista">
+          {paged.map(g => (
+            <TarjetaFila
+              key={g.id}
+              pre={`Factura ${g.numeroFactura || "sin número"} · ${g.fechaFactura || "sin fecha"}`}
+              nombre={g.proveedor || "Sin proveedor"}
+              detalle={
+                <>
+                  {g.proveedorNit ? `NIT ${g.proveedorNit}` : "Sin NIT"}
+                  <br />{origenDe(g)}
+                </>
+              }
+              datos={[{
+                etiqueta: "Total pagado",
+                valor: g.valorTotal > 0 ? (
+                  <>
+                    <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(g.valorTotal)}</span>
+                    <br /><span style={{ fontSize: 17, fontWeight: 400 }}>Incluye IVA de {fmtCOP(g.totalIva ?? 0)}</span>
+                  </>
+                ) : "—",
+              }]}
+              estado={
+                <div className="grid gap-1 justify-items-start">
+                  <EstadoPill tono={g.estado === "Recibido" ? "verde" : "rojo"}>{g.estado === "Recibido" ? "Recibida" : "Anulada"}</EstadoPill>
+                  {g.estado === "Anulado" && g.motivoAnulacion && (
+                    <span style={{ fontSize: 16, color: "var(--rojo-texto)", maxWidth: 260 }}>Motivo: {g.motivoAnulacion}</span>
+                  )}
                 </div>
-              )
-              : paged.map(g => {
-                // Igual que en la tabla: el dato viene del backend, sin
-                // búsqueda difusa (con vacío asignaba el primer proveedor).
-                const nombreMostrar = g.proveedor || "";
-                const nit = g.proveedorNit || "";
-                return (
-                  <div key={g.id} className="p-4">
-                    {/* N° de factura y estado arriba */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        {g.numeroFactura
-                          ? <p className="text-sm font-mono font-semibold text-foreground">{g.numeroFactura}</p>
-                          : <p className="text-sm text-muted-foreground">—</p>}
-                        <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{g.fechaFactura || "—"}</p>
-                      </div>
-                      <EstadoBadge e={g.estado} />
-                    </div>
-
-                    {/* Proveedor con NIT */}
-                    <div className="mt-2.5 min-w-0">
-                      {nombreMostrar
-                        ? <p className="text-sm text-foreground break-words">{nombreMostrar}</p>
-                        : <p className="text-sm text-muted-foreground">—</p>}
-                      {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
-                    </div>
-
-                    {/* Total */}
-                    <div className="mt-2.5 flex items-center justify-between gap-3 rounded-xl bg-muted/50 border border-border px-3 py-2">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="text-sm font-semibold text-foreground">
-                        {g.valorTotal > 0
-                          ? fmtCOP(g.valorTotal)
-                          : <span className="text-muted-foreground font-normal">—</span>}
-                      </span>
-                    </div>
-
-                    {/* Ver detalle + anular */}
-                    <div className="mt-2.5 flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => setDetail(g)}
-                        title="Ver detalle"
-                        className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {g.estado === "Recibido" && canEdit && (
-                        <button
-                          onClick={() => pedirCambiarEstado(g.id)}
-                          title="Anular compra"
-                          aria-label="Anular compra"
-                          className="p-2 max-md:p-3.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 cursor-pointer transition-colors"
-                        >
-                          <Ban className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
+              }
+              acciones={<BotonAccion variante="normal" onClick={() => setDetail(g)}>Ver qué llegó</BotonAccion>}
+            />
+          ))}
         </div>
-      </div>
       )}
 
-      {/* Paginador fuera y debajo de la card (unificado). */}
-      {filtered.length > 0 && (
-        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
-      )}
-
-      <AnimatePresence>
-        {detail && (
-          <CompraForm
-            mode="view"
-            compra={detail}
-            proveedores={proveedores}
-            setProveedores={setProveedores}
-            insumos={insumos}
-            // Bloque 2: mismos props que en la página Nueva Compra (en modo
-            // vista el formulario es de sólo lectura).
-            categorias={categorias} categoriasInsumo={categoriasInsumo}
-            onCrearProducto={onCrearProducto}
-            gestiones={gestiones}
-            ordenes={ordenes}
-            onClose={() => setDetail(null)}
-            onGuardar={() => {}}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {estadoConfirm && (
-          <ConfirmModal
-            title="¿Anular la compra?"
-            body={`La compra ${estadoConfirm.id} pasará de ${estadoConfirm.from} a Anulado.`}
-            detail={
-              estadoOrdenConfirm
-                ? `La orden ${estadoOrdenConfirm} también quedará anulada y no podrá recibir más facturas.`
-                : "Una compra anulada no puede volver al estado Recibido."
-            }
-            confirmLabel="Anular"
-            danger
-            icon={
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Ban className="w-5 h-5 text-red-600" />
-              </div>
-            }
-            showMotivo
-            motivo={motivoAnulacion}
-            onMotivoChange={setMotivoAnulacion}
-            onConfirm={() => handleCambiarEstado(estadoConfirm.id, motivoAnulacion)}
-            onCancel={() => {
-              setEstadoConfirm(null);
-              setMotivoAnulacion("");
-            }}
-          />
-        )}
-      </AnimatePresence>
+      <PaginadorGrande pagina={pageActual} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+      {dialogoAnular}
     </div>
   );
 }

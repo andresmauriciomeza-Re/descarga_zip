@@ -1,3 +1,15 @@
+import { Download, Package } from "lucide-react";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -706,7 +718,7 @@ function CampoImagenes({
   const casillas = Array.from({ length: MAX_IMAGENES }, (_, i) => i);
   // Con `llenarAlto` las casillas bajan su alto a un MÍNIMO (el actual) y
   // estiran con la rejilla; sin él, alto fijo como siempre.
-  const altoCasilla = llenarAlto ? "min-h-24" : "h-24";
+  const altoCasilla = llenarAlto ? "min-h-40" : "h-40";
 
   return (
     <div className={llenarAlto ? "flex flex-col h-full" : ""}>
@@ -729,7 +741,7 @@ function CampoImagenes({
                     casilla crece solo con la rejilla (llenarAlto). */}
                 <img src={getImageUrl(src)} alt={`Imagen ${idx + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                 {esPortada && (
-                  <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-black/60 text-[10px] font-semibold text-white">
+                  <span className="absolute bottom-2 left-2 px-3 py-1 rounded-lg bg-black/70 text-base font-semibold text-white">
                     Portada
                   </span>
                 )}
@@ -741,7 +753,7 @@ function CampoImagenes({
                       event.stopPropagation();
                       onChange([src, ...imagenes.filter((_, i) => i !== idx)]);
                     }}
-                    className="absolute bottom-1 left-1 rounded-md bg-black/75 px-1.5 py-1 text-[10px] font-semibold text-white hover:bg-black disabled:opacity-50"
+                    className="absolute bottom-2 left-2 rounded-lg bg-black/80 px-3 min-h-[44px] text-base font-semibold text-white hover:bg-black disabled:opacity-50 cursor-pointer"
                   >
                     Hacer portada
                   </button>
@@ -757,9 +769,9 @@ function CampoImagenes({
                       e.stopPropagation();
                       onChange(imagenes.filter((_, i) => i !== idx));
                     }}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center text-white hover:bg-black/70 cursor-pointer"
+                    className="absolute top-2 right-2 rounded-lg bg-white border-2 border-[var(--rojo)] px-3 min-h-[44px] text-base font-semibold text-[var(--rojo)] cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    Quitar
                   </button>
                 )}
               </div>
@@ -775,7 +787,7 @@ function CampoImagenes({
               } ${readOnly || completa ? "opacity-40" : ""}`}
             >
               {esPortada ? (
-                <span className="px-1.5 py-0.5 rounded-md bg-primary/15 text-[10px] font-semibold text-primary">
+                <span className="px-3 py-1 rounded-lg bg-primary/15 text-base font-semibold text-primary">
                   Portada
                 </span>
               ) : (
@@ -789,12 +801,12 @@ function CampoImagenes({
         <>
           {/* Fila 1: alta desde el equipo, a ancho completo. */}
           <label
-            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-3 py-2 max-md:min-h-11 bg-muted border border-border rounded-xl text-xs font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-4 min-h-[56px] bg-white border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
               completa || subiendo ? "opacity-50 pointer-events-none" : ""
             }`}
           >
             <Plus className="w-3.5 h-3.5" />
-            {subiendo ? "Subiendo..." : "Subir archivo"}
+            {subiendo ? "Subiendo..." : "Subir una foto"}
             <input
               type="file"
               accept="image/*"
@@ -826,7 +838,7 @@ function CampoImagenes({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && agregar(url)}
-              placeholder="Pega una URL de imagen..."
+              placeholder="O pega el link de una foto"
               disabled={completa || subiendo}
               className={`flex-1 min-w-0 ${inputCls}`}
             />
@@ -834,16 +846,16 @@ function CampoImagenes({
               type="button"
               onClick={() => agregar(url)}
               disabled={completa || subiendo || !url.trim()}
-              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 min-h-[56px] bg-primary text-white rounded-2xl text-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
             >
-              <Plus className="w-3.5 h-3.5" /> Agregar imagen
+              <Plus className="w-3.5 h-3.5" /> Agregar la foto
             </button>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-2">
-            {imagenes.length}/{MAX_IMAGENES} imágenes · la primera es la portada del menú
+          <p className="text-base text-muted-foreground mt-2">
+            {imagenes.length} de {MAX_IMAGENES} fotos · la primera es la que se ve en el menú
           </p>
           {completa && (
-            <p className="text-[11px] font-semibold text-primary mt-1">
+            <p className="text-base font-semibold text-primary mt-1">
               Se alcanzó el máximo de {MAX_IMAGENES} imágenes
             </p>
           )}
@@ -893,9 +905,9 @@ function Tarjeta({
   className?: string;
 }) {
   return (
-    <section className={`bg-card border border-border rounded-2xl flex flex-col ${className}`}>
+    <section className={`bg-card border-2 border-border rounded-[20px] flex flex-col ${className}`}>
       <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-5 pt-4 pb-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{titulo}</p>
+        <h2 style={{ font: "700 22px/1.2 var(--font-titulo)", margin: 0 }}>{titulo}</h2>
         {acciones}
       </div>
       {/* `flex-1` siempre: en tarjetas de alto natural no cambia nada (el
@@ -931,7 +943,7 @@ function TarjetaImagenes({
   onVerImagen?: (src: string) => void;
 }) {
   return (
-    <Tarjeta titulo="Imágenes del producto" className={llenarAlto ? "grow shrink-0" : ""}>
+    <Tarjeta titulo="Fotos del producto" className={llenarAlto ? "grow shrink-0" : ""}>
       <CampoImagenes
         imagenes={imagenes}
         onChange={onChange}
@@ -1053,6 +1065,7 @@ export function GestionProductosScreen({
   onDescontinuarEnServidor,
   recargarProduccion,
   verOrdenProduccion,
+  abrirOrdenCompra,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -1079,6 +1092,8 @@ export function GestionProductosScreen({
   onDescontinuarEnServidor?: (id: string) => Promise<Producto>;
   recargarProduccion?: () => Promise<boolean | void>;
   verOrdenProduccion?: (idOrden: string) => void;
+  /** Lleva a Orden de Compra (botón «Pedirlas al proveedor»). */
+  abrirOrdenCompra?: () => void;
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
@@ -1092,6 +1107,9 @@ export function GestionProductosScreen({
   // esas bebidas; el segundo clic lo apaga (el aviso se mantiene visible
   // mientras el filtro esté activo, para poder salir de él).
   const [filtroStockBajo, setFiltroStockBajo] = useState(false);
+  /** Botones de la lista: solo lo que está fuera del menú y filtro por categoría. */
+  const [soloFueraMenu, setSoloFueraMenu] = useState(false);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   // Visor grande (lightbox) de las imágenes en la vista Crear: el src de la
   // miniatura clicada o null con el visor cerrado.
@@ -1320,7 +1338,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-4 min-h-[56px] bg-white rounded-[14px] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   /** Nombre visible de una categoría: el del listado del módulo Categoría de
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
@@ -1599,7 +1617,7 @@ export function GestionProductosScreen({
   };
 
   const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -1613,13 +1631,15 @@ export function GestionProductosScreen({
         (!filtroStockBajo || esBebidaEnStockBajo(p)) &&
         (filtroTipo === "Todos" || tipoDe(p, catName(p.idCategoria)) === filtroTipo) &&
         (filtroEstado === "Todos" || p.estado === filtroEstado) &&
+        (!soloFueraMenu || p.estado !== "Disponible") &&
+        (!filtroCategoria || p.idCategoria === filtroCategoria) &&
         (presentacionDe(p).toLowerCase().includes(q) ||
           nombreBuscable(p).toLowerCase().includes(q) ||
           catName(p.idCategoria).toLowerCase().includes(q) ||
           tipoDe(p, catName(p.idCategoria)).toLowerCase().includes(q)),
     );
     return ordenarPorIdDescendente(filtrados, (producto) => producto.id);
-  }, [productos, search, filtroTipo, filtroEstado, filtroStockBajo]);
+  }, [productos, search, filtroTipo, filtroEstado, filtroStockBajo, soloFueraMenu, filtroCategoria]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice(
@@ -1689,15 +1709,21 @@ export function GestionProductosScreen({
     }
     const cfg = cfgDe(form.idCategoria);
     if (!cfg && formTieneFicha === null) {
-      setTieneFichaError("Selecciona si el producto tiene ficha técnica");
-      toast.error("Selecciona si el producto tiene ficha técnica");
+      setTieneFichaError("Elige el tipo de producto");
+      toast.error("Elige el tipo de producto");
       return;
     }
     // Tipo final: de la categoría cuando está configurada; si no, de la
     // respuesta a "¿Tiene ficha técnica?" (Sí = Producto insumo, No =
     // Producto terminado).
     const tipoFinal: TipoProducto =
-      cfg ? cfg.tipo : formTieneFicha === "si" ? TIPOS_PRODUCTO[0] : TIPOS_PRODUCTO[1];
+      formTieneFicha === "si"
+        ? TIPOS_PRODUCTO[0]
+        : formTieneFicha === "no"
+          ? TIPOS_PRODUCTO[1]
+          : cfg
+            ? cfg.tipo
+            : TIPOS_PRODUCTO[1];
     const crearOrdenPreparacion =
       tipoFinal === TIPOS_PRODUCTO[0] &&
       (esCategoriaPizza(catName(form.idCategoria)) || esCategoriaLasana(catName(form.idCategoria)));
@@ -2027,7 +2053,7 @@ export function GestionProductosScreen({
     }
   };
 
-  const roCls = "w-full px-3 py-2 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-foreground cursor-not-allowed";
+  const roCls = "w-full px-4 min-h-[56px] flex items-center bg-[var(--gris-suave)] rounded-[14px] border-2 border-[var(--borde-suave)] text-lg text-foreground cursor-not-allowed";
   const recomendadosPizza = (
     f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
     idCategoria: string,
@@ -2054,6 +2080,9 @@ export function GestionProductosScreen({
     esCrear = false,
     errorNombre = "",
     trasCategoria,
+    tipoForzado,
+    onElegirTipo,
+    errorTipo = "",
   }: {
     values: Omit<Producto, "id">;
     onChange: (f: keyof Omit<Producto, "id">, v: string | number) => void;
@@ -2081,8 +2110,13 @@ export function GestionProductosScreen({
     /** Bloque que va INMEDIATAMENTE después de Categoría (Editar pasa aquí
         la pregunta "¿Tiene ficha técnica?" de las categorías sin config). */
     trasCategoria?: React.ReactNode;
+    /** Tipo elegido a mano en Crear (manda sobre el de la categoría). */
+    tipoForzado?: TipoProducto;
+    /** Si viene, bajo Categoría se pinta el selector de tipo en vez de la pastilla. */
+    onElegirTipo?: (t: TipoProducto) => void;
+    errorTipo?: string;
   }) => {
-    const tipo = tipoDe(values, catName(values.idCategoria));
+    const tipo = tipoForzado ?? tipoDe(values, catName(values.idCategoria));
     const esPizza = esCategoriaPizza(catName(values.idCategoria));
     const esLasana = esCategoriaLasana(catName(values.idCategoria));
     const mostrarCantidadAPreparar =
@@ -2096,7 +2130,7 @@ export function GestionProductosScreen({
     /** El campo Precio de venta se pinta salvo al CREAR una bebida. */
     const mostrarPrecio = !(esCrear && (esTerminado || esPizza));
     /** Una bebida nunca se edita a mano: en Editar y Ver detalle queda solo
-        lectura con la ayuda "Se define en Compras". */
+        lectura con la ayuda "El precio se define en Compras". */
     const precioSoloLectura = readOnly || esTerminado;
     /** En Crear, Unidad de venta ya NO se muestra (tampoco antes lo hacía
         para insumos: la decide FormFields con esCrear). Las bebidas
@@ -2114,8 +2148,8 @@ export function GestionProductosScreen({
             (CONFIG_CATEGORIA) o, sin configuración, la pregunta
             "¿Tiene ficha técnica?". */}
         <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-            Categoría *
+          <label className="pn-etiqueta">
+            Categoría
           </label>
           <select
             value={values.idCategoria}
@@ -2128,7 +2162,28 @@ export function GestionProductosScreen({
               <option key={c.id} value={c.id}>{c.nombre}</option>
             ))}
           </select>
-          {values.idCategoria && mostrarTipo && (
+          {!readOnly && !onElegirTipo && values.idCategoria && configDeCategoria(values.idCategoria, catName(values.idCategoria)) && (
+            <p style={{ fontSize: 16, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+              Esta categoría ya dice si se hace aquí o se compra hecha.
+            </p>
+          )}
+          {values.idCategoria && onElegirTipo && !readOnly && (
+            <div className="mt-3">
+              <label className="pn-etiqueta" htmlFor="tipo-producto-crear">Tipo de producto</label>
+              <select
+                id="tipo-producto-crear"
+                value={tipoForzado ?? ""}
+                onChange={(e) => onElegirTipo(e.target.value as TipoProducto)}
+                className={inputCls + " cursor-pointer"}
+              >
+                <option value="" disabled>Elige el tipo de producto</option>
+                <option value={TIPOS_PRODUCTO[0]}>Producto insumo — lo hacemos aquí (lleva receta)</option>
+                <option value={TIPOS_PRODUCTO[1]}>Producto terminado — lo compramos hecho (sin receta)</option>
+              </select>
+              {errorTipo && <p role="alert" style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "8px 0 0" }}>{errorTipo}</p>}
+            </div>
+          )}
+          {values.idCategoria && mostrarTipo && !(onElegirTipo && !readOnly) && (
             /* Pastilla del tipo + descripción en UNA sola línea (sin wrap):
                la pastilla a la izquierda y la ayuda a su lado. El `title` de
                la pastilla conserva el texto completo de `descTipo`; en
@@ -2136,12 +2191,12 @@ export function GestionProductosScreen({
                pastilla ya dice el tipo. */
             <div className="flex items-center gap-2 mt-1.5">
               <span
-                className={`shrink-0 inline-flex px-3 py-1 rounded-full text-xs font-semibold ${tipoPillCls(tipo)}`}
+                className={`shrink-0 inline-flex px-3 py-1 rounded-full text-base font-semibold ${tipoPillCls(tipo)}`}
                 title={descTipo(tipo)}
               >
                 {tipo}
               </span>
-              <span className="min-w-0 truncate text-xs text-muted-foreground">
+              <span className="min-w-0 truncate text-base text-muted-foreground">
                 {descTipo(tipo).replace(`${tipo}: `, "")}
               </span>
             </div>
@@ -2155,8 +2210,8 @@ export function GestionProductosScreen({
         <div className="sm:col-span-2">
           <div className={`grid grid-cols-1 ${esPizza ? "sm:grid-cols-10" : "sm:grid-cols-5"} gap-2`}>
             <div className={mostrarPrecio ? (esPizza ? "sm:col-span-4" : "sm:col-span-3") : esPizza ? "sm:col-span-10" : "sm:col-span-5"}>
-              <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                Nombre *
+              <label className="pn-etiqueta">
+                Nombre
               </label>
               <input
                 value={values.nombre}
@@ -2170,18 +2225,18 @@ export function GestionProductosScreen({
                 }
               />
               {errorNombre && (
-                <p className="text-xs text-red-500 mt-0.5">{errorNombre}</p>
+                <p className="text-base text-red-500 mt-0.5">{errorNombre}</p>
               )}
             </div>
             {mostrarPrecio && (
               <>
                 <div className={esPizza ? "sm:col-span-3" : "sm:col-span-2"}>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+                  <label className="pn-etiqueta">
                     {esPizza
-                      ? "Precio porción Mediana (COP) *"
+                      ? "Precio de la porción mediana"
                       : esLasana
-                        ? "Precio (COP) *"
-                        : "Precio de venta (COP)"}
+                        ? "Precio"
+                        : "Precio de venta"}
                   </label>
                   <CampoPrecio
                     valor={values.precioUnitario}
@@ -2190,20 +2245,20 @@ export function GestionProductosScreen({
                     cls={precioSoloLectura ? roCls : inputCls}
                   />
                   {esPizza && recomendados && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
+                    <p className="text-base text-muted-foreground mt-1">
                       Recomendado: {fmtCOP(recomendados.Mediana)}
                     </p>
                   )}
                   {esTerminado && (
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Se define en Compras
+                    <p className="text-base text-muted-foreground mt-1">
+                      El precio se define en Compras
                     </p>
                   )}
                 </div>
                 {esPizza && (
                   <div className="sm:col-span-3">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                      Precio porción Grande (COP) *
+                    <label className="pn-etiqueta">
+                      Precio de la porción grande
                     </label>
                     <CampoPrecio
                       valor={precioGrandeVisible ?? 0}
@@ -2212,13 +2267,13 @@ export function GestionProductosScreen({
                       cls={precioSoloLectura ? roCls : inputCls}
                     />
                     {recomendados && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
+                      <p className="text-base text-muted-foreground mt-1">
                         Recomendado: {fmtCOP(recomendados.Grande)}
                       </p>
                     )}
                     {!readOnly && Number(values.precioUnitario) > 0 && Number(precioGrandeVisible) > 0
                       && Number(precioGrandeVisible) <= Number(values.precioUnitario) && (
-                      <p className="text-[11px] font-semibold text-red-600 mt-1">
+                      <p className="text-base font-semibold text-red-600 mt-1">
                         {mensajeGrandeMayorQueMediana(Number(values.precioUnitario))}
                       </p>
                     )}
@@ -2228,14 +2283,14 @@ export function GestionProductosScreen({
             )}
           </div>
           {esPizza && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              1 pizza = 8 porciones medianas o 6 porciones grandes.
+            <p className="mt-1 text-base text-muted-foreground">
+              La mediana trae 8 porciones. La grande trae 6.
             </p>
           )}
         </div>
         {mostrarCantidadAPreparar && (
           <div className="sm:col-span-2">
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+            <label className="pn-etiqueta">
               {esPizza ? "Cantidad de pizzas a preparar (opcional)" : "Cantidad a preparar (opcional)"}
             </label>
             <div className="flex items-center gap-2">
@@ -2252,7 +2307,7 @@ export function GestionProductosScreen({
                 {esPizza ? "pizzas" : "und"}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-base text-muted-foreground">
               {esPizza
                 ? `Cada pizza da 8 porciones medianas o 6 porciones grandes${Number(cantidadAPreparar) > 0 ? ` = hasta ${Number(cantidadAPreparar) * 8} medianas o ${Number(cantidadAPreparar) * 6} grandes` : ""}.`
                 : "Si escribes una cantidad, se crea una orden de producción Pendiente."}
@@ -2266,8 +2321,8 @@ export function GestionProductosScreen({
           <div className="sm:col-span-2">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                  Contenido {esCrear && <span className="text-red-500">*</span>}
+                <label className="pn-etiqueta">
+                  ¿Cuánto trae?
                 </label>
                 <input
                   type="number"
@@ -2286,8 +2341,8 @@ export function GestionProductosScreen({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
-                  Unidad de contenido
+                <label className="pn-etiqueta">
+                  Se mide en
                 </label>
                 <select
                   value={values.contenidoUnidad ?? "ml"}
@@ -2307,7 +2362,7 @@ export function GestionProductosScreen({
         {/* Estado (solo lectura; se cambia desde la lista del index). */}
         {mostrarEstado && (
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+            <label className="pn-etiqueta">
               Estado
             </label>
             <div>
@@ -2318,7 +2373,7 @@ export function GestionProductosScreen({
         {/* Unidad de venta (sólo productos NO terminado: pizzas, insumos…) */}
         {mostrarUnidad && (
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-0.5">
+            <label className="pn-etiqueta">
               Unidad de venta
             </label>
             <select
@@ -2356,47 +2411,17 @@ export function GestionProductosScreen({
     confirmLabel: string;
     children: React.ReactNode;
   }) => (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        transition={{ duration: 0.16 }}
-        className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-6"
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3
-            className="text-lg font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <>
+      <div className="pn-dialogo-fondo" onClick={onClose} />
+      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 720px)" }}>
+        <div className="pn-modal__cab"><h2 className="pn-modal__titulo">{title}</h2></div>
+        <div className="pn-campo">{children}</div>
+        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+          <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
+          <BotonAccion variante="principal" onClick={onConfirm}>{confirmLabel}</BotonAccion>
         </div>
-        <div className="px-5 py-4">{children}</div>
-        <div className="flex gap-3 px-5 py-4 border-t border-border">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </motion.div>
       </div>
-    </div>
+    </>
   );
 
   if (cargandoProductos || errorProductos) {
@@ -2430,13 +2455,17 @@ export function GestionProductosScreen({
     // "¿Tiene ficha técnica?" solo existe para categorías SIN configuración.
     const cfgCrear = cfgDe(form.idCategoria);
     const mostrarPregunta = form.idCategoria !== "" && !cfgCrear;
-    const llevaFichaCrear = cfgCrear
-      ? cfgCrear.tipo === TIPOS_PRODUCTO[0]
-      : formTieneFicha === "si";
+    // Tipo elegido a mano en el selector (manda sobre el de la categoría).
+    const tipoElegidoCrear: TipoProducto | undefined = formTieneFicha === "si"
+      ? TIPOS_PRODUCTO[0]
+      : formTieneFicha === "no"
+        ? TIPOS_PRODUCTO[1]
+        : cfgCrear?.tipo;
+    const llevaFichaCrear = tipoElegidoCrear === TIPOS_PRODUCTO[0];
     const mostrarEditor = form.idCategoria !== "" && llevaFichaCrear;
     // Reventa definida (por categoría o por la respuesta): no hay ficha que
     // ocultar/mostrar, así que el botón queda deshabilitado.
-    const sinFichaDefinitiva = (cfgCrear?.tipo === TIPOS_PRODUCTO[1]) || formTieneFicha === "no";
+    const sinFichaDefinitiva = tipoElegidoCrear === TIPOS_PRODUCTO[1];
     return (
       /* La pantalla vive dentro de `<main>`, que ya está bajado por el
          AdminTopBar (`h-14` = 3.5rem) y seguido por el footer del admin, así
@@ -2465,7 +2494,7 @@ export function GestionProductosScreen({
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear producto</h1>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Agregar un producto</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -2505,7 +2534,7 @@ export function GestionProductosScreen({
                   solo cuando hay dos columnas con el editor visible, para que
                   ambos fondos caigan parejos. Con la ficha oculta o sin ficha
                   no se estira nada (alto natural). */}
-              <Tarjeta titulo="Datos del producto" className="shrink-0">
+              <Tarjeta titulo="1 · Datos del producto" className="shrink-0">
                 {FormFields({
                   values: form,
                   cantidadAPreparar,
@@ -2528,14 +2557,10 @@ export function GestionProductosScreen({
                   mostrarEstado: false,
                   errorNombre: errorNombreServidor,
                   // La pastilla del tipo espera a tener el tipo definido.
-                  mostrarTipo: !mostrarPregunta || formTieneFicha !== null,
-                  trasCategoria: mostrarPregunta ? (
-                    <PreguntaTieneFicha
-                      valor={formTieneFicha}
-                      onElegir={elegirTieneFicha}
-                      error={tieneFichaError}
-                    />
-                  ) : null,
+                  mostrarTipo: true,
+                  tipoForzado: tipoElegidoCrear,
+                  onElegirTipo: (t: TipoProducto) => elegirTieneFicha(t === TIPOS_PRODUCTO[0] ? "si" : "no"),
+                  errorTipo: tieneFichaError,
                 })}
               </Tarjeta>
               <TarjetaImagenes
@@ -2561,7 +2586,7 @@ export function GestionProductosScreen({
             {/* Sin ficha definitiva (o categoría sin elegir): tarjeta compacta
                 con el mensaje del caso, sin botón de guardar. */}
             {!mostrarEditor ? (
-              <Tarjeta titulo="Ficha técnica">
+              <Tarjeta titulo="Receta (ficha técnica)">
                 <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
                   <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                     <span className="text-2xl">📋</span>
@@ -2569,15 +2594,15 @@ export function GestionProductosScreen({
                   <p className="text-sm font-semibold text-muted-foreground">
                     {!form.idCategoria
                       ? "Primero elige la categoría del producto"
-                      : cfgCrear?.tipo === TIPOS_PRODUCTO[1] || formTieneFicha === "no"
+                      : tipoElegidoCrear === TIPOS_PRODUCTO[1]
                         ? "Este producto no lleva ficha técnica"
-                        : "Responde arriba si el producto tiene ficha técnica"}
+                        : "Elige arriba el tipo de producto"}
                   </p>
                 </div>
               </Tarjeta>
             ) : (
               <Tarjeta
-                titulo="Ficha técnica"
+                titulo="Receta (ficha técnica)"
                 className="flex-1 min-h-0"
                 scrollInterno
                 acciones={
@@ -2588,14 +2613,14 @@ export function GestionProductosScreen({
                       </span>
                     )}
                     <span className="px-3 py-1 rounded-lg text-xs font-bold bg-primary/10 text-primary">
-                      Nueva versión (borrador)
+                      Hacer una receta nueva
                     </span>
                   </div>
                 }
                 footer={
                   <button type="button" onClick={solicitarGuardarFicha}
                     className="w-full py-3 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                    Guardar Ficha Técnica
+                    Guardar la receta
                   </button>
                 }
               >
@@ -2684,27 +2709,51 @@ export function GestionProductosScreen({
          columna con sus tarjetas, scrolleando por dentro solo como respaldo.
          La página NUNCA desplaza. */
       <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
-        <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="shrink-0 bg-card border-b-2 border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-              Detalle —{" "}
-              {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[1]
-                ? presentacionDe(detailItem)
-                : detailItem.nombre}
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Información del producto y su ficha técnica</p>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 style={{ font: "700 32px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
+                {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[1]
+                  ? presentacionDe(detailItem)
+                  : detailItem.nombre}
+              </h1>
+              <EstadoPill tono={detailItem.estado === "Disponible" ? "verde" : "gris"}>
+                {detailItem.estado === "Disponible" ? "En el menú" : "Fuera del menú"}
+              </EstadoPill>
+            </div>
+            <p style={{ fontSize: 18, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+              {catName(detailItem.idCategoria)} · {llevaFichaDetalle ? "La hacemos aquí" : "La compramos hecha"}
+            </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => setDetailItem(null)}
-              className="px-5 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-              Cerrar
-            </button>
             {canEdit && (
-              <button onClick={() => { openEdit(detailItem); setDetailItem(null); }}
-                className="px-6 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">
-                Editar
-              </button>
+              <BotonAccion variante="principal" onClick={() => { openEdit(detailItem); setDetailItem(null); }}>Cambiar datos</BotonAccion>
             )}
+            {canEdit && llevaFichaDetalle && (
+              <BotonAccion variante="normal" onClick={() => { openEdit(detailItem); setDetailItem(null); }}>Hacer una receta nueva</BotonAccion>
+            )}
+            {canEdit && (detailItem.estado === "Disponible" ? (
+              <BotonAccion
+                variante="peligro"
+                onClick={() => setConfirmEstado({ id: detailItem.id, nombre: detailItem.nombre, current: detailItem.estado, next: "Descontinuado", tieneStock: false })}
+              >
+                Sacar del menú
+              </BotonAccion>
+            ) : (
+              <BotonAccion
+                variante="bien"
+                onClick={() => setConfirmEstado({
+                  id: detailItem.id,
+                  nombre: detailItem.nombre,
+                  current: detailItem.estado,
+                  next: "Automático",
+                  tieneStock: esCategoriaPizza(catName(detailItem.idCategoria)) ? disponiblesMedianaPizza(detailItem) > 0 : detailItem.stockDisponible > 0,
+                })}
+              >
+                Volver a poner en el menú
+              </BotonAccion>
+            ))}
+            <BotonAccion variante="oscuro" onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
           </div>
         </div>
 
@@ -2715,7 +2764,7 @@ export function GestionProductosScreen({
               scrollea por dentro si algo no cabe, nunca la página. */}
           <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
             <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full">
-              <Tarjeta titulo="Datos del producto" className="shrink-0">
+              <Tarjeta titulo="Datos del producto y cuánto queda" className="shrink-0">
                 {FormFields({
                   values: detailItem,
                   recomendados: recomendadosPizza(fichaV, detailItem.idCategoria),
@@ -2758,7 +2807,7 @@ export function GestionProductosScreen({
                         </div>
                       ) : (
                         <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
-                          Sin ficha técnica
+                          Le falta la receta
                         </span>
                       )}
                     </>
@@ -2880,17 +2929,17 @@ export function GestionProductosScreen({
               con scroll interno en el cuerpo. */}
           <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
             {!llevaFichaDetalle ? (
-              <Tarjeta titulo="Ficha técnica">
+              <Tarjeta titulo="Receta (ficha técnica)">
                 <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
                   <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                     <span className="text-2xl">📋</span>
                   </div>
-                  <p className="text-sm font-semibold text-muted-foreground">Este producto no lleva ficha técnica</p>
+                  <p className="text-sm font-semibold text-muted-foreground">Este producto no necesita receta</p>
                 </div>
               </Tarjeta>
             ) : (
               <Tarjeta
-                titulo="Ficha técnica"
+                titulo="Receta (ficha técnica)"
                 className="flex-1 min-h-0"
                 scrollInterno
                 acciones={
@@ -2902,7 +2951,7 @@ export function GestionProductosScreen({
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
                         fichaV.fechaFin ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-800"
                       }`}>
-                        {fichaV.fechaFin ? "Versión histórica" : "Versión vigente"}
+                        {fichaV.fechaFin ? "Receta anterior (solo para ver)" : "Receta vigente"}
                       </span>
                     )}
                   </div>
@@ -2915,8 +2964,8 @@ export function GestionProductosScreen({
                     <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                       <span className="text-2xl">📋</span>
                     </div>
-                    <p className="text-sm font-semibold text-foreground mb-1">Sin ficha técnica</p>
-                    <p className="text-xs text-muted-foreground">Este producto no tiene ficha técnica registrada</p>
+                    <p className="text-base font-semibold text-foreground mb-1">Le falta la receta</p>
+                    <p className="text-xs text-muted-foreground">Todavía no se ha escrito su receta</p>
                   </div>
                 ) : (
                   <>
@@ -2952,7 +3001,7 @@ export function GestionProductosScreen({
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.nombre}</h1>
+            <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Cambiar «{editItem.nombre}»</h1>
             <p className="text-xs text-muted-foreground mt-0.5">Completa los datos del producto y su ficha técnica</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -2975,7 +3024,7 @@ export function GestionProductosScreen({
                 && Number(editItem.precioGrande) <= Number(editItem.precioUnitario))}
               title={errorNombreServidor || undefined}
               className="px-6 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-              {guardando ? "Guardando…" : "Guardar"}
+              {guardando ? "Guardando…" : "Guardar cambios"}
             </button>
           </div>
         </div>
@@ -3047,7 +3096,7 @@ export function GestionProductosScreen({
             <div className={`flex flex-col min-h-0 transition-all duration-200 ${
               fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
             }`}>
-              <Tarjeta titulo="Ficha técnica">
+              <Tarjeta titulo="Receta (ficha técnica)">
                 <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
                   <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-3">
                     <span className="text-2xl">📋</span>
@@ -3061,7 +3110,7 @@ export function GestionProductosScreen({
               fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
             }`}>
               <Tarjeta
-                titulo="Ficha técnica"
+                titulo="Receta (ficha técnica)"
                 className="flex-1 min-h-0"
                 scrollInterno
                 acciones={
@@ -3078,7 +3127,7 @@ export function GestionProductosScreen({
                         editFichaSel === "borrador" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"
                       }`}
                     >
-                      Nueva versión (borrador)
+                      Hacer una receta nueva
                     </button>
                   </div>
                 }
@@ -3307,351 +3356,237 @@ export function GestionProductosScreen({
                           </button>
                         )}</>);
 
+  // ── Lista con tarjetas (Gloria ve «La hacemos aquí», «En el menú», etc.) ──
+  const nombreTipo = (p: Producto) =>
+    tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0] ? "La hacemos aquí" : "La compramos hecha";
+  const estadoGloria = (p: Producto): { tono: TonoPill; texto: string } =>
+    p.estado === "Disponible"
+      ? { tono: "verde", texto: "En el menú" }
+      : { tono: "gris", texto: "Fuera del menú" };
+  const recetaGloria = (p: Producto): { tono: TonoPill; texto: string } =>
+    tipoDe(p, catName(p.idCategoria)) !== TIPOS_PRODUCTO[0]
+      ? { tono: "gris", texto: "No necesita receta" }
+      : (fichas[p.id]?.length ?? 0) > 0
+        ? { tono: "verde", texto: "Tiene receta" }
+        : { tono: "rojo", texto: "Le falta la receta" };
+  const precioGloria = (p: Producto) =>
+    esCategoriaPizza(catName(p.idCategoria)) ? (
+      <>Mediana {fmtCOP(p.precioUnitario)} la porción<br />Grande {fmtCOP(p.precioGrande ?? 0)} la porción</>
+    ) : (
+      <>{fmtCOP(p.precioUnitario)} por unidad</>
+    );
+  const quedanGloria = (p: Producto) => {
+    if (esCategoriaPizza(catName(p.idCategoria))) {
+      const m = p.stockMediana ?? 0;
+      const g = p.stockGrande ?? 0;
+      return <span style={{ color: m === 0 || g === 0 ? "var(--rojo-texto)" : undefined }}>{m} {m === 1 ? "mediana" : "medianas"} y {g} {g === 1 ? "grande" : "grandes"}</span>;
+    }
+    if (tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]) {
+      const prep = prepararDe(p);
+      if (!prep) return <span style={{ color: "var(--rojo-texto)" }}>Registra su receta para saberlo</span>;
+      const n = prep.cifras[0]?.cantidad ?? 0;
+      return <span style={{ color: n === 0 ? "var(--rojo-texto)" : undefined }}>{n === 0 ? "Se acabó" : `Se pueden preparar ${n}`}</span>;
+    }
+    const n = p.stockDisponible;
+    return n <= STOCK_BAJO
+      ? <span style={{ color: "var(--rojo-texto)" }}>{n <= 0 ? "Se acabó · pedir más" : `Solo ${n} · pedir más`}</span>
+      : <>{n} {palabraStock(p, n)}</>;
+  };
+  const fotoDe = (p: Producto) => {
+    const src = imagenesDe(p)[0];
+    return src ? (
+      <img src={src} alt="" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 16, flex: "none", border: "2px solid var(--borde-suave)" }} />
+    ) : (
+      <div aria-hidden="true" style={{ width: 84, height: 84, borderRadius: 16, flex: "none", background: "var(--gris-suave)", color: "var(--gris-texto)", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+        Sin foto
+      </div>
+    );
+  };
+
+  const chip = filtroStockBajo ? "acabando" : soloFueraMenu ? "fuera" : filtroCategoria ? `cat:${filtroCategoria}` : "todos";
+  const cambiarChip = (v: string) => {
+    setPage(1);
+    setFiltroStockBajo(v === "acabando");
+    setSoloFueraMenu(v === "fuera");
+    setFiltroCategoria(v.startsWith("cat:") ? v.slice(4) : "");
+  };
+  const nombresAcabando = bebidasStockBajo.slice(0, 4).map((p) => p.nombre).join(", ") + (bebidasStockBajo.length > 4 ? ` y ${bebidasStockBajo.length - 4} más` : "");
+  const abrirDetalle = (p: Producto) => {
+    setDetailItem(p);
+    setDetailVIdx(Math.max(0, (fichas[p.id]?.length ?? 1) - 1));
+  };
+  const sacarDelMenu = (p: Producto) =>
+    setConfirmEstado({ id: p.id, nombre: p.nombre, current: p.estado, next: "Descontinuado", tieneStock: false });
+  const ponerEnMenu = (p: Producto) => {
+    if (
+      esCategoriaPizza(catName(p.idCategoria))
+      && !(Number(p.precioUnitario) > 0 && Number(p.precioGrande) > Number(p.precioUnitario))
+    ) {
+      toast.error("No se puede volver a poner la pizza: sus precios por porción deben ser mayores a 0 y la Grande mayor que la Mediana. Primero ajusta los precios en «Cambiar datos».");
+      return;
+    }
+    setConfirmEstado({
+      id: p.id,
+      nombre: p.nombre,
+      current: p.estado,
+      next: "Automático",
+      tieneStock: esCategoriaPizza(catName(p.idCategoria)) ? disponiblesMedianaPizza(p) > 0 : p.stockDisponible > 0,
+    });
+  };
+
+  const confirmarEstado = () => {
+    if (!confirmEstado || guardandoRef.current) return;
+    if (!onCambiarEstadoEnServidor) {
+      toast.error("No está disponible la conexión con Productos API.");
+      return;
+    }
+    const datos = confirmEstado;
+    guardandoRef.current = true;
+    setGuardando(true);
+    void (async () => {
+      try {
+        const resultado = await onCambiarEstadoEnServidor(datos.id, datos.next);
+        setConfirmEstado(null);
+        toast.success(resultado.mensaje ?? `Estado cambiado a: ${resultado.producto.estado}`);
+      } catch (error) {
+        toast.error(mensajeErrorProductos(error, "No se pudo cambiar el estado."));
+      } finally {
+        guardandoRef.current = false;
+        setGuardando(false);
+      }
+    })();
+  };
+  const prodConfirm = confirmEstado ? productos.find((x) => x.id === confirmEstado.id) : undefined;
+
   return (
-    <div className="px-4 sm:px-6 py-5">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1
-            className="text-3xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            Gestión Producto
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {productos.length} producto{productos.length === 1 ? "" : "s"} registrado{productos.length === 1 ? "" : "s"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
-          {canCreate && (
-            <button
-              onClick={() => {
-                setForm(emptyForm());
-                setCantidadAPreparar("");
-                setErrorNombreServidor("");
-                resetFichaForm();
-                setFormTieneFicha(null);
-                setTieneFichaError("");
-                setFichaOculta(false);
-                setConfirmCategoria(null);
-                setShowCreate(true);
-              }}
-              className="inline-flex items-center gap-2 px-5 py-3 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
-            >
-              <Plus className="w-4 h-4" /> Crear Producto
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Search + filtro por tipo */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Buscar por nombre, categoría o tipo..."
-          wrapperClassName="max-w-sm flex-1"
-        />
-        <select
-          value={filtroTipo}
-          onChange={(e) => {
-            setFiltroTipo(e.target.value as "Todos" | TipoProducto);
-            setPage(1);
-          }}
-          aria-label="Filtrar por tipo"
-          className="px-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-        >
-          <option value="Todos">Todos</option>
-          {TIPOS_PRODUCTO.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-        <select
-          value={filtroEstado}
-          onChange={(e) => {
-            setFiltroEstado(e.target.value as "Todos" | EstadoProducto);
-            setPage(1);
-          }}
-          aria-label="Filtrar por estado"
-          className="px-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-        >
-          <option value="Todos">Todos los estados</option>
-          {ESTADOS_PRODUCTO.map((e) => (
-            <option key={e} value={e}>{e}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Aviso de stock bajo (SOLO bebidas activas, sin descontinuadas): el
-          texto es un BOTÓN que filtra el listado y muestra solo esas bebidas;
-          el segundo clic lo apaga. Sigue a la vista mientras el filtro esté
-          activo, así que siempre se puede salir. El detalle completo de los
-          nombres queda en el `title`. */}
-      {bebidasStockBajo.length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            setFiltroStockBajo((v) => !v);
-            setPage(1);
-          }}
-          aria-pressed={filtroStockBajo}
-          title={`${bebidasStockBajo.length} bebida${bebidasStockBajo.length === 1 ? "" : "s"} con stock bajo: ${bebidasStockBajo
-            .map((p) => `${p.nombre} (${p.stockDisponible} ${palabraStock(p, p.stockDisponible)})`)
-            .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
-          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 max-md:min-h-11 rounded-xl border text-sm cursor-pointer transition-all ${
-            filtroStockBajo
-              ? "bg-yellow-500 border-yellow-600 text-white shadow-md font-bold"
-              : "bg-yellow-100 border-yellow-300 text-yellow-900 dark:bg-yellow-500/15 dark:border-yellow-500/40 dark:text-yellow-300 font-semibold hover:bg-yellow-200 dark:hover:bg-yellow-500/25"
-          }`}
-        >
-          {filtroStockBajo && <span aria-hidden>✓</span>}
-          <span className="font-bold whitespace-nowrap">
-            {bebidasStockBajo.length} bebida{bebidasStockBajo.length === 1 ? "" : "s"} con stock bajo
-          </span>
-          <span className="truncate">
-            · {bebidasStockBajo.slice(0, 3).map((p) => p.nombre).join(", ")}
-            {bebidasStockBajo.length > 3 ? ` y ${bebidasStockBajo.length - 3} más` : ""}
-          </span>
-        </button>
-      )}
-
-      {/* Menos de 768 px: cada producto como tarjeta. Reutiliza las mismas piezas y
-          botones de la tabla (nombreProd, estadoProd, accionesProd…). */}
-      <div className="md:hidden space-y-3">
-        {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p className="text-4xl mb-3">📦</p>
-            <p>No se encontraron productos</p>
-          </div>
-        ) : (
-          paged.map((p) => (
-            <div key={p.id} className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 text-base font-medium text-foreground [&>span:first-child]:!whitespace-normal [&>span:first-child]:!overflow-visible [&>span:first-child]:!text-clip break-words">{nombreProd(p)}</div>
-                <div className="shrink-0">{estadoProd(p)}</div>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">{tipoProd(p)}{fichaProd(p)}</div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Categoría</dt>
-                  <dd className="mt-0.5 text-foreground break-words">{catName(p.idCategoria)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Precio de venta</dt>
-                  <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{precioProd(p)}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock</dt>
-                  <dd className="mt-0.5">{stockProd(p)}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesProd(p)}</div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Table: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed min-w-[1100px]">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {/* Sin columna "Imagen": la foto se ve en Ver detalle y en
-                    Crear/Editar (aquí solo ocupaba ancho y alto). */}
-                {/* El ancho mínimo preserva las dos líneas de precio sin invadir Stock. */}
-                {[
-                  { h: "Nombre", w: "w-[13%]" },
-                  { h: "Tipo", w: "w-[13%]" },
-                  { h: "Ficha técnica", w: "w-[11%]" },
-                  { h: "Categoría", w: "w-[9%]" },
-                  { h: "Precio de venta", w: "w-[12%]" },
-                  { h: "Stock", w: "w-[14%]" },
-                  { h: "Estado", w: "w-[18%]" },
-                  { h: "Acciones", w: "w-[10%]" },
-                ].map(({ h, w }) => (
-                  <th
-                    key={h}
-                    className={`px-4 py-2 text-left font-semibold whitespace-normal break-words leading-tight ${w}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-14 text-center text-muted-foreground"
-                  >
-                    <p className="text-4xl mb-3">📦</p>
-                    <p>No se encontraron productos</p>
-                  </td>
-                </tr>
-              ) : (
-                paged.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="hover:bg-muted/20 transition-colors h-[61px]"
-                  >
-                    {/* ID numérico sin letras: de "PROD-001" muestra "001".
-                        Solo cambia la presentación; `p.id` sigue siendo el
-                        identificador interno (Excel, detalle, edición y
-                        borrado lo siguen usando tal cual). */}
-                    <td className="px-4 py-2.5 text-sm font-medium text-foreground" title={tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] ? presentacionDe(p) : p.nombre}>
-                      {/* Nombre y, debajo, el indicador de imágenes múltiples
-                          (P13): "3 imágenes". Va en su propia línea para no
-                          robarle ancho al nombre de la columna fija. Las
-                          bebidas muestran su presentación completa
-                          ("Coca-Cola · 1.5 L · Paca x12"). */}
-                      {nombreProd(p)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {tipoProd(p)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {fichaProd(p)}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-foreground truncate" title={catName(p.idCategoria)}>
-                      {catName(p.idCategoria)}
-                    </td>
-                    {/* Precio de venta al público (precioUnitario), NO el
-                        costo: antes esta columna pintaba costoUnitario. */}
-                    <td
-                      className={`${esCategoriaPizza(catName(p.idCategoria)) ? "px-2 overflow-hidden" : "px-4"} py-2.5 text-sm font-bold text-foreground`}
-                      style={{ fontFamily: MONO }}
-                    >
-                      {precioProd(p)}
-                    </td>
-                    <td
-                      className="px-2 py-2.5 align-middle whitespace-nowrap"
-                      title={
-                        esCategoriaPizza(catName(p.idCategoria))
-                          ? textoStockPizza(p)
-                          : tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[0]
-                          ? `${p.stockDisponible} ${palabraStock(p, p.stockDisponible)}`
-                          : textoStockBebida(p)
-                      }
-                    >
-                      {stockProd(p)}
-                    </td>
-                    <td className="px-2 py-2.5 overflow-hidden">
-                      {estadoProd(p)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {accionesProd(p)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
-      )}
-
-
-      {/* ── Descontinuar (bloque 1.2; antes era "Eliminar producto") ── */}
-      <AnimatePresence>
-        {deleteId && (
-          <ConfirmDeleteModal
-            title="Descontinuar producto"
-            message={
-              <>
-                ¿Seguro que deseas descontinuar el producto{" "}
-                <strong className="text-foreground">
-                  {productos.find((x) => x.id === deleteId)?.nombre ?? deleteId}
-                </strong>
-                ? El producto sale del menú pero se conserva su historial y su
-                ficha técnica.
-              </>
-            }
-            confirmLabel="Descontinuar"
-            loading={guardando}
-            onConfirm={() => handleDescontinuar(deleteId)}
-            onCancel={() => !guardando && setDeleteId(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Confirmar cambio de estado ── */}
-      <AnimatePresence>
-        {confirmEstado && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                </div>
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  ¿Desea cambiar el estado del producto?
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-2">
-                El producto <strong className="text-foreground">{confirmEstado.nombre}</strong> pasará de:
-              </p>
-              <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
-                <EstadoBadge estado={confirmEstado.current} />
-                <span className="text-muted-foreground text-sm">→</span>
-                <EstadoBadge estado={confirmEstado.next === "Descontinuado"
-                  ? "Descontinuado"
-                  : confirmEstado.tieneStock ? "Disponible" : "No disponible"} />
-              </div>
-              {confirmEstado.next === "Descontinuado" && (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
-                  El producto dejará de mostrarse en el menú.
-                </p>
-              )}
-              {confirmEstado.next === "Automático" && confirmEstado.current === "Descontinuado" && (
-                <p className="text-sm text-foreground bg-muted/50 border border-border rounded-xl px-3 py-2 mb-4">
-                  ¿Reactivar {confirmEstado.nombre}? Volverá a aparecer en el menú y en ventas si tiene stock y precio
-                </p>
-              )}
-              <div className="flex gap-3">
-                <button onClick={() => setConfirmEstado(null)}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Cancelar
-                </button>
-                <button disabled={guardando} onClick={() => {
-                  if (guardandoRef.current) return;
-                  if (!onCambiarEstadoEnServidor) {
-                    toast.error("No está disponible la conexión con Productos API.");
-                    return;
-                  }
-                  guardandoRef.current = true;
-                  setGuardando(true);
-                  void (async () => {
-                    try {
-                      const resultado = await onCambiarEstadoEnServidor(confirmEstado.id, confirmEstado.next);
-                      setConfirmEstado(null);
-                      toast.success(resultado.mensaje ?? `Estado cambiado a: ${resultado.producto.estado}`);
-                    } catch (error) {
-                      toast.error(mensajeErrorProductos(error, "No se pudo cambiar el estado."));
-                    } finally {
-                      guardandoRef.current = false;
-                      setGuardando(false);
-                    }
-                  })();
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Productos"
+        descripcion="Lo que se vende en el menú, con su precio y cuánto queda"
+        acciones={
+          <>
+            {canExportExcel && <BotonAccion icono={Download} onClick={exportExcel}>Descargar en Excel</BotonAccion>}
+            {canCreate && (
+              <BotonAccion
+                variante="principal"
+                icono={Plus}
+                onClick={() => {
+                  setForm(emptyForm());
+                  setCantidadAPreparar("");
+                  setErrorNombreServidor("");
+                  resetFichaForm();
+                  setFormTieneFicha(null);
+                  setTieneFichaError("");
+                  setFichaOculta(false);
+                  setConfirmCategoria(null);
+                  setShowCreate(true);
                 }}
-                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50">
-                  {guardando ? "Guardando…" : "Confirmar"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+              >
+                Agregar un producto
+              </BotonAccion>
+            )}
+          </>
+        }
+      />
+
+      {bebidasStockBajo.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <AvisoBanner
+            titulo={`Se están acabando ${bebidasStockBajo.length} ${bebidasStockBajo.length === 1 ? "bebida" : "bebidas"}`}
+            boton={abrirOrdenCompra ? <BotonAccion onClick={abrirOrdenCompra}>Pedirlas al proveedor</BotonAccion> : undefined}
+          >
+            {nombresAcabando}
+          </AvisoBanner>
+        </div>
+      )}
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un producto"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre o la categoría"
+        />
+        <FiltrosChips
+          valor={chip}
+          onChange={cambiarChip}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos" },
+            ...opcionesCategoriaBase.map((c) => ({ valor: `cat:${c.id}`, etiqueta: c.nombre })),
+            ...(bebidasStockBajo.length > 0 ? [{ valor: "acabando", etiqueta: "Se están acabando", contador: bebidasStockBajo.length }] : []),
+            { valor: "fuera", etiqueta: "Fuera del menú" },
+          ]}
+        />
+      </div>
+
+      {cargandoProductos ? (
+        <p role="status" className="pn-nota">Cargando los productos…</p>
+      ) : filtered.length === 0 ? (
+        <VacioEstado icono={Package} titulo="No encontramos ningún producto">
+          Revisa cómo lo escribiste, cambia el filtro o agrega uno nuevo.
+        </VacioEstado>
+      ) : (
+        <div className="pn-lista">
+          {paged.map((p) => {
+            const est = estadoGloria(p);
+            const rec = recetaGloria(p);
+            const fuera = p.estado !== "Disponible";
+            return (
+              <TarjetaFila
+                key={p.id}
+                avatar={fotoDe(p)}
+                nombre={tipoDe(p, catName(p.idCategoria)) === TIPOS_PRODUCTO[1] ? presentacionDe(p) : p.nombre}
+                detalle={`${catName(p.idCategoria)} · ${nombreTipo(p)}`}
+                datos={[
+                  { etiqueta: "Precio", valor: precioGloria(p) },
+                  { etiqueta: "Quedan", valor: quedanGloria(p) },
+                ]}
+                estado={
+                  <div className="grid gap-2 justify-items-start">
+                    <EstadoPill tono={est.tono}>{est.texto}</EstadoPill>
+                    <EstadoPill tono={rec.tono}>{rec.texto}</EstadoPill>
+                  </div>
+                }
+                acciones={
+                  <>
+                    <BotonAccion variante="normal" onClick={() => abrirDetalle(p)}>Ver y cambiar</BotonAccion>
+                    {canEdit && <BotonAccion variante="normal" onClick={() => openEdit(p)}>Cambiar datos</BotonAccion>}
+                    {canEdit && (fuera
+                      ? <BotonAccion variante="bien" onClick={() => ponerEnMenu(p)}>Volver a poner en el menú</BotonAccion>
+                      : <BotonAccion variante="peligro" onClick={() => sacarDelMenu(p)}>Sacar del menú</BotonAccion>)}
+                  </>
+                }
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+
+      {/* Sacar del menú / volver a poner */}
+      <DialogoConfirmacion
+        abierto={!!confirmEstado}
+        onCambiarAbierto={(a) => { if (!a && !guardando) setConfirmEstado(null); }}
+        titulo={
+          confirmEstado?.next === "Descontinuado"
+            ? `¿Sacar ${confirmEstado.nombre} del menú?`
+            : `¿Volver a poner ${confirmEstado?.nombre ?? ""} en el menú?`
+        }
+        queVaAPasar={
+          confirmEstado?.next === "Descontinuado"
+            ? ["Los clientes ya no lo van a ver en la página", "No se borra: su receta y sus ventas quedan guardadas", "Lo puedes volver a poner"]
+            : [
+                confirmEstado?.tieneStock
+                  ? "Vuelve a aparecer en el menú y en ventas"
+                  : `Hay 0 ${prodConfirm ? palabraStock(prodConfirm, 0) : "unidades"}: va a salir como Se acabó hasta que haya más`,
+                "Puede pedirse otra vez en cuanto haya existencias",
+              ]
+        }
+        textoSeguro={confirmEstado?.next === "Descontinuado" ? "No, dejarlo en el menú" : "No, dejarlo fuera"}
+        textoAccion={guardando ? "Guardando…" : confirmEstado?.next === "Descontinuado" ? "Sí, sacarlo del menú" : "Sí, volver a ponerlo"}
+        onConfirmar={confirmarEstado}
+      />
     </div>
   );
 }

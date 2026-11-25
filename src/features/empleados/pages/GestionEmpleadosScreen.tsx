@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Briefcase, RefreshCw, Send, X, UserPlus } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ArrowLeft, Briefcase, Lock, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import {
@@ -13,16 +13,22 @@ import {
   reenviarInvitacion,
 } from "@/shared/services/empleadosService";
 import type { ApiErrorConEstado, ContratacionApi, CrearEmpleadoResponse, EmpleadoApi } from "@/types/api";
-import {
-  EstadoSelect,
-  ESTADO_ACTIVO_COLOR,
-  ESTADO_INACTIVO_COLOR,
-} from "@/shared/components/EstadoSelect";
-import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/campo";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/campo";
 import { hoyISO } from "@/shared/utils/fechas";
 import { SelectorRoles } from "@/shared/components/SelectorRoles";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
@@ -308,7 +314,7 @@ export function GestionEmpleadosScreen({
 
   // 5 empleados por página (unificado con el resto de listados): la tabla
   // nunca lleva scroll interno, la navegación es solo por el paginador.
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
@@ -481,12 +487,12 @@ export function GestionEmpleadosScreen({
       if (respuesta.correoEnviado) {
         toast.success(`Empleado creado. ${nombreNormalizado} ya tenía cuenta; le enviamos un correo a ${respuesta.correo} avisándole que ya es parte del equipo.`);
       } else {
-        toast.error("Empleado creado, pero no se pudo enviar el correo de aviso");
+        toast.warning("Empleado creado, pero no se pudo enviar el correo de aviso");
       }
     } else if (respuesta.correoEnviado) {
       toast.success(`Empleado creado. Le enviamos un correo a ${respuesta.correo} para que cree su contraseña.`);
     } else {
-      toast.error("Empleado creado, pero no se pudo enviar el correo");
+      toast.warning("Empleado creado, pero no se pudo enviar el correo");
     }
   };
 
@@ -564,11 +570,7 @@ export function GestionEmpleadosScreen({
     }
   };
 
-  const iCls = "px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer";
-  const fCls = (err?: string) =>
-    `w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${err ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`;
-
-  // Empleado elegido en el modal "Nueva contratación". Si es Gloria, su
+  // Empleado elegido en el formulario "Nueva contratación". Si es Gloria, su
   // selector de Estado queda deshabilitado con el tooltip del super
   // administrador (la edición de los demás datos sigue permitida).
   const ctrEmpleado = ctrEmpleadoId
@@ -576,682 +578,488 @@ export function GestionEmpleadosScreen({
     : null;
   const ctrEsSuperAdmin = !!ctrEmpleado && esSuperAdmin(ctrEmpleado);
 
-  // Piezas de una fila de empleado. Las usan la tabla (desde 768 px) y las tarjetas
-  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
-  const celdaEmp = (e: Empleado) => {
-    const rol = rolInfo(e.rolIds?.[0] ?? "");
-    const tienePerfilCliente = clientes.some(c =>
-      c.correo.trim().toLowerCase() === e.correo.trim().toLowerCase()
-    );
-    return (<div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full ${e.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                          {e.iniciales}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{e.nombre}</p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-xs font-mono text-muted-foreground">{fmtDoc(e.tipoDocumento, e.numeroDocumento)}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 ${rol && !rol.activo ? "opacity-50" : ""}`}>
-                              {tienePerfilCliente ? "Cliente/Empleado" : "Empleado"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>);
+  // ── Piezas para las tarjetas ──
+  const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  /** "2027-01-31" → "31 de enero de 2027" (sin pasar por Date: no se corre un día). */
+  const fechaLarga = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+    return m ? `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}` : iso || "—";
   };
-  const estadoEmp = (e: Empleado) => (<span title={esSuperAdmin(e) ? TITULO_SUPER_ADMIN : undefined} className="inline-flex">
-                        <EstadoSelect
-                          value={e.activo ? "activo" : "inactivo"}
-                          disabled={esSuperAdmin(e)}
-                          onChange={nuevoEstado => {
-                            if ((nuevoEstado === "activo") === e.activo) return;
-                            toggleEstado(e.id);
-                          }}
-                          options={[
-                            { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                            { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                          ]}
-                        />
-                      </span>);
-  const accionesEmp = (e: Empleado) => (<div className="flex items-center gap-1">
-                        {/* Reenviar invitación: solo para quien aún no activa su
-                            cuenta (crea un token nuevo y manda el correo otra vez). */}
-                        {invitacionesPendientes.has(e.numeroDocumento) && (
-                          <button
-                            type="button"
-                            title="Reenviar invitación"
-                            aria-label="Reenviar invitación"
-                            disabled={reenviando === e.numeroDocumento}
-                            onClick={() => void reenviarInvitacionDe(e)}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary cursor-pointer transition-colors disabled:opacity-50"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
-                        )}
-                        <ActionIcons
-                          onView={() => setDetailItem(e)}
-                          onEdit={e.activo ? undefined : () => { setEditItem({ ...e }); setEditErrors({}); }}
-                        />
-                      </div>);
+  const contratoTexto = (e: Empleado) =>
+    !e.fechaFinal
+      ? "Contrato sin fecha de fin"
+      : e.fechaFinal < hoyISO()
+        ? `El contrato terminó el ${fechaLarga(e.fechaFinal)}`
+        : `Contrato hasta el ${fechaLarga(e.fechaFinal)}`;
+  const cargoTexto = (rolIds?: string[]) => cargosMostrados(rolIds).join(" · ");
+  const documentoLegible = (tipo: string, numero: string) =>
+    `${tipo ? `${tipo} ` : ""}${/^\d+$/.test(numero) ? Number(numero).toLocaleString("es-CO") : numero}`;
+  const Avatar = ({ e, tam }: { e: Empleado; tam: number }) => (
+    <div
+      className={`${e.avatarColor} text-white font-bold shrink-0 flex items-center justify-center rounded-full`}
+      style={{ width: tam, height: tam, fontSize: tam * 0.36 }}
+      aria-hidden="true"
+    >
+      {e.iniciales}
+    </div>
+  );
+  const EstadoTrabajo = ({ activo }: { activo: boolean }) => (
+    <EstadoPill tono={activo ? "verde" : "gris"}>{activo ? "Trabajando" : "Ya no trabaja"}</EstadoPill>
+  );
 
-  return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
+  const [reenviarItem, setReenviarItem] = useState<Empleado | null>(null);
+  const [desactivarItem, setDesactivarItem] = useState<Empleado | null>(null);
+  const abrirContratoNuevo = (e: Empleado) => {
+    resetContratacion();
+    setCtrEmpleadoId(e.id);
+    setShowContrat(true);
+  };
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Empleados</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo empleado en La Sirena</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 min-w-0 sm:justify-end">
-          <button
-            onClick={() => { resetContratacion(); setShowContrat(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
+  /** Botones de una persona según la regla de siempre. */
+  const botonesEmpleado = (e: Empleado) => {
+    const verDatos = <BotonAccion key="ver" variante="normal" onClick={() => setDetailItem(e)}>Ver datos</BotonAccion>;
+    if (invitacionesPendientes.has(e.numeroDocumento)) {
+      return (
+        <>
+          <BotonAccion
+            variante="principal"
+            disabled={reenviando === e.numeroDocumento}
+            onClick={() => setReenviarItem(e)}
           >
-            <Briefcase className="w-4 h-4" /> Nueva contratación
-          </button>
-          <button
-            onClick={() => { resetCreate(); setShowCreate(true); }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
+            Mandar la invitación otra vez
+          </BotonAccion>
+          {verDatos}
+        </>
+      );
+    }
+    if (e.activo) {
+      return (
+        <>
+          {verDatos}
+          <BotonAccion
+            variante="peligro"
+            disabled={esSuperAdmin(e)}
+            title={esSuperAdmin(e) ? TITULO_SUPER_ADMIN : undefined}
+            onClick={() => setDesactivarItem(e)}
           >
-            <UserPlus className="w-4 h-4" /> Crear empleado
-          </button>
-        </div>
-      </div>
-
-
-
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <SearchInput
-          value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por nombre, correo, cargo, documento o estado..."
-          wrapperClassName="w-full max-w-sm shrink-0"
-        />
-        <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
-          <option value="todos">Todos los estados</option>
-          <option value="activo">Activo</option>
-          <option value="inactivo">Inactivo</option>
-        </select>
-        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className={iCls}>
-          <option value="id">Ordenar por ID</option>
-          <option value="nombre">Ordenar por nombre</option>
-          <option value="cargo">Ordenar por cargo</option>
-        </select>
-      </div>
-
-      {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
-          el número de filas por página se calcula arriba para que siempre quepan
-          enteras y la navegación sea solo por el paginador. Sin `flex-1 min-h-0`
-          (punto 2.5): la card mide su contenido y el paginador queda debajo. */}
-      {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-2 shrink-0">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
-          <p className="text-sm">Cargando empleados…</p>
-        </div>
-      ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-2 shrink-0">
-          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
-          <button onClick={() => void cargarEmpleados()} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">Reintentar</button>
-        </div>
-      ) : (
+            Desactivar
+          </BotonAccion>
+        </>
+      );
+    }
+    return (
       <>
-      {/* Menos de 768 px: cada empleado como tarjeta. Reutiliza las mismas piezas
-          y controles de la tabla (celdaEmp, estadoEmp, accionesEmp…). */}
-      <div className="md:hidden space-y-3 mb-2">
-        {paged.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p className="text-4xl mb-3">👥</p><p>No se encontraron empleados</p>
-          </div>
-        ) : (
-          paged.map((e) => (
-            <div key={e.id} className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">{celdaEmp(e)}</div>
-                <div className="shrink-0">{estadoEmp(e)}</div>
-              </div>
-              <dl className="mt-3 text-sm">
-                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt>
-                <dd className="mt-0.5 text-muted-foreground break-all">{e.correo}</dd>
-                <dt className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">Cargo</dt>
-                <dd className="mt-0.5 text-muted-foreground">{chipsCargos(e.rolIds)}</dd>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesEmp(e)}</div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Tabla: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              {["Empleado","Correo","Cargo","Estado","Acciones"].map(h => (
-                <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
-              ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">👥</p><p>No se encontraron empleados</p>
-                </td></tr>
-              ) : paged.map(e => {
-                return (
-                  <tr key={e.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-1.5">
-                      {celdaEmp(e)}
-                    </td>
-                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{e.correo}</td>
-                    <td className="px-4 py-1.5 text-sm text-muted-foreground">{chipsCargos(e.rolIds)}</td>
-                    <td className="px-4 py-1.5">
-                      {/* Pill de estado (diseño de Proveedores): antes era un
-                          badge y el switch vivía en Acciones.
-                          P7: para Gloria el pill queda deshabilitado con el
-                          tooltip que explica el motivo, igual que en
-                          GestionUsuariosScreen. */}
-                      {estadoEmp(e)}
-                    </td>
-                    <td className="px-4 py-1.5">
-                      {accionesEmp(e)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <BotonAccion variante="principal" onClick={() => abrirContratoNuevo(e)}>Darle un contrato nuevo</BotonAccion>
+        <BotonAccion variante="normal" onClick={() => { setEditItem({ ...e }); setEditErrors({}); }}>Corregir sus datos</BotonAccion>
+        {verDatos}
       </>
-      )}
+    );
+  };
 
-      {/* Paginación (unificada, fuera de la card) */}
-      {filtered.length > 0 && (
-        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
-      )}
+  const cerrarCrear = () => { setShowCreate(false); resetCreate(); };
+  const cerrarContrat = () => { setShowContrat(false); resetContratacion(); };
+  const chipEstado = filterEstado === "activo" ? "activo" : filterEstado === "inactivo" ? "inactivo" : "todos";
 
-      {/* Modal: Nueva contratación */}
-      <AnimatePresence>
-        {showContrat && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-                 className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
-                <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nueva Contratación</h3>
-                  <button onClick={() => { setShowContrat(false); resetContratacion(); }}
-                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+  const dialogos = (
+    <>
+      <DialogoConfirmacion
+        abierto={!!reenviarItem}
+        onCambiarAbierto={a => { if (!a) setReenviarItem(null); }}
+        titulo={`¿Mandar otra vez la invitación a ${reenviarItem?.nombre.split(" ")[0] ?? ""}?`}
+        queVaAPasar={[`Le llega un correo nuevo a ${reenviarItem?.correo ?? ""}`, "El enlace anterior deja de servir"]}
+        textoAccion="Sí, mandarla otra vez"
+        onConfirmar={() => { if (reenviarItem) void reenviarInvitacionDe(reenviarItem); }}
+      />
+      <DialogoConfirmacion
+        abierto={!!desactivarItem}
+        onCambiarAbierto={a => { if (!a) setDesactivarItem(null); }}
+        titulo={`¿Desactivar a ${desactivarItem?.nombre ?? ""}?`}
+        queVaAPasar={[
+          `Ya no podrá entrar al panel como ${desactivarItem ? cargoTexto(desactivarItem.rolIds).toLowerCase() : "empleado"}`,
+          "Su cargo y su contrato quedan guardados",
+          "Puede seguir comprando como cliente",
+        ]}
+        textoAccion="Sí, desactivar"
+        onConfirmar={() => { if (desactivarItem) void toggleEstado(desactivarItem.id); }}
+      />
+    </>
+  );
 
-                <div className="px-4 py-3.5 grid grid-cols-2 gap-x-3 gap-y-3">
-                  {/* Empleado al que se le registra la contratación */}
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Empleado <MarcaObligatorio />
-                    </label>
-                    <select value={ctrEmpleadoId} autoFocus
-                      onChange={e => {
-                        setCtrEmpleadoId(e.target.value);
-                        // P7: al elegir a Gloria el estado se fuerza a Activo,
-                        // para que el selector de Estado (deshabilitado más
-                        // abajo) no arranque en "Inactivo" con datos viejos.
-                        const empSel = empleados.find(x => x.id === e.target.value);
-                        if (empSel && esSuperAdmin(empSel)) setCtrActivo(true);
-                        if (ctrErrors.empleado) setCtrErrors(p => ({ ...p, empleado: undefined }));
-                      }}
-                      className={`${fCls(ctrErrors.empleado)} cursor-pointer`}>
-                      <option value="">Selecciona un empleado…</option>
-                      {empleados.map(e => (
-                        <option key={e.id} value={e.id}>
-                          {e.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {ctrErrors.empleado && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.empleado}</p>}
-                  </div>
+  // ── Formularios (agregar, corregir y nuevo contrato) ──
+  const sino = [{ valor: "activo", etiqueta: "Sí" }, { valor: "inactivo", etiqueta: "No" }];
+  const editErrs = editItem ? { ...editErrors, ...erroresDeEdicion(editItem) } : {};
+  const editBloqueado = editItem ? Object.values(erroresDeEdicion(editItem)).some(Boolean) : false;
+  const editaContrato = editItem ? puedeEditarContrato(editItem) : false;
+  const historialCtr = ctrEmpleado ? ordenarContrataciones(ctrEmpleado.contrataciones ?? []) : [];
 
-                  {/* Datos del empleado */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                    {/* P7: si el empleado elegido es Gloria, el estado no se
-                        puede tocar (el guard de handleNuevaContratacion además
-                        lo fuerza a activo al guardar).
-                        Punto 3.2: 2 opciones → control segmentado. */}
-                    <SegmentadoButtons
-                      valor={ctrActivo ? "activo" : "inactivo"}
-                      onChange={valor => setCtrActivo(valor === "activo")}
-                      disabled={ctrEsSuperAdmin}
-                      title={ctrEsSuperAdmin ? TITULO_SUPER_ADMIN : undefined}
-                      opciones={[
-                        { valor: "activo", etiqueta: "Activo" },
-                        { valor: "inactivo", etiqueta: "Inactivo" },
-                      ]}
-                    />
+  const formularios = (
+    <>
+      {showCreate && (
+        <Dialog.Root open onOpenChange={a => { if (!a) cerrarCrear(); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+              <div className="pn-modal__cab"><Dialog.Title className="pn-modal__titulo">Agregar un empleado</Dialog.Title></div>
+              <div className="grid gap-5">
+                <SeccionFormulario numero={1} titulo="Datos de la persona">
+                  <div className="pn-grilla">
+                    <CampoFormulario etiqueta="Tipo de documento" error={createErrors.tipoDocumento}>
+                      {(p) => (
+                        <select {...p} value={newTipoDoc}
+                          onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(prev => ({ ...prev, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}>
+                          {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                        </select>
+                      )}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Número de documento" ayuda="Solo números, sin puntos" error={createErrors.documento}>
+                      {(p) => (
+                        <input {...p} type="text" inputMode="numeric" value={newDocumento} autoComplete="off" placeholder="12345678"
+                          onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(prev => ({ ...prev, documento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }} />
+                      )}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Nombre completo" error={createErrors.nombre}>
+                      {(p) => (
+                        <input {...p} type="text" value={newNombre} autoFocus placeholder="Ej: Laura Martínez"
+                          onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(prev => ({ ...prev, nombre: undefined })); }}
+                          onBlur={() => setNewNombre(normalizarNombre(newNombre))} />
+                      )}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Correo" ayuda="Aquí le llega la invitación" error={createErrors.correo}>
+                      {(p) => (
+                        <input {...p} type="email" value={newCorreo} autoComplete="off" placeholder="correo@gmail.com"
+                          onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(prev => ({ ...prev, correo: validarCorreo(v) ?? undefined })); }} />
+                      )}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Celular" opcional error={createErrors.telefono}>
+                      {(p) => (
+                        <input {...p} type="tel" inputMode="numeric" value={newTelefono} autoComplete="off" placeholder="3001234567"
+                          onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(prev => ({ ...prev, telefono: undefined })); }} />
+                      )}
+                    </CampoFormulario>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Cargo <MarcaObligatorio />
-                    </label>
-                    {/* CARGO = ROL: un solo campo con los cargos (roles) de esta
-                        contratación; ya no hay un texto de cargo aparte. */}
-                    <SelectorRoles
-                      roles={roles}
-                      value={ctrRolIds}
-                      onChange={ids => { setCtrRolIds(ids); if (ctrErrors.cargo) setCtrErrors(p => ({ ...p, cargo: undefined })); }}
-                      error={ctrErrors.cargo}
-                    />
-                  </div>
-
-                  {/* Datos de Contratación */}
-                  <p className="col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Fecha de inicio <MarcaObligatorio />
-                    </label>
-                    <input type="date" value={ctrFechaInicio}
-                      onChange={e => { setCtrFechaInicio(e.target.value); if (ctrErrors.fechaInicio) setCtrErrors(p => ({ ...p, fechaInicio: undefined })); }}
-                      className={fCls(ctrErrors.fechaInicio)} />
-                    {ctrErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.fechaInicio}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Fecha final <span className="text-muted-foreground font-normal">(opcional)</span>
-                    </label>
-                    <input type="date" value={ctrFechaFinal}
-                      onChange={e => { setCtrFechaFinal(e.target.value); if (ctrErrors.fechaFinal) setCtrErrors(p => ({ ...p, fechaFinal: undefined })); }}
-                      className={fCls(ctrErrors.fechaFinal)} />
-                    {ctrErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{ctrErrors.fechaFinal}</p>}
-                  </div>
-                </div>
-
-                <div className="flex gap-3 px-4 py-3 border-t border-border">
-                  <button onClick={() => { setShowContrat(false); resetContratacion(); }}
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                    Cancelar
-                  </button>
-                  <button onClick={() => void handleNuevaContratacion()} disabled={guardandoCtr}
-                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
-                    {guardandoCtr ? "Registrando..." : "Registrar"}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Ver detalle */}
-      <AnimatePresence>
-        {detailItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Empleado</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="px-5 py-4">
-                <div className="flex items-center gap-4 pb-4 mb-4 border-b border-border">
-                  <div className={`w-14 h-14 rounded-full ${detailItem.avatarColor} flex items-center justify-center text-white text-lg font-bold`}>
-                    {detailItem.iniciales}
-                  </div>
-                  <div>
-                    <p className="font-bold text-foreground text-base">{detailItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{fmtDoc(detailItem.tipoDocumento, detailItem.numeroDocumento)}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                  <div className="space-y-2">
-                    {[
-                      { l: "Correo", v: detailItem.correo },
-                      { l: "Teléfono", v: detailItem.telefono || "—" },
-                      { l: "Tipo de documento", v: detailItem.tipoDocumento },
-                      { l: "Número de documento", v: detailItem.numeroDocumento },
-                    ].map(({ l, v }) => (
-                      <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
-                        <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                        <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between py-2 border-b border-border gap-4">
-                      <span className="text-sm text-muted-foreground font-medium shrink-0">Cargo</span>
-                      <span className="text-sm font-semibold text-foreground text-right">{chipsCargos(detailItem.rolIds, "justify-end")}</span>
+                </SeccionFormulario>
+                <SeccionFormulario numero={2} titulo="Su trabajo">
+                  <div className="pn-grilla">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <p className="pn-etiqueta">Cargo</p>
+                      <SelectorRoles roles={roles} value={newRolIds}
+                        onChange={ids => { setNewRolIds(ids); if (createErrors.cargo) setCreateErrors(prev => ({ ...prev, cargo: undefined })); }}
+                        error={createErrors.cargo} />
                     </div>
-                    {[
-                      { l: "Fecha inicio", v: detailItem.fechaInicio },
-                      { l: "Fecha final", v: detailItem.fechaFinal || "Continúa activo" },
-                      { l: "Estado", v: detailItem.activo ? "Activo" : "Inactivo" },
-                    ].map(({ l, v }) => (
-                      <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
-                        <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                        <span className="text-sm font-semibold text-foreground text-right break-all">{v}</span>
-                      </div>
-                    ))}
+                    <CampoFormulario etiqueta="Empieza a trabajar" error={createErrors.fechaInicio}>
+                      {(p) => <input {...p} type="date" value={newFechaInicio} onChange={e => { setNewFechaInicio(e.target.value); if (createErrors.fechaInicio) setCreateErrors(prev => ({ ...prev, fechaInicio: undefined })); }} />}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Termina el contrato" opcional error={createErrors.fechaFinal}>
+                      {(p) => <input {...p} type="date" value={newFechaFinal} onChange={e => { setNewFechaFinal(e.target.value); if (createErrors.fechaFinal) setCreateErrors(prev => ({ ...prev, fechaFinal: undefined })); }} />}
+                    </CampoFormulario>
+                    <div>
+                      <p className="pn-etiqueta">¿Ya está trabajando?</p>
+                      <OpcionesBotones etiqueta="Estado del empleado" valor={newActivo ? "activo" : "inactivo"} onChange={v => setNewActivo(v === "activo")} opciones={sino} />
+                    </div>
                   </div>
+                </SeccionFormulario>
+                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={cerrarCrear}>Cancelar</BotonAccion>
+                  <BotonAccion variante="principal" disabled={creando} onClick={() => void handleCreate()}>
+                    {creando ? "Agregando…" : "Agregar y mandar la invitación"}
+                  </BotonAccion>
+                </div>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
-                  {/* Historial de contrataciones a ancho completo. */}
-                  <div className="sm:col-span-2 mt-2 pt-4 border-t border-border">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">
-                    Historial de contrataciones
-                  </p>
-                  {detalleHistorial.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Sin contrataciones registradas</p>
-                  ) : (
-                    <div className="space-y-2 pr-1">
-                      {detalleHistorial.map((c, i) => (
-                        <div key={c.id}
-                          className={`rounded-xl border px-3 py-2.5 ${i === 0 ? "border-primary/30 bg-primary/5" : "border-border bg-muted/40"}`}>
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-sm font-semibold text-foreground">{chipsCargos(c.rolIds)}</span>
-                            {i === 0 && (
-                              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
-                                Actual
-                              </span>
-                            )}
+      {editItem && (
+        <Dialog.Root open onOpenChange={a => { if (!a) setEditItem(null); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+              <div className="pn-modal__cab"><Dialog.Title className="pn-modal__titulo">Corregir los datos de {editItem.nombre}</Dialog.Title></div>
+              <div className="grid gap-5">
+                <SeccionFormulario titulo="Sus datos">
+                  <div className="pn-grilla">
+                    <div>
+                      <p className="pn-etiqueta">Documento</p>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{documentoLegible(editItem.tipoDocumento, editItem.numeroDocumento)}</div>
+                      <p className="pn-campo__ayuda">No se puede cambiar</p>
+                    </div>
+                    <div>
+                      <p className="pn-etiqueta">Nombre</p>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.nombre}</div>
+                    </div>
+                    <div>
+                      <p className="pn-etiqueta">Correo</p>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.correo}</div>
+                    </div>
+                    <div>
+                      <p className="pn-etiqueta">Celular</p>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.telefono || "—"}</div>
+                    </div>
+                  </div>
+                  <p className="pn-campo__ayuda" style={{ marginTop: 14 }}>Estos datos los cambia cada persona desde su perfil.</p>
+                </SeccionFormulario>
+                <SeccionFormulario titulo="Su trabajo">
+                  <div className="pn-grilla">
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <p className="pn-etiqueta">Cargo</p>
+                      <SelectorRoles roles={roles} value={editItem.rolIds ?? []} disabled={!editaContrato}
+                        onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
+                        error={editErrs.cargo} />
+                      {!editaContrato && <p className="pn-campo__ayuda">Sin contrato abierto: los cargos y la fecha final se guardan cuando vuelva a trabajar.</p>}
+                    </div>
+                    <div>
+                      <p className="pn-etiqueta">¿Está trabajando?</p>
+                      <OpcionesBotones etiqueta="Estado del empleado" deshabilitado={esSuperAdmin(editItem)}
+                        valor={esSuperAdmin(editItem) || editItem.activo ? "activo" : "inactivo"}
+                        onChange={v => setEditItem(x => x && ({ ...x, activo: v === "activo" }))} opciones={sino} />
+                    </div>
+                    <div>
+                      <p className="pn-etiqueta">Empezó a trabajar</p>
+                      <div className="pn-lectura">{fechaLarga(editItem.fechaInicio)}</div>
+                      <p className="pn-campo__ayuda">No se cambia aquí</p>
+                    </div>
+                    <CampoFormulario etiqueta="Termina el contrato" error={editErrs.fechaFinal}>
+                      {(p) => (
+                        <input {...p} type="date" disabled={!editaContrato} value={editItem.fechaFinal}
+                          onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p2 => ({ ...p2, fechaFinal: undefined })); }} />
+                      )}
+                    </CampoFormulario>
+                  </div>
+                </SeccionFormulario>
+                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={() => setEditItem(null)}>Cancelar</BotonAccion>
+                  <BotonAccion variante="principal" disabled={guardando || editBloqueado} onClick={() => void handleEdit()}>
+                    {guardando ? "Guardando…" : "Guardar cambios"}
+                  </BotonAccion>
+                </div>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+
+      {showContrat && (
+        <Dialog.Root open onOpenChange={a => { if (!a) cerrarContrat(); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+              <div className="pn-modal__cab"><Dialog.Title className="pn-modal__titulo">Nuevo contrato</Dialog.Title></div>
+              <div className="grid gap-5">
+                <SeccionFormulario titulo="El contrato nuevo">
+                  <div className="pn-grilla">
+                    <CampoFormulario etiqueta="¿A quién?" error={ctrErrors.empleado}>
+                      {(p) => (
+                        <select {...p} value={ctrEmpleadoId}
+                          onChange={e => {
+                            setCtrEmpleadoId(e.target.value);
+                            const empSel = empleados.find(x => x.id === e.target.value);
+                            if (empSel && esSuperAdmin(empSel)) setCtrActivo(true);
+                            if (ctrErrors.empleado) setCtrErrors(prev => ({ ...prev, empleado: undefined }));
+                          }}>
+                          <option value="">Escoge a la persona…</option>
+                          {empleados.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                        </select>
+                      )}
+                    </CampoFormulario>
+                    <div>
+                      <p className="pn-etiqueta">¿Vuelve a trabajar ya?</p>
+                      <OpcionesBotones etiqueta="Estado del empleado" deshabilitado={ctrEsSuperAdmin}
+                        valor={ctrActivo ? "activo" : "inactivo"} onChange={v => setCtrActivo(v === "activo")} opciones={sino} />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <p className="pn-etiqueta">Cargo</p>
+                      <SelectorRoles roles={roles} value={ctrRolIds}
+                        onChange={ids => { setCtrRolIds(ids); if (ctrErrors.cargo) setCtrErrors(prev => ({ ...prev, cargo: undefined })); }}
+                        error={ctrErrors.cargo} />
+                    </div>
+                    <CampoFormulario etiqueta="Empieza a trabajar" error={ctrErrors.fechaInicio}>
+                      {(p) => <input {...p} type="date" value={ctrFechaInicio} onChange={e => { setCtrFechaInicio(e.target.value); if (ctrErrors.fechaInicio) setCtrErrors(prev => ({ ...prev, fechaInicio: undefined })); }} />}
+                    </CampoFormulario>
+                    <CampoFormulario etiqueta="Termina el contrato" opcional error={ctrErrors.fechaFinal}>
+                      {(p) => <input {...p} type="date" value={ctrFechaFinal} onChange={e => { setCtrFechaFinal(e.target.value); if (ctrErrors.fechaFinal) setCtrErrors(prev => ({ ...prev, fechaFinal: undefined })); }} />}
+                    </CampoFormulario>
+                  </div>
+                </SeccionFormulario>
+                {ctrEmpleado && (
+                  <SeccionFormulario titulo="Contratos anteriores">
+                    {historialCtr.length === 0 ? (
+                      <p className="pn-seccion__ayuda">Todavía no tiene contratos.</p>
+                    ) : (
+                      <div className="pn-permisos">
+                        {historialCtr.map(c => (
+                          <div key={c.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,2fr)" }}>
+                            <strong>{cargoTexto(c.rolIds)}</strong>
+                            <span>{fechaLarga(c.fechaInicio)} → {c.fechaFinal ? fechaLarga(c.fechaFinal) : "sin fecha de fin"}</span>
                           </div>
-                          <p className="text-xs text-muted-foreground">{cargosMostrados(c.rolIds).join(" · ") || "—"}</p>
-                          <p className="text-xs text-muted-foreground font-mono mt-1">
-                            {c.fechaInicio} → {c.fechaFinal || "Continúa activo"}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  </div>
+                        ))}
+                      </div>
+                    )}
+                  </SeccionFormulario>
+                )}
+                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={cerrarContrat}>Cancelar</BotonAccion>
+                  <BotonAccion variante="principal" disabled={guardandoCtr} onClick={() => void handleNuevaContratacion()}>
+                    {guardandoCtr ? "Guardando…" : "Guardar y activarla"}
+                  </BotonAccion>
                 </div>
               </div>
-              <div className="px-5 py-4 border-t border-border">
-                <button onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+    </>
+  );
+
+  // ── Detalle ──
+  if (detailItem) {
+    const d = detailItem;
+    const anteriores = detalleHistorial.slice(1);
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 950 }}>
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+        <div className="flex flex-wrap items-center gap-5 mb-1">
+          <Avatar e={d} tam={80} />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{d.nombre}</h1>
+              <EstadoTrabajo activo={d.activo} />
             </div>
+            <p className="pn-seccion__ayuda" style={{ margin: "6px 0 0" }}>{cargoTexto(d.rolIds)} · {contratoTexto(d).toLowerCase()}</p>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Crear empleado */}
-      <AnimatePresence>
-        {showCreate && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-               className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Empleado</h3>
-                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2.5">
-                  {/* Datos de cuenta */}
-                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5 first:pt-0">Datos de cuenta</p>
-                  <div className="sm:col-span-2 flex flex-col sm:flex-row sm:items-start gap-2">
-                    <div className="w-full sm:w-56 shrink-0">
-                       <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento <MarcaObligatorio /></label>
-                      <select value={newTipoDoc}
-                       onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, documento: newDocumento ? validarDocumento(newDocumento, e.target.value) ?? undefined : undefined })); }}
-                        className={`${fCls(createErrors.tipoDocumento)} cursor-pointer`}>
-                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
-                      </select>
-                      {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Número de documento <MarcaObligatorio />
-                      </label>
-                       <input type="text" inputMode="numeric" value={newDocumento} autoComplete="off"
-                         onChange={e => { const v = filtrarDocumento(e.target.value, newTipoDoc); setNewDocumento(v); setCreateErrors(p => ({ ...p, documento: v ? validarDocumento(v, newTipoDoc) ?? undefined : undefined })); }}
-                         placeholder="12345678"
-                        className={fCls(createErrors.documento)} />
-                      {createErrors.documento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.documento}</p>}
-                    </div>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Nombre completo <MarcaObligatorio />
-                    </label>
-                    <input type="text" value={newNombre} autoFocus
-                        onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: undefined })); }}
-                        onBlur={() => setNewNombre(normalizarNombre(newNombre))}
-                      placeholder="Ej: Laura Martínez"
-                      className={fCls(createErrors.nombre)} />
-                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
-                  </div>
-                  {/* Correo / Teléfono con la MISMA proporción que el
-                      formulario de Registro (correo 4/6, teléfono 2/6 en una
-                      grilla de 6). En celular cada campo ocupa todo el ancho. */}
-                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-6 gap-x-3 gap-y-2.5">
-                    <div className="sm:col-span-4">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                         Correo electrónico <MarcaObligatorio />
-                      </label>
-                      <input type="email" value={newCorreo} autoComplete="off"
-                         onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: validarCorreo(v) ?? undefined })); }}
-                        placeholder="correo@ejemplo.com"
-                        className={fCls(createErrors.correo)} />
-                      {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Teléfono <span className="text-muted-foreground font-normal">(opcional)</span>
-                      </label>
-                      <input type="tel" inputMode="numeric" value={newTelefono} autoComplete="off"
-                        onChange={e => { setNewTelefono(soloDigitos(e.target.value)); if (createErrors.telefono) setCreateErrors(p => ({ ...p, telefono: undefined })); }}
-                        placeholder="3001234567"
-                        className={fCls(createErrors.telefono)} />
-                      {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
-                    </div>
-                  </div>
-                  {/* Datos del empleado */}
-                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos del empleado</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                    {/* Punto 3.2: 2 opciones → control segmentado */}
-                    <SegmentadoButtons
-                      valor={newActivo ? "activo" : "inactivo"}
-                      onChange={valor => setNewActivo(valor === "activo")}
-                      opciones={[
-                        { valor: "activo", etiqueta: "Activo" },
-                        { valor: "inactivo", etiqueta: "Inactivo" },
-                      ]}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Cargo <MarcaObligatorio />
-                    </label>
-                    {/* CARGO = ROL: aquí se eligen los cargos (roles) del nuevo
-                        empleado; no hay input de texto libre. */}
-                    <SelectorRoles
-                      roles={roles}
-                      value={newRolIds}
-                      onChange={ids => { setNewRolIds(ids); if (createErrors.cargo) setCreateErrors(p => ({ ...p, cargo: undefined })); }}
-                      error={createErrors.cargo}
-                    />
-                  </div>
-
-                  {/* Datos de Contratación */}
-                  <p className="sm:col-span-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1.5">Datos de Contratación</p>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Fecha de inicio <MarcaObligatorio />
-                    </label>
-                    <input type="date" value={newFechaInicio}
-                      onChange={e => { setNewFechaInicio(e.target.value); if (createErrors.fechaInicio) setCreateErrors(p => ({ ...p, fechaInicio: undefined })); }}
-                      className={fCls(createErrors.fechaInicio)} />
-                    {createErrors.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.fechaInicio}</p>}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Fecha final <span className="text-muted-foreground font-normal">(opcional)</span>
-                    </label>
-                    <input type="date" value={newFechaFinal}
-                      onChange={e => { setNewFechaFinal(e.target.value); if (createErrors.fechaFinal) setCreateErrors(p => ({ ...p, fechaFinal: undefined })); }}
-                      className={fCls(createErrors.fechaFinal)} />
-                    {createErrors.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.fechaFinal}</p>}
-                  </div>
-                </div>
-
-                <div className="flex gap-3 px-4 py-3 border-t border-border">
-                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                    Cancelar
-                  </button>
-                  <button onClick={() => void handleCreate()}
-                    disabled={creando}
-                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
-                    {creando ? "Creando..." : "Crear empleado"}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Editar empleado */}
-      <AnimatePresence>
-        {editItem && (() => {
-          // Errores visibles: los del servidor (editErrors) más los del tiempo
-          // real, que tienen la última palabra; el botón se bloquea con estos.
-          const errs = { ...editErrors, ...erroresDeEdicion(editItem) };
-          const bloqueado = Object.values(erroresDeEdicion(editItem)).some(Boolean);
-          const editaContrato = puedeEditarContrato(editItem);
-          return (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
-              exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground" style={{fontFamily:SERIF}}>Editar Empleado</h3>
-                <button onClick={() => setEditItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4"/>
-                </button>
-              </div>
-              {/* Misma proporción que el formulario de Registro: grilla de 6 con
-                  el correo en 4/6 y el teléfono en 2/6; en celular cada campo
-                  ocupa todo el ancho. */}
-              <div className="px-4 py-3.5 grid grid-cols-1 sm:grid-cols-6 gap-x-3 gap-y-3">
-                <div className="sm:col-span-6 flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full ${editItem.avatarColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}>
-                    {editItem.iniciales}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{editItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground">{fmtDoc(editItem.tipoDocumento, editItem.numeroDocumento)}</p>
-                  </div>
-                </div>
-                <div className="sm:col-span-6 flex flex-wrap gap-2 items-start">
-                  <div className="w-56 max-md:w-full shrink-0">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">Tipo de documento</label>
-                    <select disabled value={editItem.tipoDocumento}
-                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed">
-                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex-1 min-w-0 max-md:basis-full">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento</label>
-                    <input readOnly type="text" inputMode="numeric" value={editItem.numeroDocumento} autoComplete="off"
-                      placeholder="12345678"
-                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
-                  </div>
-                </div>
-                {/* Datos de la persona: de solo lectura. Cada quien los edita
-                    desde su perfil (el backend rechaza estos campos en PUT). */}
-                {[
-                  { label: "Nombre completo", field: "nombre" as const, type: "text", full: true  },
-                  { label: "Correo",          field: "correo" as const, type: "email" },
-                  { label: "Teléfono",        field: "telefono" as const, type: "tel" },
-                ].map(({ label, field, type, full }) => (
-                  <div key={field} className={full ? "sm:col-span-6" : field === "correo" ? "sm:col-span-4" : "sm:col-span-2"}>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
-                    <input readOnly type={type} value={editItem[field]} autoComplete="off"
-                      className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
+        </div>
+        <div className="grid gap-5 mt-6">
+          <SeccionFormulario titulo="Sus datos">
+            <DatosDetalle datos={[
+              { etiqueta: "Documento", valor: documentoLegible(d.tipoDocumento, d.numeroDocumento) },
+              { etiqueta: "Correo", valor: d.correo },
+              { etiqueta: "Celular", valor: d.telefono || "—" },
+              { etiqueta: "Su cuenta", valor: d.invitacionPendiente ? "Todavía no abre la invitación" : "✓ Ya entró al sistema" },
+            ]} />
+            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+              Los cambia la misma persona en su perfil mientras trabaje aquí.
+            </p>
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Contrato actual">
+            <DatosDetalle datos={[
+              { etiqueta: "Cargo", valor: cargoTexto(d.rolIds) },
+              { etiqueta: "Empezó", valor: fechaLarga(d.fechaInicio) },
+              { etiqueta: "Termina", valor: d.fechaFinal ? fechaLarga(d.fechaFinal) : "Sin fecha de fin" },
+            ]} />
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Contratos anteriores">
+            {anteriores.length === 0 ? (
+              <p className="pn-seccion__ayuda">Todavía no tiene contratos anteriores.</p>
+            ) : (
+              <div className="pn-permisos">
+                {anteriores.map(c => (
+                  <div key={c.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,2fr)" }}>
+                    <strong>{cargoTexto(c.rolIds)}</strong>
+                    <span>{fechaLarga(c.fechaInicio)} → {c.fechaFinal ? fechaLarga(c.fechaFinal) : "sin fecha de fin"}</span>
                   </div>
                 ))}
-                <p className="sm:col-span-6 text-xs text-muted-foreground -mt-1">Los datos de la persona no se pueden editar aquí: cada quien los actualiza desde su perfil.</p>
-                <div className="sm:col-span-6">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                     Cargo <MarcaObligatorio />
-                  </label>
-                  <SelectorRoles
-                    roles={roles}
-                    value={editItem.rolIds ?? []}
-                    disabled={!editaContrato}
-                    onChange={ids => { setEditItem(x => x && ({ ...x, rolIds: ids })); if (editErrors.cargo) setEditErrors(p => ({ ...p, cargo: undefined })); }}
-                    error={errs.cargo}
-                  />
-                  {!editaContrato && (
-                    <p className="text-xs text-muted-foreground mt-1 leading-tight">Sin contratación abierta: los cargos y la fecha final se guardan al activar al empleado.</p>
-                  )}
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                  {/* P7: el estado de Gloria no se puede cambiar desde el
-                      modal de edición tampoco. Punto 3.2: 2 opciones → control
-                      segmentado. */}
-                  <SegmentadoButtons
-                    disabled={esSuperAdmin(editItem)}
-                    title={esSuperAdmin(editItem) ? TITULO_SUPER_ADMIN : undefined}
-                    valor={esSuperAdmin(editItem) || editItem.activo ? "activo" : "inactivo"}
-                    onChange={valor => setEditItem(x => x && ({ ...x, activo: valor === "activo" }))}
-                    opciones={[
-                      { valor: "activo", etiqueta: "Activo" },
-                      { valor: "inactivo", etiqueta: "Inactivo" },
-                    ]}
-                  />
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de inicio</label>
-                  <input readOnly type="date" value={editItem.fechaInicio}
-                    className="w-full px-3 py-2 max-md:min-h-11 rounded-xl border border-border bg-muted/60 text-sm text-muted-foreground cursor-not-allowed" />
-                  <p className="text-xs text-muted-foreground mt-1 leading-tight">No se modifica aquí.</p>
-                  {errs.fechaInicio && <p className="text-xs text-red-500 mt-1 leading-tight">{errs.fechaInicio}</p>}
-                </div>
-                <div className="sm:col-span-3">
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha final</label>
-                  <input type="date" disabled={!editaContrato} value={editItem.fechaFinal}
-                    onChange={e => { setEditItem(x => x && ({ ...x, fechaFinal: e.target.value })); if (editErrors.fechaFinal) setEditErrors(p => ({ ...p, fechaFinal: undefined })); }}
-                    className={`w-full px-3 py-2 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${errs.fechaFinal ? "border-red-400 bg-red-50/30" : editaContrato ? "bg-muted border-border" : "bg-muted/60 border-border text-muted-foreground cursor-not-allowed"}`} />
-                  {errs.fechaFinal && <p className="text-xs text-red-500 mt-1 leading-tight">{errs.fechaFinal}</p>}
-                </div>
               </div>
-              <div className="flex gap-3 px-4 py-3 border-t border-border">
-                <button onClick={() => setEditItem(null)}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={() => void handleEdit()} disabled={guardando || bloqueado}
-                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-60">
-                  {guardando ? "Guardando..." : "Guardar cambios"}
-                </button>
-              </div>
-            </motion.div>
-            </div>
-          </div>
-          );
-        })()}
-      </AnimatePresence>
+            )}
+          </SeccionFormulario>
+          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>{botonesEmpleado(d)}</div>
+        </div>
+        {dialogos}
+        {formularios}
+      </div>
+    );
+  }
 
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Empleados"
+        descripcion="Las personas que trabajan en La Sirena, su cargo y hasta cuándo va su contrato"
+        acciones={
+          <>
+            <BotonAccion icono={Briefcase} onClick={() => { resetContratacion(); setShowContrat(true); }}>
+              Nuevo contrato a alguien que ya trabajó
+            </BotonAccion>
+            <BotonAccion variante="principal" icono={UserPlus} onClick={() => { resetCreate(); setShowCreate(true); }}>
+              Agregar un empleado
+            </BotonAccion>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un empleado"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre, la cédula, el correo o el cargo"
+        />
+        <FiltrosChips
+          valor={chipEstado}
+          onChange={v => { setFiltro(v); setPage(1); }}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos", contador: empleados.length },
+            { valor: "activo", etiqueta: "Trabajando", contador: empleados.filter(e => e.activo).length },
+            { valor: "inactivo", etiqueta: "Ya no trabajan", contador: empleados.filter(e => !e.activo).length },
+          ]}
+        />
+        <FiltrosChips
+          titulo="Ordenar por:"
+          valor={sortBy}
+          onChange={v => { setSortBy(v); setPage(1); }}
+          opciones={[
+            { valor: "id", etiqueta: "Los más nuevos" },
+            { valor: "nombre", etiqueta: "Nombre" },
+            { valor: "cargo", etiqueta: "Cargo" },
+          ]}
+        />
+      </div>
+
+      {cargando ? (
+        <p role="status" className="pn-nota">Cargando los empleados…</p>
+      ) : errorCarga ? (
+        <AvisoBanner
+          titulo="No pudimos cargar a los empleados"
+          boton={<BotonAccion onClick={() => void cargarEmpleados()}>Intentar de nuevo</BotonAccion>}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={Users} titulo="No encontramos a ningún empleado">
+          Revisa cómo lo escribiste, cambia el filtro o agrega uno nuevo.
+        </VacioEstado>
+      ) : (
+        <div className="pn-lista">
+          {paged.map(e => (
+            <TarjetaFila
+              key={e.id}
+              resaltada={e.invitacionPendiente ? "ambar" : undefined}
+              avatar={<Avatar e={e} tam={56} />}
+              nombre={e.nombre}
+              detalle={`${documentoLegible(e.tipoDocumento, e.numeroDocumento)} · ${e.correo}`}
+              datos={[
+                { etiqueta: "Cargo", valor: cargoTexto(e.rolIds) },
+                { etiqueta: "Contrato", valor: contratoTexto(e) },
+              ]}
+              estado={
+                <div className="grid gap-2 justify-items-start">
+                  <EstadoTrabajo activo={e.activo} />
+                  {e.invitacionPendiente
+                    ? <EstadoPill tono="ambar">No ha abierto el correo de invitación</EstadoPill>
+                    : <span style={{ fontSize: 17, color: "var(--verde-texto)", fontWeight: 600 }}>✓ Ya entró al sistema</span>}
+                </div>
+              }
+              acciones={botonesEmpleado(e)}
+            />
+          ))}
+        </div>
+      )}
+
+      <PaginadorGrande pagina={pageActual} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+      {dialogos}
+      {formularios}
     </div>
   );
 }

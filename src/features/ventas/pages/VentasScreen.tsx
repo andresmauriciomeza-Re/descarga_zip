@@ -1,3 +1,17 @@
+import { ArrowLeft as IconoVolver, Download as IconoBajar, Plus as IconoMas, ShoppingCart as IconoCarro } from "lucide-react";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { DatosDetalle, Historial } from "@/shared/components/panel/DatosDetalle";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
@@ -94,72 +108,37 @@ function ConfirmModal({
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
-  /** "aviso" pinza el botón en naranja, para acciones que no son destructivas
-      (p. ej. registrar una devolución). */
+  /** "aviso": el botón de la acción va en rojo lleno (no es destructiva). */
   tone?: "peligro" | "aviso";
-  /** Slot opcional entre el mensaje y los botones. Lo usa el rechazo del pago
-      para pedir el motivo obligatorio (y el texto cuando es "Otro"). */
+  /** Slot opcional entre el mensaje y los botones (motivo del rechazo). */
   children?: ReactNode;
-  /** Apaga el botón de confirmar sin desmontar el modal (falta elegir el
-      motivo o escribir el detalle de "Otro"). El clic nunca llega a
-      `onConfirm`. */
+  /** Apaga el botón de confirmar sin desmontar el diálogo. */
   confirmDisabled?: boolean;
   confirmLabel?: string;
 }) {
-  const esAviso = tone === "aviso";
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", alTeclear);
+    return () => window.removeEventListener("keydown", alTeclear);
+  }, [onCancel]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ scale: 0.94, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.94, opacity: 0 }}
-        transition={{ duration: 0.18 }}
-        className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border"
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-              esAviso ? "bg-orange-100" : "bg-red-100"
-            }`}
-          >
-            <AlertCircle
-              className={`w-5 h-5 ${esAviso ? "text-orange-600" : "text-red-600"}`}
-            />
-          </div>
-          <h3
-            className="text-xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            {title}
-          </h3>
-        </div>
-        <p className={`leading-relaxed text-muted-foreground ${children ? "mb-4" : "mb-6"}`}>
+    <>
+      <div className="pn-dialogo-fondo" onClick={onCancel} />
+      <div className="pn-dialogo" role="alertdialog" aria-modal="true" aria-label={title}>
+        <h2>{title}</h2>
+        <div className="pn-dialogo__caja">
+          <strong>Qué va a pasar:</strong>
           {message}
-        </p>
-        {children}
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={confirmDisabled}
-            className={`flex-1 py-3 text-white rounded-xl font-semibold transition-colors active:scale-95 ${
-              confirmDisabled
-                ? "bg-red-600/50 opacity-50 cursor-not-allowed"
-                : `${
-                    esAviso ? "bg-orange-600 hover:bg-orange-700" : "bg-red-600 hover:bg-red-700"
-                  } cursor-pointer`
-            }`}
-          >
-            {confirmLabel}
-          </button>
         </div>
-      </motion.div>
-    </div>
+        {children}
+        <div className="pn-dialogo__botones">
+          <BotonAccion variante="oscuro" onClick={onCancel}>No, dejarlo como está</BotonAccion>
+          <BotonAccion variante={tone === "aviso" ? "principal" : "peligro"} disabled={confirmDisabled} onClick={onConfirm}>
+            {confirmLabel}
+          </BotonAccion>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -545,6 +524,11 @@ const hoyFecha = () => {
         del botón no alcanza si llegan dos clics en el mismo tick). */
     const [guardando, setGuardando] = useState(false);
     const guardandoRef = useRef(false);
+    useEffect(() => {
+      const alTeclear = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+      window.addEventListener("keydown", alTeclear);
+      return () => window.removeEventListener("keydown", alTeclear);
+    }, [onClose]);
 
     type EstadoBusquedaDocumento = "inactivo" | "pendiente" | "buscando" | "registrado" | "no-encontrado" | "error";
     const [estadoBusqueda, setEstadoBusqueda] = useState<EstadoBusquedaDocumento>("inactivo");
@@ -1016,38 +1000,18 @@ const hoyFecha = () => {
       "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
-          transition={{ duration: 0.16 }}
-          className={`bg-card rounded-2xl w-full shadow-2xl border border-border flex flex-col my-4 transition-all ${
-            showPicker ? "max-w-7xl max-h-[92vh]" : "max-w-5xl max-h-[90vh]"
-          }`}
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-            <h3
-              className="text-lg font-bold text-foreground"
-              style={{ fontFamily: SERIF }}
-            >
-              Nuevo pedido
-            </h3>
-            <button
-              onClick={onClose}
-              className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      <>
+        <div className="pn-dialogo-fondo" onClick={onClose} />
+        <div className="pn-modal" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
+          <div className="pn-modal__cab">
+            <h2 id="titulo-venta-local" className="pn-modal__titulo">Registrar venta del local</h2>
           </div>
-
-          <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-6 flex-1 min-h-0 overflow-y-auto">
-          {/* ── Izquierda: datos del pedido ── */}
-          <div className="space-y-4">
+          <div className="grid gap-5" style={{ maxWidth: 980 }}>
+            <SeccionFormulario numero={1} titulo="¿Quién compra?">
+              <div className="pn-campo space-y-4">
             <div className="min-w-0">
-              <label htmlFor="buscar-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">
-                Cliente <MarcaObligatorio />
+              <label htmlFor="buscar-cliente-venta" className="pn-etiqueta">
+                Cliente
               </label>
               <div className="relative">
                 <input
@@ -1083,10 +1047,16 @@ const hoyFecha = () => {
                   </button>
                 )}
               </div>
-              {errorCliente && <p id="error-cliente-venta" role="alert" className="text-xs mt-1 text-red-500 dark:text-red-400">Selecciona un cliente o créalo.</p>}
-              {clienteElegido && clienteInactivo && <p role="status" className="text-xs mt-1 font-medium text-amber-600">⚠ Cliente inactivo</p>}
+              {errorCliente && <p id="error-cliente-venta" role="alert" className="text-base mt-1 text-red-500 dark:text-red-400">Selecciona un cliente o créalo.</p>}
+              {clienteElegido && (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <p role="status" style={{ color: "var(--verde-texto)", fontWeight: 600, fontSize: 18, margin: 0 }}>✓ Es {usuario}</p>
+                  <BotonAccion variante="normal" onClick={borrarCliente}>Buscar otro cliente</BotonAccion>
+                </div>
+              )}
+              {clienteElegido && clienteInactivo && <p role="status" className="text-base mt-1 font-medium text-amber-600">⚠ Cliente inactivo</p>}
               {estadoCargaClientes === "sin-permiso" && !clienteElegido && !crearCliente && (
-                <p className="text-xs mt-1 text-amber-600">Sin permiso para listar clientes: busca con al menos 3 caracteres del nombre o el documento completo.</p>
+                <p className="text-base mt-1 text-amber-600">Sin permiso para listar clientes: busca con al menos 3 caracteres del nombre o el documento completo.</p>
               )}
               {listaNombreAbierta && puedeBuscar && !clienteElegido && !crearCliente && (
                 <div className="mt-1 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
@@ -1108,7 +1078,7 @@ const hoyFecha = () => {
                           onClick={() => elegirClientePorNombre(cliente)}
                           className={`w-full min-w-0 px-3 py-2 text-left text-sm hover:bg-muted ${indice === indiceNombreActivo ? "bg-muted" : ""}`}>
                           <span className="block break-words text-foreground">{cliente.nombre}</span>
-                          <span className="block break-words text-xs text-muted-foreground">{cliente.tipoDocumento} {cliente.documento}{!cliente.estado && " · Inactivo"}</span>
+                          <span className="block break-words text-base text-muted-foreground">{cliente.tipoDocumento} {cliente.documento}{!cliente.estado && " · Inactivo"}</span>
                         </button>
                       ))}
                     </div>
@@ -1126,7 +1096,7 @@ const hoyFecha = () => {
                         setCrearCliente(true);
                         setErrorCliente(false);
                         setListaNombreAbierta(false);
-                      }} className="mt-1 font-semibold text-primary hover:underline">+ Crear cliente</button>
+                      }} className="mt-1 font-semibold text-primary hover:underline">Crear este cliente nuevo</button>
                     </div>
                   )}
                 </div>
@@ -1136,7 +1106,7 @@ const hoyFecha = () => {
             {crearCliente && (
               <>
                 <div>
-                  <label htmlFor="tipo-documento-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de documento <MarcaObligatorio /></label>
+                  <label htmlFor="tipo-documento-venta" className="pn-etiqueta">Tipo de documento </label>
                   <select id="tipo-documento-venta" value={tipoDocumento} onChange={(e) => {
                     busquedaId.current += 1;
                     tipoActual.current = e.target.value;
@@ -1146,7 +1116,7 @@ const hoyFecha = () => {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="documento-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Número de documento <MarcaObligatorio /></label>
+                  <label htmlFor="documento-cliente-venta" className="pn-etiqueta">Número de documento </label>
                   <input id="documento-cliente-venta" value={documento}
                     onChange={(e) => { setDocumentoTocado(true); cambiarDocumento(filtrarDocumento(e.target.value, tipoDocumento)); }}
                     onBlur={() => setDocumentoTocado(true)}
@@ -1154,82 +1124,37 @@ const hoyFecha = () => {
                     className={`${iCls} ${documentoTocado && validarDocumento(documento, tipoDocumento) ? "border-red-400 bg-red-50/30" : ""}`}
                     aria-invalid={documentoTocado && !!validarDocumento(documento, tipoDocumento)}
                   />
-                  {documentoTocado && validarDocumento(documento, tipoDocumento) && <p className="text-xs mt-1 text-red-500 dark:text-red-400">{validarDocumento(documento, tipoDocumento)}</p>}
-                  {estadoBusqueda === "no-encontrado" && <p className="text-xs mt-1 text-muted-foreground">Documento no registrado — se creará un cliente nuevo</p>}
-                  {estadoBusqueda === "pendiente" && <p className="text-xs mt-1 text-muted-foreground">Esperando documento completo…</p>}
-                  {estadoBusqueda === "buscando" && <p className="text-xs mt-1 text-muted-foreground">Buscando cliente…</p>}
-                  {estadoBusqueda === "error" && <p role="alert" className="text-xs mt-1 font-medium text-red-600">No se pudo verificar el documento. Revisa la conexión e inténtalo de nuevo.</p>}
+                  {documentoTocado && validarDocumento(documento, tipoDocumento) && <p className="text-base mt-1 text-red-500 dark:text-red-400">{validarDocumento(documento, tipoDocumento)}</p>}
+                  {estadoBusqueda === "no-encontrado" && <p className="text-base mt-1 text-muted-foreground">Documento no registrado — se creará un cliente nuevo</p>}
+                  {estadoBusqueda === "pendiente" && <p className="text-base mt-1 text-muted-foreground">Esperando documento completo…</p>}
+                  {estadoBusqueda === "buscando" && <p className="text-base mt-1 text-muted-foreground">Buscando cliente…</p>}
+                  {estadoBusqueda === "error" && <p role="alert" className="text-base mt-1 font-medium text-red-600">No se pudo verificar el documento. Revisa la conexión e inténtalo de nuevo.</p>}
                 </div>
                 <div>
-                  <label htmlFor="nombre-cliente-venta" className="block text-xs font-semibold text-muted-foreground mb-1">Nombre del cliente <MarcaObligatorio /></label>
+                  <label htmlFor="nombre-cliente-venta" className="pn-etiqueta">Nombre del cliente </label>
                   <input id="nombre-cliente-venta" value={usuario} autoComplete="off"
                     onChange={(e) => { usuarioActual.current = e.target.value; setUsuario(e.target.value); setNombreTocado(true); }}
                     onBlur={() => { const nombre = normalizarNombre(usuario); usuarioActual.current = nombre; setUsuario(nombre); setNombreTocado(true); }}
                     className={`${iCls} ${nombreTocado && !usuario.trim() ? "border-red-400 bg-red-50/30" : ""}`}
                     aria-invalid={nombreTocado && !usuario.trim()}
                   />
-                  {nombreTocado && !usuario.trim() && <p className="text-xs mt-1 text-red-500 dark:text-red-400">El nombre del cliente es obligatorio</p>}
+                  {nombreTocado && !usuario.trim() && <p className="text-base mt-1 text-red-500 dark:text-red-400">El nombre del cliente es obligatorio</p>}
                 </div>
               </>
             )}
 
-            {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                Fecha del pedido
-              </label>
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/50 rounded-xl border border-dashed border-border">
-                <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-semibold text-foreground">
-                  {new Date(`${fecha}T00:00:00`).toLocaleDateString("es-CO", {
-                    weekday: "long",
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </span>
-                <span className="ml-auto text-[11px] text-muted-foreground shrink-0">
-                  Automática
-                </span>
               </div>
-            </div>
-
-            <CampoTiempoPreparacion valor={minutosPreparacion} onChange={setMinutosPreparacion} />
-
-            {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                 Método de pago <MarcaObligatorio />
-              </label>
-              <div className="flex gap-2">
-                {METODO_PAGO_ADMIN.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMetodoPago(m)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 rounded-xl border text-sm font-semibold transition-all cursor-pointer ${
-                      metodoPago === m
-                        ? `${METODO_PAGO_ESTILO[m].btn} text-white`
-                        : "bg-muted border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Derecha: productos del pedido ── */}
-          <div className="space-y-4">
+            </SeccionFormulario>
+            <SeccionFormulario numero={2} titulo="¿Qué lleva?">
+              <div className="space-y-4">
             {/* Selector de productos */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-muted-foreground">
-                   Productos <MarcaObligatorio />
+                <label className="block text-base font-semibold text-muted-foreground">
+                   Lo que lleva
                 </label>
                 {selProductos.length > 0 && (
-                  <span className="text-xs text-primary font-semibold">
+                  <span className="text-base text-primary font-semibold">
                     {selProductos.length} seleccionados
                   </span>
                 )}
@@ -1289,7 +1214,7 @@ const hoyFecha = () => {
                                   onClick={() =>
                                     updateTamaño(p.id, s.label)
                                   }
-                                  className={`px-3 py-1 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
+                                  className={`px-3 py-1 text-base font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${p.tamaño === s.label ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:bg-border"}`}
                                 >
                                   {s.label}
                                 </button>
@@ -1303,7 +1228,7 @@ const hoyFecha = () => {
                               onClick={() =>
                                 updateQty(p.id, p.tamaño, p.cantidad - 1)
                               }
-                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs"
+                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-base"
                             >
                               −
                             </button>
@@ -1311,20 +1236,20 @@ const hoyFecha = () => {
                               {p.cantidad}
                             </span>
                             {esPizza && (
-                              <span className="text-[10px] text-muted-foreground">porc.</span>
+                              <span className="text-base text-muted-foreground">porc.</span>
                             )}
                             <button
                               onClick={() =>
                                 updateQty(p.id, p.tamaño, p.cantidad + 1)
                               }
                               disabled={disponible !== undefined && p.cantidad >= disponible}
-                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-base disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                               +
                             </button>
                           </div>
                           {esPizza && (
-                            <span className="text-[10px] font-semibold text-muted-foreground">
+                            <span className="text-base font-semibold text-muted-foreground">
                               {disponible === undefined
                                 ? "Disponibilidad no informada"
                                 : `Disponibles para agregar: ${Math.max(0, disponible - p.cantidad)} porciones`}
@@ -1335,14 +1260,14 @@ const hoyFecha = () => {
                             className="ml-auto flex items-baseline gap-1.5"
                           >
                             <span
-                              className="text-[11px] text-muted-foreground"
+                              className="text-base text-muted-foreground"
                               style={{ fontFamily: MONO }}
                             >
                               ${p.precio.toLocaleString("es-CO")}
                               {prodData?.category.toLowerCase().includes("pizza") ? " / porción" : " c/u"}
                             </span>
                             <span
-                              className="text-xs font-bold text-primary"
+                              className="text-base font-bold text-primary"
                               style={{ fontFamily: MONO }}
                             >
                               $
@@ -1357,7 +1282,7 @@ const hoyFecha = () => {
                             type="button"
                             onClick={() => agregarTamanoPizza(prodData, otroTamano.label)}
                             disabled={(disponibleParaVenta(prodData, otroTamano.label) ?? 0) <= (selProductos.find((x) => x.id === prodData.id && x.tamaño === otroTamano.label)?.cantidad ?? 0) || otroTamano.price <= 0}
-                            className="mt-2 text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="mt-2 text-base font-semibold text-primary hover:underline cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             + Agregar {otroTamano.label}
                           </button>
@@ -1380,8 +1305,8 @@ const hoyFecha = () => {
               >
                 <span>
                   {selProductos.length === 0
-                    ? "Seleccionar productos del catálogo..."
-                    : "Agregar más productos..."}
+                    ? "+ Agregar un producto"
+                    : "+ Agregar otro producto"}
                 </span>
                 <ChevronDown
                   className={`w-4 h-4 transition-transform ${showPicker ? "rotate-180" : ""}`}
@@ -1400,7 +1325,7 @@ const hoyFecha = () => {
                         value={prodSearch}
                         onChange={(e) => setProdSearch(e.target.value)}
                         placeholder="Buscar producto..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-card rounded-lg border border-border text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        className="w-full pl-8 pr-3 py-1.5 bg-card rounded-lg border border-border text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
                       />
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -1409,7 +1334,7 @@ const hoyFecha = () => {
                           key={c}
                           type="button"
                           onClick={() => setCatPicker(c)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                          className={`px-2.5 py-1 rounded-lg text-base font-semibold border transition-colors cursor-pointer ${
                             catPicker === c
                               ? "bg-primary text-white border-transparent"
                               : "bg-card text-foreground border-border hover:border-primary/40"
@@ -1458,7 +1383,7 @@ const hoyFecha = () => {
                                 alt={p.name}
                                 className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0"
                               />
-                              <p className="text-[11px] font-semibold text-foreground leading-tight line-clamp-2">
+                              <p className="text-base font-semibold text-foreground leading-tight line-clamp-2">
                                 {p.name}
                               </p>
                             </div>
@@ -1485,11 +1410,11 @@ const hoyFecha = () => {
                                           : "border-border bg-muted/40 hover:border-primary/40"
                                       } ${stock === 0 || s.price <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
                                     >
-                                      <span className="block text-[10px] font-semibold truncate">{s.label}</span>
-                                      <span className={`block text-[10px] truncate ${active ? "opacity-80" : "text-muted-foreground"}`} style={{ fontFamily: MONO }}>
+                                      <span className="block text-base font-semibold truncate">{s.label}</span>
+                                      <span className={`block text-base truncate ${active ? "opacity-80" : "text-muted-foreground"}`} style={{ fontFamily: MONO }}>
                                         {s.price > 0 ? `$${(s.price / 1000).toFixed(0)}k` : "Sin precio"}
                                       </span>
-                                      <span className={`block text-[9px] ${active ? "opacity-80" : "text-muted-foreground"}`}>
+                                      <span className={`block text-base ${active ? "opacity-80" : "text-muted-foreground"}`}>
                                         {stock === undefined ? "porción · stock —" : stock === 0 ? "Agotado" : `Disponibles: ${stock} porc.`}
                                       </span>
                                     </button>
@@ -1516,11 +1441,11 @@ const hoyFecha = () => {
                                         : "border-border bg-muted/40 hover:border-primary/40"
                                     }`}
                                   >
-                                    <span className="block text-[10px] font-semibold truncate">
+                                    <span className="block text-base font-semibold truncate">
                                       {s.label}
                                     </span>
                                     <span
-                                      className={`block text-[10px] truncate ${
+                                      className={`block text-base truncate ${
                                         active ? "opacity-80" : "text-muted-foreground"
                                       }`}
                                       style={{ fontFamily: MONO }}
@@ -1537,7 +1462,7 @@ const hoyFecha = () => {
                     </div>
 
                     {filteredProds.length === 0 && (
-                      <p className="px-3 py-4 text-xs text-muted-foreground italic">
+                      <p className="px-3 py-4 text-base text-muted-foreground italic">
                         Sin productos en esta categoría.
                       </p>
                     )}
@@ -1553,36 +1478,67 @@ const hoyFecha = () => {
                   {[
                     cantidadPorciones > 0 ? `${cantidadPorciones} ${cantidadPorciones === 1 ? "porción" : "porciones"}` : "",
                     cantidadUnidades > 0 ? `${cantidadUnidades} und` : "",
-                  ].filter(Boolean).join(" · ")} · Total
+                  ].filter(Boolean).join(" · ")} · Total a cobrar
                 </span>
-                <span
-                  className="text-base font-bold text-primary"
-                  style={{ fontFamily: MONO }}
-                >
+                <span style={{ font: "700 30px var(--font-titulo)", color: "var(--texto)" }}>
                   ${totalCalculado.toLocaleString("es-CO")}
                 </span>
               </div>
             )}
-          </div>
-          </div>
+              </div>
+            </SeccionFormulario>
+            <SeccionFormulario numero={3} titulo="¿Cómo paga?">
+              <div className="pn-campo space-y-4">
+            {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
+            <div>
+              <label className="pn-etiqueta">
+                Fecha del pedido
+              </label>
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-muted/50 rounded-xl border border-dashed border-border">
+                <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-semibold text-foreground">
+                  {new Date(`${fecha}T00:00:00`).toLocaleDateString("es-CO", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+                <span className="ml-auto text-base text-muted-foreground shrink-0">
+                  Automática
+                </span>
+              </div>
+            </div>
 
-          <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-            >
-              Cancelar
-            </button>            <button
-              onClick={() => void handleSave()}
-              disabled={guardando || !minutosPreparacionValidos(minutosPreparacion)}
-              className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95 ${guardando || !minutosPreparacionValidos(minutosPreparacion) ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-            >
-              {guardando ? "Comprando…" : "Comprar"}
-            </button>
+            <CampoTiempoPreparacion valor={minutosPreparacion} onChange={setMinutosPreparacion} />
+
+            {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
+            <div>
+              <label className="pn-etiqueta">
+                 Método de pago
+              </label>
+              <OpcionesBotones
+                etiqueta="Método de pago"
+                valor={metodoPago}
+                onChange={(v) => setMetodoPago(v as MetodoPago)}
+                opciones={METODO_PAGO_ADMIN.map((m) => ({ valor: m, etiqueta: m }))}
+              />
+            </div>
+              </div>
+            </SeccionFormulario>
+            <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+              <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
+              <BotonAccion
+                variante="principal"
+                disabled={guardando || !minutosPreparacionValidos(minutosPreparacion)}
+                onClick={() => void handleSave()}
+              >
+                {guardando ? "Registrando…" : "Registrar la venta"}
+              </BotonAccion>
+            </div>
           </div>
-        </motion.div>
         </div>
-      </div>
+      </>
     );
   }
 // ─────────────────────────── VENTAS SCREEN ───────────────────────────
@@ -2024,7 +1980,7 @@ export function VentasScreen({
   };
 
   const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const filtered = useMemo(() => {
     const termino = search.toLowerCase();
@@ -2171,241 +2127,194 @@ export function VentasScreen({
                       </div>
   );
 
-  return (
-    <div className="px-4 sm:px-6 py-6">
-      {ventaLista && (
-        <ConfirmDeleteModal
-          title="Marcar como listo"
-          message={`¿El pedido de la venta ${ventaLista.id} está listo?`}
-          confirmLabel="Sí"
-          loading={marcandoLista}
-          onCancel={() => setVentaLista(null)}
-          onConfirm={() => void confirmarVentaLista()}
-        />
-      )}
-      {ventaAdelantar && (
-        <ConfirmDeleteModal
-          neutro
-          title="Completar venta"
-          message="¿Marcar esta venta como completada ahora? El cliente ya recibió su pedido."
-          cancelLabel="No, volver"
-          confirmLabel="Sí, completar"
-          loading={adelantando}
-          onCancel={() => setVentaAdelantar(null)}
-          onConfirm={() => void confirmarAdelanto()}
-        />
-      )}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1
-            className="text-3xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            Gestión Ventas
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {pedidos.length} ventas registradas
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {canExportExcel && <BotonDescargarExcel onClick={exportExcel} />}
-          {_canCreate && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
-            >
-              <span className="text-lg leading-none">+</span>
-              Nuevo pedido
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Banner — pagos por verificar */}
-      {(() => {
-        const pendientes = pedidos.filter(
-          (p) => p.estado === "Por verificar",
-        );
-        if (pendientes.length === 0) return null;
-        return (
-          <div className="flex items-center gap-4 max-md:flex-wrap max-md:gap-3 px-5 py-4 mb-5 bg-amber-50 border border-amber-200 rounded-2xl dark:bg-amber-500/10 dark:border-amber-500/25">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 dark:bg-amber-500/15">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0 max-md:basis-0 max-md:grow max-md:min-w-[10rem]">
-              <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                {pendientes.length}{" "}
-                {pendientes.length === 1
-                  ? "pedido pendiente de verificación"
-                  : "pedidos pendientes de verificación"}
-              </p>
-              <p className="text-xs text-amber-700 mt-0.5 dark:text-amber-300/80">
-                Revisa el comprobante de pago y aprueba o
-                rechaza cada pedido.
-              </p>
-            </div>
-            <span className="shrink-0 max-md:w-full max-md:text-center text-xs font-bold px-3 py-1 rounded-full bg-amber-200 text-amber-900 animate-pulse dark:bg-amber-500/20 dark:text-amber-300 dark:animate-none">
-              ● Requiere acción
-            </span>
-          </div>
-        );
-      })()}
-
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <SearchInput
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
+  // ── Lista con tarjetas ──
+  const TONO_VENTA: Record<Venta["estado"], TonoPill> = {
+    "Por verificar": "ambar",
+    "En espera": "rojo",
+    "Por entregar": "azul",
+    Completado: "verde",
+    Devolucion: "morado",
+    Anulado: "gris",
+  };
+  const fraseEstado = (p: Venta): string => {
+    switch (p.estado) {
+      case "Por verificar":
+        return "Llegó un comprobante. Míralo y acepta o rechaza el pago";
+      case "En espera":
+        return `Le faltan ${fmtCOP(p.montoFaltante ?? 0)}`;
+      case "Por entregar":
+        return p.ventaLocal && p.finVentaLocalMs != null && (p.estadoOrden === "En proceso" || !p.estadoOrden)
+          ? `En la cocina · listo en ${tiempoRestante(p.finVentaLocalMs, ahora)}`
+          : "Listo para recoger";
+      case "Completado":
+        return `Entregado a las ${horaEstado(p)}`;
+      case "Devolucion":
+        return "El cliente devolvió algo";
+      default:
+        return p.anuladoPor ? `Anulado por ${p.anuladoPor}` : etiquetaMotivoRechazo(p.motivoRechazo);
+    }
+  };
+  const esperandoGloria = (p: Venta) => p.estado === "Por verificar" || p.estado === "En espera";
+  const botonPrincipalVenta = (p: Venta) => {
+    if (esperandoGloria(p)) return <BotonAccion variante="principal" onClick={() => abrirDetalle(p)}>Revisar el pago</BotonAccion>;
+    if (canEdit && p.estado === "Por entregar") {
+      return p.ventaLocal && p.finVentaLocalMs != null && (p.estadoOrden === "En proceso" || !p.estadoOrden) ? (
+        <BotonAccion variante="bien" disabled={marcandoLista} onClick={() => setVentaLista(p)}>Marcar como listo</BotonAccion>
+      ) : (
+        <BotonAccion
+          variante="principal"
+          onClick={() => {
+            if (p.estadoOrden && p.estadoOrden !== "Completada") {
+              toast.error("La cocina aún no termina este pedido");
+              return;
+            }
+            setVentaAdelantar(p);
           }}
-          placeholder="Buscar por #, cliente, producto o estado..."
-          wrapperClassName="w-full max-w-sm"
-        />
-        <select
-          aria-label="Filtrar ventas por estado"
-          value={estadoFiltro}
-          onChange={(event) => {
-            setEstadoFiltro(event.target.value);
-            setPage(1);
-          }}
-          className="rounded-lg border border-border bg-card px-3 py-2 max-md:min-h-11 text-sm text-foreground"
         >
-          <option value="">Todos los estados</option>
-          {Object.entries(VENTA_STATUS_LABEL).map(([estado, etiqueta]) => (
-            <option key={estado} value={estado}>
-              {estado === "Anulado" ? "Anulado / Rechazado" : etiqueta}
-            </option>
-          ))}
-        </select>
-      </div>
+          {p.estadoOrden === "Completada" ? "Entregar ya" : "Ya lo recogió"}
+        </BotonAccion>
+      );
+    }
+    if (p.estado === "Completado") return <BotonAccion variante="principal" onClick={() => setFacturaVenta(p)}>Imprimir factura</BotonAccion>;
+    if (p.estado === "Devolucion") return <BotonAccion variante="principal" onClick={() => onGestionarDevolucion(p.id)}>Ir a la devolución</BotonAccion>;
+    if (p.estado === "Anulado") return <BotonAccion variante="principal" onClick={() => abrirDetalle(p)}>Ver por qué</BotonAccion>;
+    return null;
+  };
+  const conteoEstado = (e: string) => pedidos.filter((p) => p.estado === e).length;
+  const porVerificar = conteoEstado("Por verificar");
 
-      {/* Menos de 768 px: cada venta como tarjeta. Reutiliza las mismas piezas y
-          botones de la tabla (idVenta, estadoVenta, accionesVenta…). */}
-      <div className="md:hidden space-y-3">
-        {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p className="text-4xl mb-3">📋</p>
-            <p>No se encontraron ventas</p>
-          </div>
-        ) : (
-          paged.map((p) => (
-            <div key={p.id} className={`rounded-2xl border border-border bg-card p-4 transition-colors ${claseFilaVenta(p)}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-mono font-semibold text-foreground">{idVenta(p)}</div>
-                  <p className="text-base font-medium text-foreground mt-0.5 break-words">{p.usuario}</p>
-                </div>
-                <div className="text-right shrink-0">{estadoVenta(p)}</div>
-              </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Hora de recogida</dt>
-                  <dd className="mt-0.5 text-muted-foreground">{horaRecogidaVenta(p)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Método de pago</dt>
-                  <dd className="mt-0.5"><PagoPill metodo={p.metodoPago} /></dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Total</dt>
-                  <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(p.total)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Hora de estado</dt>
-                  <dd className="mt-0.5 text-muted-foreground" style={{ fontFamily: MONO }}>{horaEstado(p)}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesVenta(p)}</div>
-            </div>
-          ))
-        )}
-      </div>
+  const ventaTexto = (p: Venta) =>
+    p.detalle?.length
+      ? p.detalle.map((d) => (esPizzaVenta({ tamaño: d.tamaño }) ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} de ${d.nombre}` : `${d.cantidad} ${d.nombre}`)).join(", ")
+      : p.productos;
 
-      {/* Table: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {[
-                  "ID",
-                  "Cliente",
-                  "Hora de recogida",
-                  "Método de Pago",
-                  "Total",
-                  "Estado",
-                  "Hora de estado",
-                  "Acciones",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left font-semibold whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-14 text-center text-muted-foreground"
-                  >
-                    <p className="text-4xl mb-3">📋</p>
-                    <p>No se encontraron ventas</p>
-                  </td>
-                </tr>
-              ) : (
-                paged.map((p) => (
-                  <tr
-                    key={p.id}
-                    className={`transition-colors ${claseFilaVenta(p)}`}
-                  >
-                    <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">
-                      {idVenta(p)}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-foreground">
-                      {p.usuario}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap">
-                      {horaRecogidaVenta(p)}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <PagoPill metodo={p.metodoPago} />
-                    </td>
-                    <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                      {fmtCOP(p.total)}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {/* Punto C2: el estado es de SOLO LECTURA. La venta avanza
-                          sola por el flujo (verificación → en preparación →
-                          orden de producción → por entregar → completado) y en
-                          la columna sólo se muestra el badge con su hora. */}
-                      {estadoVenta(p)}
-                    </td>
-                    <td
-                      className="px-4 py-3.5 text-sm text-muted-foreground whitespace-nowrap"
-                      style={{ fontFamily: MONO }}
-                    >
-                      {horaEstado(p)}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {accionesVenta(p)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+  const significados: { estado: Venta["estado"]; texto: string; frase: string }[] = [
+    { estado: "Por verificar", texto: "Por verificar", frase: "Llegó un comprobante. Míralo y acepta o rechaza el pago." },
+    { estado: "En espera", texto: "En espera", frase: "Faltó plata. Ya se le pidió al cliente lo que falta." },
+    { estado: "Por entregar", texto: "Por entregar", frase: "Pago aceptado. La cocina lo prepara o ya está listo para recoger." },
+    { estado: "Completado", texto: "Completado", frase: "El cliente ya lo recibió." },
+    { estado: "Devolucion", texto: "Devolución", frase: "El cliente devolvió algo y se resuelve en Devoluciones." },
+    { estado: "Anulado", texto: "Anulado / Rechazado", frase: "No se hizo: se anuló o no se aceptó el pago." },
+  ];
+
+  return (
+    <div className="pn-contenido">
+      <DialogoConfirmacion
+        abierto={!!ventaLista}
+        onCambiarAbierto={(a) => { if (!a && !marcandoLista) setVentaLista(null); }}
+        titulo={`¿El pedido #${ventaLista?.id ?? ""} ya está listo?`}
+        queVaAPasar={["La cocina lo da por terminado", "Queda listo para entregar al cliente"]}
+        textoSeguro="No, todavía no"
+        textoAccion={marcandoLista ? "Guardando…" : "Sí, ya está listo"}
+        onConfirmar={() => void confirmarVentaLista()}
+      />
+      <DialogoConfirmacion
+        abierto={!!ventaAdelantar}
+        onCambiarAbierto={(a) => { if (!a && !adelantando) setVentaAdelantar(null); }}
+        titulo={`¿${ventaAdelantar?.usuario ?? "El cliente"} ya recogió el pedido #${ventaAdelantar?.id ?? ""}?`}
+        queVaAPasar={["La venta queda cerrada como completada", "Si la cocina ya lo terminó, se cierra sin esperar el tiempo"]}
+        textoSeguro="No, volver"
+        textoAccion={adelantando ? "Guardando…" : "Sí, ya lo recogió"}
+        onConfirmar={() => void confirmarAdelanto()}
+      />
+
+      <EncabezadoPagina
+        titulo="Ventas"
+        descripcion="Los pedidos de la página y las ventas del local. Los más nuevos van primero"
+        acciones={
+          <>
+            {canExportExcel && <BotonAccion icono={IconoBajar} onClick={exportExcel}>Descargar en Excel</BotonAccion>}
+            {_canCreate && <BotonAccion variante="principal" icono={IconoMas} onClick={() => setShowCreate(true)}>Registrar venta del local</BotonAccion>}
+          </>
+        }
+      />
+
+      {porVerificar > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <AvisoBanner
+            titulo={`Tienes ${porVerificar} ${porVerificar === 1 ? "pedido esperando" : "pedidos esperando"} por ti`}
+            boton={<BotonAccion onClick={() => { setEstadoFiltro("Por verificar"); setPage(1); }}>Ver esos pedidos</BotonAccion>}
+          >
+            Mientras no los revises, la cocina no empieza.
+          </AvisoBanner>
         </div>
+      )}
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un pedido"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el número, el cliente o el producto"
+        />
+        <FiltrosChips
+          valor={estadoFiltro}
+          onChange={(v) => { setEstadoFiltro(v); setPage(1); }}
+          opciones={[
+            { valor: "", etiqueta: "Todos" },
+            { valor: "Por verificar", etiqueta: "Revisar pago", contador: conteoEstado("Por verificar") },
+            { valor: "En espera", etiqueta: "Le falta plata", contador: conteoEstado("En espera") },
+            { valor: "Por entregar", etiqueta: "En cocina o listos", contador: conteoEstado("Por entregar") },
+            { valor: "Completado", etiqueta: "Entregados" },
+            { valor: "Devolucion", etiqueta: "Devoluciones" },
+            { valor: "Anulado", etiqueta: "Anulados" },
+          ]}
+        />
       </div>
 
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      {filtered.length === 0 ? (
+        <VacioEstado icono={IconoCarro} titulo="No encontramos ningún pedido">
+          Revisa cómo lo escribiste o cambia el filtro.
+        </VacioEstado>
+      ) : (
+        <div className="pn-lista">
+          {paged.map((p) => (
+            <TarjetaFila
+              key={p.id}
+              resaltada={p.estado === "Por verificar" ? "ambar" : p.estado === "En espera" ? "rojo" : undefined}
+              pre={
+                <span className="inline-flex items-center gap-2">
+                  Pedido #{p.id} · {p.ventaLocal ? "Local" : "Página"}
+                  {p.estado === "Por verificar" && <span aria-label="Nuevo" title="Nuevo" style={{ width: 12, height: 12, borderRadius: 999, background: "#F97316" }} className="animate-pulse" />}
+                </span>
+              }
+              nombre={p.usuario}
+              detalle={ventaTexto(p)}
+              datos={[
+                { etiqueta: "Recoge", valor: p.horaRecogida ? formatearHora(p.horaRecogida) : "—" },
+                { etiqueta: "Pago", valor: p.metodoPago ? `Pagó con ${p.metodoPago}` : "—" },
+                { etiqueta: "Total", valor: <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(p.total)}</span> },
+              ]}
+              estado={
+                <div className="grid gap-1 justify-items-start" style={{ maxWidth: 260 }}>
+                  <EstadoPill tono={TONO_VENTA[p.estado]}>{etiquetaEstadoVenta(p)}</EstadoPill>
+                  <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>{fraseEstado(p)}</span>
+                </div>
+              }
+              acciones={
+                <>
+                  {botonPrincipalVenta(p)}
+                  <BotonAccion variante="normal" onClick={() => abrirDetalle(p)}>Ver pedido</BotonAccion>
+                </>
+              }
+            />
+          ))}
+        </div>
       )}
+
+      <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+
+      <section className="pn-seccion" style={{ marginTop: 28 }}>
+        <h2>Qué significa cada estado</h2>
+        <div className="grid gap-3" style={{ marginTop: 14 }}>
+          {significados.map((s) => (
+            <div key={s.estado} className="flex flex-wrap items-center gap-3">
+              <EstadoPill tono={TONO_VENTA[s.estado]}>{s.texto}</EstadoPill>
+              <span style={{ fontSize: 18 }}>{s.frase}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── Ver detalle — pantalla completa ── */}
       <AnimatePresence>
@@ -2418,134 +2327,90 @@ export function VentasScreen({
             className="fixed inset-0 z-40 bg-background overflow-y-auto"
           >
             <div className="max-w-4xl mx-auto px-6 py-6">
-              {/* Top bar */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-6">
-                <button
-                  onClick={cerrarDetalle}
-                  className="flex items-center gap-2 whitespace-nowrap max-md:min-h-11 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Volver a ventas
-                </button>
-                <span className="text-border">·</span>
-                <span className="text-sm text-muted-foreground whitespace-nowrap">Venta {detailItem.id}</span>
-                <span className={`ml-auto text-xs font-semibold px-3 py-1 rounded-full ${VENTA_STATUS_COLOR[detailItem.estado]}`}>
-                  {etiquetaEstadoVenta(detailItem)}
-                </span>
+              {/* Volver + estado */}
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <BotonAccion icono={IconoVolver} onClick={cerrarDetalle}>Volver a ventas</BotonAccion>
+                <EstadoPill tono={TONO_VENTA[detailItem.estado]}>{etiquetaEstadoVenta(detailItem)}</EstadoPill>
               </div>
               {detailItem.ventaLocal && detailItem.estado === "Por entregar" && detailItem.finVentaLocalMs != null && (
-                <p className="text-sm text-muted-foreground mb-2 tabular-nums">⏱ {tiempoRestante(detailItem.finVentaLocalMs, ahora)}</p>
+                <p className="mb-2 tabular-nums" style={{ fontSize: 18 }}>⏱ {tiempoRestante(detailItem.finVentaLocalMs, ahora)}</p>
               )}
 
-              <h1 className="text-2xl font-bold text-foreground mb-6" style={{ fontFamily: SERIF }}>
-                Detalle de venta — ID {detailItem.id}
+              <h1 className="mb-1" style={{ font: "700 34px/1.15 var(--font-titulo)" }}>
+                Pedido #{detailItem.id} · {detailItem.usuario}
               </h1>
+              <p className="pn-seccion__ayuda" style={{ marginBottom: 16 }}>
+                {detailItem.ventaLocal ? "Venta del local" : "Pedido de la página"} · {detailItem.fecha}
+              </p>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {/* COL 1 — Info + historial */}
-                <div className="space-y-5">
-                  <div className="bg-card border border-border rounded-2xl p-5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                      Información
-                    </p>
-                    <div className="space-y-3">
-                      {[
-                        { label: "ID Venta", value: detailItem.id },
-                        { label: "Cliente",  value: detailItem.usuario },
-                        ...(detailItem.documento
-                          ? [{ label: "Documento", value: detailItem.documento }]
-                          : []),
-                        { label: "Fecha del pedido", value: detailItem.fecha },
-                      ].map(({ label, value }) => (
-                        <div key={label}>
-                          <p className="text-xs text-muted-foreground font-medium mb-0.5">{label}</p>
-                          <p className="text-sm font-semibold text-foreground">{value}</p>
-                        </div>
-                      ))}
-                      {detailItem.horaRecogida && (
-                        <div>
-                          <p className="text-xs text-muted-foreground font-medium mb-0.5">Hora de recogida</p>
-                          <p className="text-sm font-semibold text-foreground">🕐 {formatearHora(detailItem.horaRecogida)}</p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-xs text-muted-foreground font-medium mb-0.5">Método de pago</p>
-                        {detailItem.metodoPago ? (
-                          <PagoPill metodo={detailItem.metodoPago} />
-                        ) : (
-                          <p className="text-sm text-muted-foreground italic">No registrado</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+              {/* Lo que se puede hacer con el pedido (anular y devolución viven aquí) */}
+              <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
+                {!["Por verificar", "En espera", "Anulado", "Devolucion"].includes(detailItem.estado) && (
+                  <BotonAccion variante="normal" onClick={() => setFacturaVenta(detailItem)}>Imprimir factura</BotonAccion>
+                )}
+                {canEdit && detailItem.estado === "Completado" && (
+                  <BotonAccion variante="normal" onClick={() => setVentaDevolver(detailItem)}>El cliente devolvió algo</BotonAccion>
+                )}
+                {canEdit && ESTADOS_ANULABLES.includes(detailItem.estado) && (
+                  <BotonAccion
+                    variante="peligro"
+                    disabled={!puedeAnular(detailItem)}
+                    title={puedeAnular(detailItem) ? undefined : "Solo se puede anular en los primeros 10 minutos"}
+                    onClick={() => { if (puedeAnular(detailItem)) abrirAnular(detailItem); }}
+                  >
+                    {puedeAnular(detailItem) ? `Anular (te quedan ${Math.ceil(segundosAnulacion(detailItem) / 60)} min)` : "Anular"}
+                  </BotonAccion>
+                )}
+              </div>
 
-                  {/* Historial */}
-                  {detailItem.historial && detailItem.historial.length > 0 && (
-                    <div className="bg-card border border-border rounded-2xl p-5">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                        Historial de estados
-                      </p>
-                      <div className="space-y-3">
-                        {detailItem.historial.map((h, i) => (
-                          <div key={i} className="flex items-center gap-3">
-                            <div className="flex flex-col items-center shrink-0">
-                              <div className={`w-2.5 h-2.5 rounded-full ${i === detailItem.historial!.length - 1 ? "bg-primary" : "bg-muted-foreground/30"}`} />
-                              {i < detailItem.historial!.length - 1 && (
-                                <div className="w-px flex-1 min-h-[20px] bg-border mt-1" />
-                              )}
-                            </div>
-                            <div className="flex-1 flex items-center gap-2 pb-2">
-                              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${VENTA_STATUS_COLOR[h.estado]}`}>
-                                {VENTA_STATUS_LABEL[h.estado]}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* COL 1 — Lo que pidió + cómo fue el pedido */}
+                <div className="grid gap-5 content-start">
+                  <SeccionFormulario titulo="Lo que pidió">
+                    {detailItem.detalle && detailItem.detalle.length > 0 ? (
+                      <>
+                        <div className="pn-permisos">
+                          {detailItem.detalle.map((d, i) => (
+                            <div key={i} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) auto" }}>
+                              <strong>{d.nombre}</strong>
+                              <span>
+                                {esPizzaVenta({ tamaño: d.tamaño })
+                                  ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} · ${fmtCOP(d.precio)} cada una · ${d.tamaño}`
+                                  : `${d.cantidad} · ${fmtCOP(d.precio)} cada una`}
                               </span>
-                              <span className="text-xs text-muted-foreground ml-auto">{formatearHora(h.hora)}</span>
+                              <strong>{fmtCOP(d.precio * d.cantidad)}</strong>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* COL 2 — Productos */}
-                <div className="bg-card border border-border rounded-2xl p-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                    Productos del pedido
-                  </p>
-                  {detailItem.detalle && detailItem.detalle.length > 0 ? (
-                    <div className="space-y-2">
-                      {detailItem.detalle.map((d, i) => (
-                        <div key={i} className="flex items-center gap-3 py-2.5 border-b border-border last:border-0">
-                          {d.imagen && (
-                            <img src={d.imagen} alt={d.nombre} className="w-12 h-12 rounded-xl object-cover bg-muted shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{d.nombre}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {esPizzaVenta({ tamaño: d.tamaño })
-                                ? `${d.cantidad} ${d.cantidad === 1 ? "porción" : "porciones"} — ${d.tamaño}`
-                                : `${fmtCOP(d.precio)} × ${d.cantidad}`}
-                            </p>
-                            {esPizzaVenta({ tamaño: d.tamaño }) && (
-                              <p className="text-[11px] text-muted-foreground">
-                                Precio por porción: {fmtCOP(d.precio)}
-                              </p>
-                            )}
-                          </div>
-                          <p className="text-sm font-bold text-primary shrink-0" style={{ fontFamily: MONO }}>
-                            {fmtCOP(d.precio * d.cantidad)}
-                          </p>
+                          ))}
                         </div>
-                      ))}
-                      <div className="flex items-center justify-between pt-3 border-t border-border mt-1">
-                        <span className="text-sm font-bold text-foreground">Total</span>
-                        <span className="text-lg font-bold text-primary" style={{ fontFamily: MONO }}>
-                          {fmtCOP(detailItem.detalle.reduce((s, d) => s + d.precio * d.cantidad, 0))}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">{detailItem.productos}</p>
+                        <p style={{ font: "700 26px var(--font-titulo)", margin: "14px 0 0", textAlign: "right" }}>
+                          Total: {fmtCOP(detailItem.detalle.reduce((s, d) => s + d.precio * d.cantidad, 0))}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="pn-seccion__ayuda" style={{ margin: 0 }}>{detailItem.productos}</p>
+                    )}
+                  </SeccionFormulario>
+
+                  <SeccionFormulario titulo="Datos del pedido">
+                    <DatosDetalle datos={[
+                      { etiqueta: "Cliente", valor: detailItem.usuario },
+                      ...(detailItem.documento ? [{ etiqueta: "Documento", valor: detailItem.documento }] : []),
+                      { etiqueta: "Fecha del pedido", valor: detailItem.fecha },
+                      ...(detailItem.horaRecogida ? [{ etiqueta: "Recoge", valor: formatearHora(detailItem.horaRecogida) }] : []),
+                      { etiqueta: "Pagó con", valor: detailItem.metodoPago ? <PagoPill metodo={detailItem.metodoPago} /> : "No registrado" },
+                    ]} />
+                  </SeccionFormulario>
+
+                  {detailItem.historial && detailItem.historial.length > 0 && (
+                    <SeccionFormulario titulo="Cómo fue el pedido">
+                      <Historial
+                        pasos={detailItem.historial.map((h, i, lista) => ({
+                          titulo: VENTA_STATUS_LABEL[h.estado],
+                          hora: formatearHora(h.hora),
+                          hecho: i <= lista.length - 1,
+                        }))}
+                      />
+                    </SeccionFormulario>
                   )}
                 </div>
 
@@ -2559,7 +2424,7 @@ export function VentasScreen({
                     return (
                       <div className="bg-card border border-border rounded-2xl p-5">
                         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                          Comprobante de transferencia
+                          Pagos · comprobante
                         </p>
                         {comps.length > 0 ? (
                           <div className="space-y-3">
@@ -2671,86 +2536,123 @@ export function VentasScreen({
                   })()}
 
                   {enVerificacion && (
-                    <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
-                      <h3 className="text-sm font-semibold">Verificación de pago</h3>
-                      <div className="rounded-xl bg-muted/50 p-4 text-lg font-bold tabular-nums">
-                        <p>Total a pagar: {fmtPago(resumenPagos?.total ?? detailItem.total)}</p>
-                        {resumenPagos && (
-                          <p className="mt-2 flex flex-wrap gap-x-2" aria-live="polite">
-                            <span>Recibido: {fmtPago(resumenPagos.recibido)}</span>
-                            <span>· En revisión: {fmtPago(resumenPagos.en_revision)}</span>
-                            <span>· Falta: {fmtPago(resumenPagos.falta)}</span>
-                          </p>
+                    <div className="grid gap-4">
+                      <section className="pn-seccion">
+                        <h2>Paso 1 · ¿Cuánta plata llegó?</h2>
+                        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1" style={{ marginTop: 14 }} aria-live="polite">
+                          <div className="pn-dialogo__caja" style={{ marginBottom: 0 }}>
+                            <strong style={{ fontWeight: 500, fontSize: 16 }}>Total del pedido</strong>
+                            <span style={{ font: "700 22px var(--font-titulo)" }}>{fmtPago(resumenPagos?.total ?? detailItem.total)}</span>
+                          </div>
+                          <div className="pn-dialogo__caja" style={{ marginBottom: 0 }}>
+                            <strong style={{ fontWeight: 500, fontSize: 16 }}>Llegó</strong>
+                            <span style={{ font: "700 22px var(--font-titulo)" }}>{resumenPagos ? fmtPago(resumenPagos.recibido) : "—"}</span>
+                          </div>
+                          <div className="pn-dialogo__caja" style={{ marginBottom: 0, background: "var(--rojo-suave)", borderColor: "var(--rojo)" }}>
+                            <strong style={{ fontWeight: 500, fontSize: 16, color: "var(--rojo-texto)" }}>Falta</strong>
+                            <span style={{ font: "700 22px var(--font-titulo)", color: "var(--rojo-texto)" }}>{resumenPagos ? fmtPago(resumenPagos.falta) : "—"}</span>
+                          </div>
+                        </div>
+                        {resumenPagos && resumenPagos.en_revision > 0 && (
+                          <p className="pn-campo__ayuda">Hay {fmtPago(resumenPagos.en_revision)} en revisión: confirma abajo cuánto llegó en cada comprobante.</p>
                         )}
-                      </div>
-                      {errorPagos ? (
-                        <p role="alert" className="text-sm text-red-600">No se pudo actualizar el resumen de pagos.</p>
-                      ) : !resumenPagos && <p role="status" className="text-sm">Cargando pagos…</p>}
-                      {resumenPagos?.pagos.length === 0 && <p className="text-sm">Sin pagos registrados.</p>}
-                      {resumenPagos?.pagos.map((pago) => {
-                        const valor = montosPago[pago.id_pago] ?? String(pago.monto_declarado ?? "");
-                        const monto = Number(valor);
-                        const puedeConfirmar = Number.isSafeInteger(monto) && monto > 0;
-                        return (
-                          <article key={pago.id_pago} className="space-y-2 rounded-xl border border-border p-3 text-sm">
-                            <p className="font-semibold">
-                              {formatearFechaHora(pago.fecha)}
+                        {errorPagos ? (
+                          <p role="alert" className="pn-campo__error"><span>No se pudo actualizar el resumen de pagos. Intenta de nuevo en un momento.</span></p>
+                        ) : !resumenPagos && <p role="status" className="pn-nota" style={{ margin: "12px 0 0" }}>Cargando los pagos…</p>}
+                        {resumenPagos?.pagos.length === 0 && <p className="pn-nota" style={{ margin: "12px 0 0" }}>Todavía no hay comprobantes.</p>}
+                        <div className="grid gap-3" style={{ marginTop: 14 }}>
+                          {resumenPagos?.pagos.map((pago) => {
+                            const valor = montosPago[pago.id_pago] ?? String(pago.monto_declarado ?? "");
+                            const monto = Number(valor);
+                            const puedeConfirmar = Number.isSafeInteger(monto) && monto > 0;
+                            return (
+                              <article key={pago.id_pago} className="pn-fila" style={{ display: "grid", gap: 10 }}>
+                                <p style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{formatearFechaHora(pago.fecha)}</p>
+                                {pago.comprobante && (esComprobantePdf(pago.comprobante) ? (
+                                  <div><BotonAccion href={pago.comprobante} target="_blank" rel="noreferrer">Abrir el comprobante (PDF)</BotonAccion></div>
+                                ) : (
+                                  <div className="grid gap-2 justify-items-start">
+                                    <img src={pago.comprobante} alt="Comprobante" style={{ maxHeight: 200, borderRadius: 12, border: "2px solid var(--borde-suave)" }} />
+                                    <BotonAccion onClick={() => setVisorSrc(pago.comprobante)}>Ver el comprobante más grande</BotonAccion>
+                                  </div>
+                                ))}
+                                <p style={{ fontSize: 17, margin: 0 }}>
+                                  Dijo que pagó: <strong>{pago.monto_declarado == null ? "no dijo cuánto" : fmtPago(pago.monto_declarado)}</strong>
+                                  {" · "}Tú confirmaste: <strong>{pago.monto_confirmado == null ? "todavía nada" : fmtPago(pago.monto_confirmado)}</strong>
+                                </p>
+                                {canEdit && pago.monto_confirmado == null && pago.estado !== "Rechazado" && (
+                                  <div className="pn-campo">
+                                    <label className="pn-etiqueta">¿Cuánto llegó en este comprobante?</label>
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={valor}
+                                      disabled={operacionPago}
+                                      onChange={(e) => {
+                                        const entrada = e.target.value.replace(/\D/g, "");
+                                        setMontosPago((actuales) => ({ ...actuales, [pago.id_pago]: entrada }));
+                                      }}
+                                    />
+                                    <div style={{ marginTop: 10 }}>
+                                      <BotonAccion
+                                        variante="principal"
+                                        disabled={!puedeConfirmar || operacionPago || errorPagos}
+                                        onClick={() => void confirmarMonto(detailItem.id, pago.id_pago, monto)}
+                                      >
+                                        Confirmar monto
+                                      </BotonAccion>
+                                    </div>
+                                  </div>
+                                )}
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      <section className="pn-seccion">
+                        <h2>Paso 2 · ¿Qué hacemos?</h2>
+                        <div className="grid gap-5" style={{ marginTop: 14 }}>
+                          <div>
+                            <BotonAccion
+                              variante="principal"
+                              className="pn-boton--grande"
+                              disabled={!puedePedirFaltante}
+                              onClick={() => setModalFaltante(true)}
+                            >
+                              {falta !== undefined && falta > 0 ? `Pedirle los ${fmtPago(falta)} que faltan` : "Pedirle lo que falta"}
+                            </BotonAccion>
+                            <p className="pn-campo__ayuda">Le llega un correo. El pedido queda esperando.</p>
+                          </div>
+                          <div>
+                            <BotonAccion
+                              variante="bien"
+                              className="pn-boton--grande"
+                              disabled={!puedeAceptarPago}
+                              onClick={() => setConfirmVerif("aprobar")}
+                            >
+                              Aceptar el pago y mandarlo a la cocina
+                            </BotonAccion>
+                            <p className="pn-campo__ayuda">
+                              {puedeAceptarPago
+                                ? "La cocina empieza a preparar el pedido."
+                                : "Se activa cuando la plata que llegó cubre todo el pedido."}
                             </p>
-                            {pago.comprobante && (esComprobantePdf(pago.comprobante) ? (
-                              <a href={pago.comprobante} target="_blank" rel="noreferrer" className="font-semibold text-primary underline">
-                                Abrir comprobante (PDF)
-                              </a>
-                            ) : (
-                              <button type="button" onClick={() => setVisorSrc(pago.comprobante)} className="font-semibold text-primary underline">
-                                Abrir comprobante (imagen)
-                              </button>
-                            ))}
-                            <p>Monto declarado: {pago.monto_declarado == null ? "Sin declarar" : fmtPago(pago.monto_declarado)}</p>
-                            <p>Monto confirmado: {pago.monto_confirmado == null ? "Pendiente" : fmtPago(pago.monto_confirmado)}</p>
-                            {canEdit && pago.monto_confirmado == null && pago.estado !== "Rechazado" && (
-                              <div className="space-y-2">
-                                <label className="block font-semibold">
-                                  ¿Cuánto llegó en este comprobante?
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={valor}
-                                    disabled={operacionPago}
-                                    onChange={(e) => {
-                                      const entrada = e.target.value.replace(/\D/g, "");
-                                      setMontosPago((actuales) => ({ ...actuales, [pago.id_pago]: entrada }));
-                                    }}
-                                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  disabled={!puedeConfirmar || operacionPago || errorPagos}
-                                  onClick={() => void confirmarMonto(detailItem.id, pago.id_pago, monto)}
-                                  className="rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground disabled:opacity-50"
-                                >
-                                  Confirmar monto
-                                </button>
-                              </div>
-                            )}
-                          </article>
-                        );
-                      })}
-                      <div className="flex flex-wrap gap-2 text-sm font-semibold">
-                        <button onClick={() => setConfirmVerif("rechazar")} disabled={!canEdit || operacionPago}
-                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 max-md:min-h-11 text-red-700 disabled:opacity-50">
-                          Rechazar
-                        </button>
-                        <button onClick={() => setModalFaltante(true)} disabled={!puedePedirFaltante}
-                          className="rounded-xl bg-violet-600 px-3 py-2 max-md:min-h-11 text-white disabled:opacity-50">
-                          Pedir dinero faltante{falta !== undefined && falta > 0 && ` (${fmtPago(falta)})`}
-                        </button>
-                        <button onClick={() => setConfirmVerif("aprobar")} disabled={!puedeAceptarPago}
-                          className="rounded-xl bg-emerald-600 px-3 py-2 max-md:min-h-11 text-white disabled:opacity-50">
-                          {falta !== undefined && falta > 0 ? `Aún faltan ${fmtPago(falta)}` : "Aceptar"}
-                        </button>
-                      </div>
-                    </section>
+                          </div>
+                          <div>
+                            <BotonAccion
+                              variante="peligro"
+                              className="pn-boton--grande"
+                              disabled={!canEdit || operacionPago}
+                              onClick={() => setConfirmVerif("rechazar")}
+                            >
+                              Rechazar el pago
+                            </BotonAccion>
+                            <p className="pn-campo__ayuda">Si el comprobante es falso o no es de este pedido.</p>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
                   )}
                 </div>
               </div>
@@ -2810,14 +2712,14 @@ export function VentasScreen({
           const motivoFinal = esRechazo && puedeConfirmarRechazo ? motivoRechazoFinal() : "";
           return (
             <ConfirmModal
-              title={esRechazo ? "Rechazar pago" : "Aprobar pago"}
+              title={esRechazo ? `¿Rechazar el pago del pedido #${detailItem.id}?` : `¿Aceptar el pago del pedido #${detailItem.id}?`}
               tone={esRechazo ? "peligro" : "aviso"}
               message={
                 esRechazo
-                  ? `¿Rechazar el pago${motivoFinal ? ` por ${motivoFinal}` : ""}? La venta quedará Rechazado.`
-                  : "¿Aceptar el pago? Se creará la orden de producción y el pedido quedará Por entregar."
+                  ? `El pedido queda rechazado${motivoFinal ? ` (${motivoFinal})` : ""} y la cocina no lo prepara.`
+                  : "Se crea la orden para la cocina y el pedido queda Por entregar."
               }
-              confirmLabel={esRechazo ? "Confirmar rechazo" : "Sí, confirmar"}
+              confirmLabel={esRechazo ? "Sí, rechazar el pago" : "Sí, aceptar el pago"}
               confirmDisabled={esRechazo ? !puedeConfirmarRechazo || operacionPago || !canEdit : !puedeAceptarPago}
               onConfirm={() => {
                 if (esRechazo) rechazarPago(detailItem.id);
@@ -2828,8 +2730,8 @@ export function VentasScreen({
             >
               {esRechazo && (
                 <div className="mb-5 space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    Motivo del rechazo *
+                  <p className="text-base font-bold uppercase tracking-wide text-muted-foreground">
+                    ¿Por qué se rechaza?
                   </p>
                   <div className="space-y-1.5">
                     {MOTIVOS_RECHAZO.map((m) => (
@@ -2849,7 +2751,7 @@ export function VentasScreen({
                           onChange={() => setMotivoSel(m.value)}
                           className="mt-0.5 accent-red-600 cursor-pointer"
                         />
-                        <span className="text-sm text-foreground leading-snug">{m.label}</span>
+                        <span className="text-lg text-foreground leading-snug">{m.label}</span>
                       </label>
                     ))}
                   </div>
@@ -2859,9 +2761,9 @@ export function VentasScreen({
                     <div>
                       <label
                         htmlFor="motivo-rechazo-otro"
-                        className="block text-xs font-semibold text-muted-foreground mb-1"
+                        className="block text-base font-semibold text-muted-foreground mb-1"
                       >
-                        Describe el motivo *
+                        Describe el motivo
                       </label>
                       <textarea
                         id="motivo-rechazo-otro"
@@ -2873,10 +2775,10 @@ export function VentasScreen({
                         className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-red-400"
                       />
                       <div className="flex justify-between gap-3 mt-1">
-                        <p className="text-[11px] text-red-600">
+                        <p className="text-base text-red-600">
                           {motivoOtroTexto.trim() === "" ? "El texto es obligatorio." : ""}
                         </p>
-                        <p className="text-[11px] text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
+                        <p className="text-base text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
                           {motivoOtroTexto.length}/{MOTIVO_OTRO_MAX}
                         </p>
                       </div>
@@ -2890,47 +2792,14 @@ export function VentasScreen({
       </AnimatePresence>
 
       {/* ── Pedir dinero faltante (→ En espera) ── */}
-      <AnimatePresence>
-        {modalFaltante && enVerificacion && detailItem && resumenPagos && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border overflow-hidden"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <p className="font-bold text-foreground">Pedir dinero faltante</p>
-                <button onClick={() => setModalFaltante(false)} className="p-1 max-md:p-3.5 max-md:-m-2.5 rounded-lg hover:bg-muted cursor-pointer" aria-label="Cerrar">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="p-5 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  El pedido pasa a <span className="font-semibold">En espera</span> y el cliente podrá enviar el comprobante del dinero restante.
-                </p>
-                <p className="text-lg font-bold">Falta {fmtPago(resumenPagos.falta)}</p>
-              </div>
-              <div className="flex gap-2 px-5 pb-5">
-                <button
-                  onClick={() => setModalFaltante(false)}
-                  className="flex-1 py-2.5 max-md:min-h-11 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => pedirFaltante(detailItem.id)}
-                  disabled={!puedePedirFaltante}
-                  className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors ${puedePedirFaltante ? "bg-violet-600 hover:bg-violet-700 cursor-pointer" : "bg-violet-600/50 opacity-50 cursor-not-allowed"}`}
-                >
-                  Confirmar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <DialogoConfirmacion
+        abierto={modalFaltante && enVerificacion && !!detailItem && !!resumenPagos}
+        onCambiarAbierto={(a) => { if (!a) setModalFaltante(false); }}
+        titulo={`¿Pedirle ${fmtPago(resumenPagos?.falta ?? 0)} a ${detailItem?.usuario ?? "el cliente"}?`}
+        queVaAPasar={["Le llega un correo", "Queda En espera", "Cuando mande el comprobante de lo que falta, lo revisas aquí"]}
+        textoAccion="Sí, pedirle lo que falta"
+        onConfirmar={() => { if (detailItem && puedePedirFaltante) pedirFaltante(detailItem.id); }}
+      />
 
       {/* ── Registrar devolución (venta Completado → Devolucion): aviso, no
              confirmación destructiva — la gestión real (canje/dinero) ocurre
@@ -2938,10 +2807,10 @@ export function VentasScreen({
       <AnimatePresence>
         {ventaDevolver && (
           <ConfirmModal
-            title="Registrar devolución"
+            title={`¿Mandar el pedido #${ventaDevolver.id} a Devoluciones?`}
             tone="aviso"
-            message={`¿Marcar la venta #${ventaDevolver.id} de ${ventaDevolver.usuario} como devolución? Luego se gestiona el canje o la devolución del dinero.`}
-            confirmLabel="Sí, registrar devolución"
+            message={`El pedido de ${ventaDevolver.usuario} queda como devolución y ahí se decide si se le cambia el producto o se le devuelve la plata.`}
+            confirmLabel="Sí, mandarlo a Devoluciones"
             onCancel={() => setVentaDevolver(null)}
             onConfirm={() => void confirmarDevolucionVenta()}
           />
@@ -2969,8 +2838,8 @@ export function VentasScreen({
                       <Ban className="w-5 h-5 text-red-600 dark:text-red-400" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-foreground">Anular venta</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>¿Anular el pedido #{ventaAnular.id}?</p>
+                      <p className="text-base text-muted-foreground truncate">
                         Pedido #{ventaAnular.id} · {ventaAnular.usuario}
                       </p>
                     </div>
@@ -2981,16 +2850,15 @@ export function VentasScreen({
                 </div>
 
                 <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-                  <p className="text-sm text-muted-foreground">
-                    La venta quedará en <span className="font-semibold">Anulado</span> y sus pagos como{" "}
-                    <span className="font-semibold">Rechazado</span>. Sólo se puede anular dentro de los primeros
-                    10 minutos de haber creado el pedido.
+                  <p className="text-lg text-muted-foreground">
+                    La cocina no lo prepara. Si ya pagó, hay que devolverle la plata y subir el comprobante.{" "}
+                    <span className="font-semibold">Te quedan {Math.ceil(segundosAnulacion(ventaAnular) / 60)} minutos</span> para anularlo.
                   </p>
 
                   {/* Motivo obligatorio: la misma lista que valida el backend. */}
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
-                      Motivo de la anulación *
+                    <p className="text-base font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+                      ¿Por qué se anula?
                     </p>
                     <div className="space-y-1.5">
                       {MOTIVOS_ANULACION.map((m) => (
@@ -3010,7 +2878,7 @@ export function VentasScreen({
                             onChange={() => setAnularMotivoSel(m.value)}
                             className="mt-0.5 accent-red-600 cursor-pointer"
                           />
-                          <span className="text-sm text-foreground leading-snug">{m.label}</span>
+                          <span className="text-lg text-foreground leading-snug">{m.label}</span>
                         </label>
                       ))}
                     </div>
@@ -3020,9 +2888,9 @@ export function VentasScreen({
                       <div className="mt-2">
                         <label
                           htmlFor="motivo-anulacion-otro"
-                          className="block text-xs font-semibold text-muted-foreground mb-1"
+                          className="block text-base font-semibold text-muted-foreground mb-1"
                         >
-                          Describe el motivo *
+                          Describe el motivo
                         </label>
                         <textarea
                           id="motivo-anulacion-otro"
@@ -3031,13 +2899,13 @@ export function VentasScreen({
                           maxLength={MOTIVO_OTRO_MAX}
                           rows={2}
                           placeholder="Ej.: el cliente pidió cambiar la hora de recogida"
-                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:border-red-400"
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-lg text-foreground focus:outline-none focus:border-red-400"
                         />
                         <div className="flex justify-between gap-3 mt-1">
-                          <p className="text-[11px] text-red-600">
+                          <p className="text-base text-red-600">
                             {anularOtroTexto.trim() === "" ? "El texto es obligatorio." : ""}
                           </p>
-                          <p className="text-[11px] text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
+                          <p className="text-base text-muted-foreground shrink-0" style={{ fontFamily: MONO }}>
                             {anularOtroTexto.length}/{MOTIVO_OTRO_MAX}
                           </p>
                         </div>
@@ -3047,8 +2915,8 @@ export function VentasScreen({
 
                   {/* Comprobante de la devolución: OPCIONAL. */}
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
-                      Comprobante de la devolución (opcional)
+                    <p className="text-base font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
+                      Comprobante de la devolución (si ya le devolviste la plata)
                     </p>
                     <CampoComprobante
                       fileRef={anularFileRef}
@@ -3066,11 +2934,11 @@ export function VentasScreen({
 
                   {/* Valor a devolver según el motivo. */}
                   <div className="rounded-xl border border-border bg-muted/50 px-4 py-3 space-y-1.5">
-                    <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 text-lg">
                       <span className="text-muted-foreground">Total del pedido</span>
                       <span className="font-semibold" style={{ fontFamily: MONO }}>{fmtCOP(total)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 text-lg">
                       <span className="text-muted-foreground">Motivo</span>
                       <span className="font-semibold text-right">
                         {anularMotivoSel
@@ -3080,7 +2948,7 @@ export function VentasScreen({
                           : "—"}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between gap-3 text-sm border-t border-border pt-1.5">
+                    <div className="flex items-center justify-between gap-3 text-lg border-t border-border pt-1.5">
                       <span className="font-semibold text-foreground">
                         Valor a devolver ({Math.round(porcentaje * 100)} %)
                       </span>
@@ -3094,20 +2962,20 @@ export function VentasScreen({
                 <div className="flex gap-2 px-5 pb-5">
                   <button
                     onClick={cerrarAnular}
-                    className="flex-1 py-2.5 max-md:min-h-11 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 rounded-2xl min-h-[56px] border-2 border-black text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
-                    Cancelar
+                    No, dejarlo como está
                   </button>
                   <button
                     onClick={() => void anularVentaSeleccionada()}
                     disabled={!puedeConfirmarAnulacion}
-                    className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold text-white transition-colors ${
+                    className={`flex-1 py-2.5 max-md:min-h-11 rounded-xl text-lg font-semibold text-white transition-colors ${
                       puedeConfirmarAnulacion
                         ? "bg-red-600 hover:bg-red-700 cursor-pointer"
                         : "bg-red-600/50 opacity-50 cursor-not-allowed"
                     }`}
                   >
-                    Anular venta
+                    Sí, anular el pedido
                   </button>
                 </div>
               </motion.div>

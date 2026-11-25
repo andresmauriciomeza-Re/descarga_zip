@@ -1,13 +1,13 @@
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
 import type { TipoPersona } from "@/features/compras/hooks/useProveedorForm";
 
-// Selector "Persona Natural / Persona Jurídica" del ENCABEZADO de los
-// formularios de proveedor (Crear, Editar, Nuevo Proveedor desde Orden de
-// Compra y Compra). Se sacó del cuerpo del formulario para que viva en la
-// misma fila del título, alineado a la derecha.
+// Selector "Empresa / Persona natural" de los formularios de proveedor (Crear,
+// Editar, Nuevo Proveedor desde Orden de Compra y Compra). Los valores internos
+// siguen siendo "Persona Natural" y "Persona Jurídica"; solo cambia lo que se lee.
 //
 //  · Crear  → botones activos (`onChange`).
-//  · Editar → `disabled`: se ve el tipo actual marcado pero atenuado, porque
+//  · Editar → `disabled`: se ve el tipo actual marcado pero apagado, porque
 //             el tipo de persona solo se elige al crear.
 //  · Detalle → `comoEtiqueta`: etiqueta fija (sin botones).
 //
@@ -15,9 +15,13 @@ import type { TipoPersona } from "@/features/compras/hooks/useProveedorForm";
 // `enfocarPrimeroInvalido` del hook lo siga encontrando si falta el tipo.
 
 const OPCIONES = [
-  { valor: "Persona Natural", etiqueta: "Persona Natural" },
-  { valor: "Persona Jurídica", etiqueta: "Persona Jurídica" },
-] as const;
+  { valor: "Persona Jurídica", etiqueta: "Empresa" },
+  { valor: "Persona Natural", etiqueta: "Persona natural" },
+];
+
+/** Cómo se lee el tipo de persona en pantalla. */
+export const etiquetaTipoPersona = (tipo?: string | null) =>
+  tipo === "Persona Jurídica" ? "Empresa" : tipo === "Persona Natural" ? "Persona" : "Sin tipo";
 
 export function TipoPersonaSelector({
   valor,
@@ -29,7 +33,7 @@ export function TipoPersonaSelector({
 }: {
   valor: TipoPersona | "";
   onChange?: (valor: TipoPersona) => void;
-  /** Editar: tipo actual marcado, no clicable y atenuado. */
+  /** Editar: tipo actual marcado, no clicable y apagado. */
   disabled?: boolean;
   /** Detalle: se pinta como etiqueta fija, sin botones. */
   comoEtiqueta?: boolean;
@@ -39,29 +43,25 @@ export function TipoPersonaSelector({
 }) {
   if (comoEtiqueta) {
     return (
-      <span
-        className={`inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold whitespace-nowrap ${className}`}
-      >
-        {valor || "Sin tipo de persona"}
+      <span className={className}>
+        <EstadoPill tono="azul">{etiquetaTipoPersona(valor)}</EstadoPill>
       </span>
     );
   }
 
   return (
-    <div
-      data-prov-campo="tipoPersona"
-      className={`flex flex-col items-end ${className}`}
-      aria-label="Tipo de persona"
-    >
-      <SegmentadoButtons
+    <div data-prov-campo="tipoPersona" className={className}>
+      <OpcionesBotones
+        etiqueta="Tipo de proveedor"
         valor={valor}
-        disabled={disabled || !onChange}
-        title={disabled ? "El tipo de persona no se puede cambiar al editar" : undefined}
-        className={disabled ? "opacity-60" : ""}
+        deshabilitado={disabled || !onChange}
         onChange={(v) => onChange?.(v as TipoPersona)}
         opciones={OPCIONES}
       />
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      <p className="pn-campo__ayuda">
+        {disabled ? "Esto no se puede cambiar después de creado el proveedor." : "Según lo que escojas, cambian las preguntas."}
+      </p>
+      {error && <p className="pn-campo__error" role="alert"><span>{error}</span></p>}
     </div>
   );
 }

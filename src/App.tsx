@@ -87,6 +87,7 @@ import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
 import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
 import logoBlanco from "@/assets/img/logo-blanco.webp";
 import logoClaro from "@/assets/img/logoclaro2.webp";
+import { RutaPagina } from "@/shared/components/panel/RutaPagina";
 import imgPepsi from "@/assets/img/Pepsi.webp";
 import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
 import pizzaCañon from "@/assets/img/pizza_cañon.webp";
@@ -942,7 +943,7 @@ const NAV_SECTIONS = [
       },
       {
         screen: "perecederos" as Screen,
-        label: "CPN",
+        label: "Productos no conformes",
         Icon: AlertTriangle,
         permKey: KEY("Producción", "Producto No Conforme"),
       },
@@ -1063,9 +1064,9 @@ function Sidebar({
   current,
   navigate,
   abierto,
-  onClose,
-  darkMode,
-  userRole,
+  userName,
+  menuButtonRef,
+  onToggleMenu,
   accesos,
   esSuperAdminSesion,
   hasDashboardAccess,
@@ -1078,13 +1079,18 @@ function Sidebar({
   /** true = menú visible; false = totalmente oculto (fuera de pantalla). */
   abierto: boolean;
   /** Cierra el menú (escritorio) y devuelve el foco al botón hamburguesa. */
-  onClose: () => void;
-  darkMode: boolean;
-  userRole: string;
+  onClose?: () => void;
+  darkMode?: boolean;
+  userRole?: string;
+  /** Nombre de quien inició sesión («Hola, {nombre}»). */
+  userName?: string;
+  /** Botón «Menú» de la franja roja (celular): el foco vuelve aquí al cerrar. */
+  menuButtonRef?: { current: HTMLButtonElement | null };
+  onToggleMenu?: () => void;
   accesos: AccesosMap;
   esSuperAdminSesion: boolean;
   hasDashboardAccess: boolean;
-  /** true en viewport < 768px: el aside pasa a panel deslizante. */
+  /** true en viewport ≤ 820px: franja roja arriba + menú a pantalla completa. */
   esMovil?: boolean;
   onCerrarMovil?: () => void;
   /** Ref mutable que recibe la primera opción del menú al abrir (para el foco). */
@@ -1131,115 +1137,151 @@ function Sidebar({
   const canView = (permKey: string) =>
     canViewPermission(accesos, permKey);
 
-  return (
-    <aside
-      ref={asideRef}
-      role="navigation"
-      aria-label="Menú principal"
-      className={`fixed left-0 top-0 h-full w-60 bg-sidebar text-sidebar-foreground flex flex-col z-30 shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil ? "max-w-[80vw]" : ""
-        } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
+  const [busqueda, setBusqueda] = useState("");
+  const q = busqueda.trim().toLowerCase();
+  const nombrePila = (userName ?? "").trim().split(/\s+/)[0] ?? "";
+
+  // Módulos visibles para este usuario (misma regla de permisos de siempre).
+  const modulos = NAV_SECTIONS.map((sec) => {
+    // Todos los ítems de NAV_SECTIONS declaran permKey, así que la
+    // decisión es siempre por permisos. El fallback solo cubre un ítem
+    // futuro sin permKey, que quedaría restringido al rol semilla.
+    const items: { screen: Screen; label: string; Icon: typeof Home; permKey?: string }[] =
+      ((sec as any).items ?? []).filter((it: any) =>
+        sec.key === "dashboard"
+          ? hasDashboardAccess
+          : sec.key === "inicio"
+            ? !hasDashboardAccess
+            : it.permKey
+              ? canView(it.permKey)
+              : esSuperAdminSesion
+      );
+    return { sec, items };
+  })
+    // Un módulo sin opciones visibles no se muestra.
+    .filter((m) => m.items.length > 0)
+    // Con texto en el buscador solo quedan las opciones (o módulos) que coinciden.
+    .map((m) => {
+      if (!q) return m;
+      const modCoincide = m.sec.label.toLowerCase().includes(q);
+      return { ...m, items: modCoincide ? m.items : m.items.filter((it) => it.label.toLowerCase().includes(q)) };
+    })
+    .filter((m) => m.items.length > 0);
+
+  const opcion = (it: { screen: Screen; label: string; Icon: typeof Home }) => (
+    <button
+      key={it.screen}
+      type="button"
+      onClick={() => ir(it.screen)}
+      aria-current={active(it.screen) ? "page" : undefined}
+      className="pn-sidebar__opcion"
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border shrink-0">
-        <div className="relative shrink-0">
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-10 h-10" />
-        </div>
-        <div className="overflow-hidden leading-none">
-          <p
-            className="font-bold text-sm text-sidebar-foreground"
-            style={{ fontFamily: SERIF }}
+      <it.Icon size={22} aria-hidden="true" className="shrink-0" />
+      <span>{it.label}</span>
+    </button>
+  );
+
+  return (
+    <>
+      {/* Celular/tableta (≤ 820px): franja roja arriba con el logo y «Menú». */}
+      {esMovil && (
+        <div className="pn-tira">
+          <div className="pn-tira__logo">
+            <img src={logoClaro} alt="S.I.V.PRO" />
+          </div>
+          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21 }}>La Sirena</span>
+          <button
+            ref={menuButtonRef as React.Ref<HTMLButtonElement>}
+            type="button"
+            className="pn-tira__btn"
+            onClick={onToggleMenu}
+            aria-expanded={abierto}
           >
-            La Sirena
-          </p>
-          <p className="text-[11px] text-sidebar-foreground/40 mt-0.5">
-            S.I.V.PRO
-          </p>
+            {abierto ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
+            <span>{abierto ? "Cerrar" : "Menú"}</span>
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="ml-auto p-1 max-md:min-w-11 max-md:min-h-11 max-md:flex max-md:items-center max-md:justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
-          aria-label="Cerrar menú"
-          title="Cerrar menú"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Scrollable nav */}
-      <nav
-        ref={navRef}
-        className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5"
-        style={{ scrollbarWidth: "none" }}
+      )}
+      <aside
+        ref={asideRef}
+        role="navigation"
+        aria-label="Menú principal"
+        className={`pn-sidebar flex flex-col shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil
+          ? "fixed left-0 right-0 bottom-0 top-16 z-30"
+          : "fixed left-0 top-0 h-full w-[280px] z-30"
+          } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
       >
-        {NAV_SECTIONS.map((sec) => {
-          // Todos los ítems de NAV_SECTIONS declaran permKey, así que la
-          // decisión es siempre por permisos. El fallback solo cubre un ítem
-          // futuro sin permKey, que quedaría restringido al rol semilla.
-          const allItems: { screen: Screen; label: string; Icon: typeof Home; permKey?: string }[] =
-            ((sec as any).items ?? []).filter((it: any) =>
-              sec.key === "dashboard"
-                ? hasDashboardAccess
-                : sec.key === "inicio"
-                  ? !hasDashboardAccess
-                  : it.permKey
-                    ? canView(it.permKey)
-                    : esSuperAdminSesion
-            );
-
-          // Hide entire module if no sub-items are visible
-          if (allItems.length === 0) return null;
-
-          if (sec.key === "dashboard" || sec.key === "inicio") {
-            return (
-              <div key={sec.key} className="pt-3 pb-1">
-                {allItems.map((it) => (
-                  <button
-                    key={it.screen}
-                    onClick={() => ir(it.screen)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 max-md:min-h-12 rounded-xl text-sm font-semibold transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
-                  >
-                    <it.Icon className="w-4 h-4 shrink-0" />
-                    <span>{it.label}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          }
-
-          const groupActive = allItems.some(it => active(it.screen));
-
-          return (
-            <div key={sec.key}>
-              <button
-                onClick={() => toggle(sec.key)}
-                className={`w-full flex items-center gap-2 px-3 py-2 max-md:min-h-12 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer mt-2 ${groupActive ? "text-primary" : "text-sidebar-foreground/35 hover:text-sidebar-foreground/60"}`}
-              >
-                <sec.Icon className="w-4 h-4 shrink-0" />
-                <span className="flex-1 text-left">{sec.label}</span>
-                <ChevronDown
-                  className={`w-3 h-3 transition-transform ${open[sec.key] ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {open[sec.key] && (
-                <div className="ml-2 border-l border-sidebar-border pl-2 space-y-0.5 mt-0.5">
-                  {allItems.map((it) => (
-                    <button
-                      key={it.screen}
-                      onClick={() => ir(it.screen)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 max-md:min-h-12 rounded-xl text-sm transition-all cursor-pointer ${active(it.screen) ? "bg-primary text-white font-semibold" : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"}`}
-                    >
-                      <it.Icon className="w-3.5 h-3.5 shrink-0" />
-                      <span>{it.label}</span>
-                    </button>
-                  ))}
-                </div>
+        {/* Logo, nombre y saludo */}
+        {!esMovil && (
+          <div className="flex items-center gap-3 px-4 py-5 shrink-0">
+            <div className="pn-sidebar__logo">
+              <img src={logoClaro} alt="S.I.V.PRO Logo" />
+            </div>
+            <div className="min-w-0">
+              <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21, lineHeight: 1.2 }}>La Sirena</p>
+              {nombrePila && (
+                <p style={{ fontSize: 18, lineHeight: 1.3 }} className="truncate">
+                  Hola, {nombrePila}
+                </p>
               )}
             </div>
-          );
-        })}
-      </nav>
-    </aside>
+          </div>
+        )}
+        {esMovil && nombrePila && (
+          <p style={{ fontSize: 18, padding: "16px 28px 12px" }}>Hola, {nombrePila}</p>
+        )}
+
+        {/* Buscador de módulos */}
+        <div className="pn-sidebar__buscador">
+          <Search size={22} aria-hidden="true" />
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar en el menú"
+            aria-label="Buscar un módulo del menú"
+            autoComplete="off"
+          />
+        </div>
+
+        {/* Menú con scroll */}
+        <nav
+          ref={navRef}
+          className="flex-1 overflow-y-auto pb-4"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {modulos.length === 0 && (
+            <p className="pn-sidebar__vacio">No hay ninguna opción con ese nombre.</p>
+          )}
+          {modulos.map(({ sec, items }) => {
+            if (sec.key === "dashboard" || sec.key === "inicio") {
+              return <div key={sec.key}>{items.map(opcion)}</div>;
+            }
+            const abiertoGrupo = q ? true : !!open[sec.key];
+            return (
+              <div key={sec.key}>
+                <div className="pn-sidebar__sep" />
+                <button
+                  type="button"
+                  onClick={() => toggle(sec.key)}
+                  className="pn-sidebar__grupo"
+                  aria-expanded={abiertoGrupo}
+                >
+                  <sec.Icon size={22} aria-hidden="true" className="shrink-0" />
+                  <span className="flex-1">{sec.label}</span>
+                  <ChevronDown
+                    size={20}
+                    aria-hidden="true"
+                    className={`transition-transform ${abiertoGrupo ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {abiertoGrupo && items.map(opcion)}
+              </div>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 }
 
@@ -1419,6 +1461,7 @@ function AdminTopBar({
   homeScreen,
   rolesParaCambiar = [], ordenAEditar,
   onCambiarRol,
+  esMovil = false,
 }: {
   current: Screen;
   onToggleSidebar: () => void;
@@ -1436,6 +1479,8 @@ function AdminTopBar({
    *  menú "Cambiar de rol" (los vacíos no se ofrecen). */
   rolesParaCambiar?: Rol[]; ordenAEditar?: unknown;
   onCambiarRol?: (rolId: string) => void;
+  /** ≤ 820px: el botón de menú vive en la franja roja del Sidebar. */
+  esMovil?: boolean;
 }) {
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
@@ -1445,113 +1490,98 @@ function AdminTopBar({
     reports: "Reportes e informes",
     roles: "Roles",
     permissions: "Permisos",
-    users: "Gestión de usuarios",
+    users: "Usuarios",
     empleados: "Gestión de empleados",
     access: "Gestión de acceso",
-    perecederos: "CPN",
-    "orden-compra": "Órdenes de Compra",
-    "nueva-orden-compra": ordenAEditar ? "Editar Orden de Compra" : "Nueva Orden de Compra",
+    perecederos: "Productos no conformes",
+    "orden-compra": "Orden de Compra",
+    "nueva-orden-compra": ordenAEditar ? "Cambiar el pedido" : "Hacer un pedido",
     "gestion-compra": "Gestión de Compras",
-    "nueva-compra": "Nueva Compra",
-    supplies: "Gestión de insumos",
+    "nueva-compra": "Anotar una factura",
+    supplies: "Insumos",
     suppliers: "Proveedores",
-    "production-orders": "Órdenes de producción",
+    "production-orders": "Orden de Producción",
     "finished-products": "Producto terminado",
     sales: "Gestión de ventas",
     "supply-categories": "Categorías de insumos",
     "product-categories": "Categorías de productos",
     profile: "Mi perfil",
     "sales-chart": "Estadísticas",
-    "ventas-pedidos": "Gestión Ventas",
+    "ventas-pedidos": "Ventas",
     devoluciones: "Devoluciones",
     clientes: "Clientes",
-    "gestion-roles": "Gestión de Roles",
-    "gestion-productos": "Gestión Producto",
-    "cat-producto": "Categoría Producto",
-    "recepcion-compra": "Recepción de compra",
+    "gestion-roles": "Roles",
+    "gestion-productos": "Productos",
+    "cat-producto": "Categoría Productos",
+    "recepcion-compra": "Recibir la mercancía",
   };
+  // Módulo al que pertenece la pantalla actual (para «Estás en: Módulo › Pantalla»).
+  const pantallaNombre = labels[current] ?? String(current);
+  const moduloNombre = (() => {
+    if (current === homeScreen) return undefined;
+    const clave: Screen =
+      current === "nueva-orden-compra" ? "orden-compra"
+        : current === "nueva-compra" ? "gestion-compra"
+          : current;
+    const sec = NAV_SECTIONS.find((s) =>
+      (s.items as { screen: Screen }[]).some((it) => it.screen === clave)
+    );
+    return sec && sec.key !== "dashboard" && sec.key !== "inicio" ? sec.label : undefined;
+  })();
+  const nombreHome = homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO;
+
   return (
-    <header className="sticky top-0 z-20 bg-card/95 backdrop-blur-md border-b border-border h-14 flex items-center px-4 max-[359px]:px-2 gap-2 max-md:gap-1 shadow-sm">
-      <button
-        ref={menuButtonRef}
-        onClick={onToggleSidebar}
-        className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-        aria-label={menuVisible ? "Cerrar menú" : "Abrir menú"}
-        title={menuVisible ? "Cerrar menú" : "Abrir menú"}
-        aria-expanded={menuVisible}
-      >
-        <Menu className="w-5 h-5" />
-      </button>
-      <div className="flex items-center gap-1.5 text-sm max-[399px]:text-xs text-muted-foreground ml-2 max-md:ml-0 min-w-0 overflow-hidden">
-        <button
-          onClick={() => navigate(homeScreen)}
-          className={`hover:text-foreground transition-colors cursor-pointer max-md:min-h-11 max-md:min-w-11 ${current !== homeScreen ? "shrink-0 max-md:hidden" : "min-w-0 truncate max-md:block max-md:text-left max-md:leading-[2.75rem]"}`}
-          title={current === homeScreen ? (homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO) : undefined}
-        >
-          {homeScreen === "dashboard" ? "Dashboard" : ETIQUETA_INICIO_EMPLEADO}
-        </button>
-        {current !== homeScreen && (
-          <>
-            <ChevronRight className="w-3.5 h-3.5 shrink-0 max-md:hidden" />
-            <span className="text-foreground font-medium min-w-0 truncate max-md:whitespace-normal max-md:line-clamp-2 max-md:leading-tight" title={labels[current] ?? current}>
-              {labels[current] ?? current}
-            </span>
-          </>
+    <>
+      <header className="pn-header">
+        {!esMovil && (
+          <button
+            ref={menuButtonRef}
+            type="button"
+            onClick={onToggleSidebar}
+            className="pn-header__btn pn-header__solo-escritorio"
+            aria-expanded={menuVisible}
+          >
+            <Menu size={24} aria-hidden="true" />
+            <span>{menuVisible ? "Ocultar menú" : "Mostrar menú"}</span>
+          </button>
         )}
-      </div>
-      <div className="ml-auto flex items-center gap-0">
-        {onCambiarRol && (
-          <div className="mr-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3 max-md:gap-2">
+          {onCambiarRol && (
             <CambiarRolMenu
               roles={rolesParaCambiar}
               rolActivoNombre={roleName}
               onSelect={onCambiarRol}
             />
-          </div>
-        )}
-        <button
-          onClick={() => navigate("landing")}
-          className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-          title="Ir a la tienda"
-          aria-label="Ir a la tienda"
-        >
-          <Store className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className="p-2 min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-muted transition-colors cursor-pointer text-muted-foreground"
-          title={darkMode ? "Modo claro" : "Modo oscuro"}
-          aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-        >
-          {darkMode ? (
-            <Sun className="w-5 h-5" />
-          ) : (
-            <Moon className="w-5 h-5" />
           )}
-        </button>
-        <div
-          className="ml-3 flex items-center gap-2 cursor-pointer max-md:min-w-11 max-md:min-h-11 max-md:justify-center"
-          onClick={() => navigate("profile")}
-          role="button"
-          tabIndex={0}
-          aria-label="Ir a mi perfil"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              navigate("profile");
-            }
-          }}
-        >
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div className="hidden sm:flex flex-col leading-tight">
-            <span className="text-sm font-semibold text-foreground">{userName}</span>
-            <span className="text-[11px] text-muted-foreground font-medium">{roleName}</span>
-          </div>
+          <button type="button" onClick={() => navigate("landing")} className="pn-header__btn">
+            <Store size={24} aria-hidden="true" />
+            <span>Ver la tienda</span>
+          </button>
+          <button type="button" onClick={() => setDarkMode(!darkMode)} className="pn-header__btn">
+            {darkMode ? <Sun size={24} aria-hidden="true" /> : <Moon size={24} aria-hidden="true" />}
+            <span>{darkMode ? "Modo claro" : "Modo oscuro"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("profile")}
+            className="pn-header__btn"
+            aria-label={`Mi perfil: ${userName}${roleName ? `, ${roleName}` : ""}`}
+          >
+            <span className="pn-header__avatar" aria-hidden="true">
+              {userName.charAt(0).toUpperCase()}
+            </span>
+            <span className="pn-header__nombre">
+              <span>{userName}</span>
+              <span className="pn-header__solo-escritorio">{roleName}</span>
+            </span>
+          </button>
         </div>
-      </div>
-    </header>
+      </header>
+      <RutaPagina
+        modulo={moduloNombre}
+        pantalla={current === homeScreen ? nombreHome : pantallaNombre}
+      />
+    </>
   );
 }
 
@@ -8466,7 +8496,7 @@ export default function App() {
   });
   // En celular/tablet el sidebar no cabe (240px fijos sobre ~375px de ancho):
   // se oculta y el botón del topbar lo abre como panel deslizante.
-  const esMovil = useIsMobile();
+  const esMovil = useIsMobile(821);
   const [sidebarMovilAbierto, setSidebarMovilAbierto] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const firstNavRef = useRef<HTMLButtonElement | null>(null);
@@ -9707,11 +9737,27 @@ export default function App() {
     setTimeout(() => navigate(adminHomeScreen), 0);
   }
 
+  const alternarMenu = () => {
+    if (esMovil) {
+      if (!sidebarMovilAbierto) {
+        setSidebarMovilAbierto(true);
+        requestAnimationFrame(() => firstNavRef.current?.focus());
+      } else {
+        setSidebarMovilAbierto(false);
+      }
+    } else if (!menuAbierto) {
+      setMenuAbierto(true);
+      requestAnimationFrame(() => firstNavRef.current?.focus());
+    } else {
+      setMenuAbierto(false);
+    }
+  };
+
   const sideW = isAdmin
     ? esMovil
       ? ""
       : menuAbierto
-        ? "ml-60"
+        ? "ml-[280px]"
         : "ml-0"
     : "";
 
@@ -9728,7 +9774,8 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen bg-background text-foreground${isAdmin ? "" : " app-publica"}`}
+      className={`min-h-screen bg-background text-foreground${isAdmin ? " panel-admin" : " app-publica"}`}
+      data-panel-texto-grande={isAdmin ? "" : undefined}
       style={{ fontFamily: "var(--font-texto)" }}
     >
       <Toaster
@@ -9742,7 +9789,7 @@ export default function App() {
           classNames: { actionButton: "max-md:!h-11 max-md:!px-4 max-md:!text-sm" },
           style: {
             fontFamily: "var(--font-texto)",
-            fontSize: "15px",
+            fontSize: isAdmin ? "16px" : "15px",
           },
         }}
       />
@@ -9764,12 +9811,9 @@ export default function App() {
           current={screen}
           navigate={navigate}
           abierto={esMovil ? sidebarMovilAbierto : menuAbierto}
-          onClose={() => {
-            setMenuAbierto(false);
-            setTimeout(() => menuButtonRef.current?.focus(), 0);
-          }}
-          darkMode={darkMode}
-          userRole={userRole}
+          userName={sesionRestaurandose ? "" : loggedInUserName}
+          menuButtonRef={menuButtonRef}
+          onToggleMenu={alternarMenu}
           accesos={loggedInAccesos}
           esSuperAdminSesion={esSuperAdminSesion}
           hasDashboardAccess={hasDashboardAccess}
@@ -9783,7 +9827,7 @@ export default function App() {
       )}
 
       <div
-        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden" : ""}`}
+        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden max-[820px]:h-[calc(100dvh-4rem)] max-[820px]:min-h-0" : ""}`}
       >
         {/* Public navbar */}
         {!isAdmin && !isAuth && (
@@ -9805,21 +9849,8 @@ export default function App() {
         {isAdmin && (
           <AdminTopBar
             current={screen}
-            onToggleSidebar={() => {
-              if (esMovil) {
-                if (!sidebarMovilAbierto) {
-                  setSidebarMovilAbierto(true);
-                  requestAnimationFrame(() => firstNavRef.current?.focus());
-                } else {
-                  setSidebarMovilAbierto(false);
-                }
-              } else if (!menuAbierto) {
-                setMenuAbierto(true);
-                requestAnimationFrame(() => firstNavRef.current?.focus());
-              } else {
-                setMenuAbierto(false);
-              }
-            }}
+            onToggleSidebar={alternarMenu}
+            esMovil={esMovil}
             menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
             menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
             navigate={navigate}
@@ -10381,6 +10412,7 @@ export default function App() {
                       onDescontinuarEnServidor={descontinuarProductoEnServidor}
                       recargarProduccion={recargarProduccion}
                       verOrdenProduccion={verOrdenProduccion}
+                      abrirOrdenCompra={() => navigate("orden-compra")}
                     />
                   )}
                   {screen === "cat-producto" && (
@@ -10404,6 +10436,7 @@ export default function App() {
                       canDelete={getPerms("gestion-roles").canDelete}
                       accesosPropios={loggedInAccesos}
                       loggedInRolId={loggedInRol?.id ?? null}
+                      onIrAEmpleados={() => navigate("empleados")}
                     />
                   )}
                   {screen === "sales-chart" && (
@@ -10429,6 +10462,8 @@ export default function App() {
                       canVer={esSuperAdminSesion || (loggedInAccesos[KEY("Configuración", "Usuarios")] ?? []).includes("Ver")}
                       canEdit={getPerms("users").canEdit}
                       canDelete={getPerms("users").canDelete}
+                      onIrAClientes={() => navigate("clientes")}
+                      onIrAEmpleados={() => navigate("empleados")}
                     />
                   )}
                   {screen === "empleados" && (
@@ -10587,6 +10622,7 @@ export default function App() {
                          automática y el toast ofrece "Ver orden". */
                       recargarProduccion={async () => { await recargarProduccion(); }}
                       verOrdenProduccion={verOrdenProduccion}
+                      abrirOrdenCompra={() => navigate("orden-compra")}
                     />
                   )}
                   {isAdmin &&

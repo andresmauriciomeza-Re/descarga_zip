@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, X, Check, Package, AlertTriangle, ChefHat } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Plus, X, Check, Package, AlertTriangle, ChefHat, Download } from "lucide-react";
 import { toast } from "sonner";
 import { UnidadSelect } from "@/features/compras/components/UnidadSelect";
 import {
@@ -26,7 +27,20 @@ import {
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
 import {
   copiarFicha,
@@ -52,7 +66,7 @@ import {
 } from "@/shared/utils/disponibilidad";
 
 const SERIF = "var(--font-titulo)";
-const PER_PAGE = 5;
+const PER_PAGE = 10;
 const formatoCantidad = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
 const esOtraPresentacion = (valor: string) =>
   valor === OTRA_PRESENTACION_G || valor === OTRA_PRESENTACION_ML;
@@ -359,9 +373,11 @@ interface Props {
   /** "Ver orden" del toast: navega a Orden de Producción con el detalle de
       esa orden ya abierto. */
   verOrdenProduccion?: (idOrden: string) => void;
+  /** Lleva a Orden de Compra (botón «Hacer el pedido al proveedor»). */
+  abrirOrdenCompra?: () => void;
 }
 
-export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando, errorCarga, onReintentar, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion, recargarProduccion, verOrdenProduccion }: Props) {
+export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando, errorCarga, onReintentar, fichas, setFichas, idsConFicha, productosMenu = [], abrirOrdenProduccion, recargarProduccion, verOrdenProduccion, abrirOrdenCompra }: Props) {
   // Categorías con las que trabajan el buscador y los selectores: las de la
   // API (por props) o, si la pantalla se abre sin API, el catálogo local.
   const cats = categorias.length > 0 ? categorias : CATEGORIAS_INSUMO;
@@ -388,6 +404,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
   // mostrando SOLO esos insumos; el segundo clic lo apaga (el aviso se
   // mantiene visible mientras el filtro esté activo, para poder salir).
   const [filtroStockBajo, setFiltroStockBajo] = useState(false);
+  /** Filtro por categoría (botones de la lista). "" = todas. */
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  /** Borrado rechazado por el servidor (tiene historial): se explica en un diálogo. */
+  const [bloqueoBorrado, setBloqueoBorrado] = useState<{ id: string; nombre: string; mensaje: string } | null>(null);
   /** true = el registro en edición es un Producto Insumo (el tipo del
       formulario queda bloqueado y solo se modifica la ficha técnica). */
   const [editandoProducto, setEditandoProducto] = useState(false);
@@ -462,6 +482,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     // A5.5: filtro del aviso de stock bajo (solo activos, igual que el aviso).
     if (filtroStockBajo)
       result = result.filter(i => i.estado === "activo" && estadoStock(i) !== "ok");
+    if (filtroCategoria) result = result.filter(i => i.categoriaId === filtroCategoria);
     if (q) {
       result = result.filter(i =>
         i.nombre.toLowerCase().includes(q) ||
@@ -471,7 +492,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       );
     }
     return ordenarPorIdDescendente(result, (insumo) => insumo.id);
-  }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo]);
+  }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo, filtroCategoria]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -811,8 +832,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     try {
       await eliminarInsumo(id);
     } catch (error) {
-      // Con historial el servidor responde 409 ("…tiene historial. Desactívalo.").
-      toast.error(mensajeErrorInsumos(error, "No se pudo eliminar el insumo."));
+      // Con historial el servidor responde 409 ("…tiene historial. Desactívalo."):
+      // se explica en un diálogo en vez de un aviso que desaparece.
+      setBloqueoBorrado({
+        id,
+        nombre: reg?.nombre ?? "",
+        mensaje: mensajeErrorInsumos(error, "No se pudo eliminar el insumo."),
+      });
       return;
     }
     setInsumos(prev => {
@@ -1059,536 +1085,347 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       : null;
 
   // ─────────────────────────── Render ───────────────────────────
-  // Piezas de una fila de insumo. Las usan la tabla (desde 768 px) y las tarjetas
-  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
-  const nombreIns = (insumo: Insumo) => {
-    const esProductoInsumo = insumo.tipo === "ProductoInsumo";
-    return (<><div>{insumo.nombre}</div>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300">
-                      {esProductoInsumo ? "Producto insumo" : "Insumo"}
-                    </span></>);
-  };
-  const unidadIns = (insumo: Insumo) => (<><div>{insumo.unidadMedida}</div>
-                    {insumo.pesoMedida != null && (
-                      <div className="text-[11px] text-muted-foreground">
-                        {formatoCantidad.format(insumo.pesoMedida)} {insumo.unidadMedida}
-                      </div>
-                    )}</>);
-  const stockIns = (insumo: Insumo) => {
+  const etiquetaTipo = (i: Insumo) => (i.tipo === "ProductoInsumo" ? "Lo preparamos aquí" : "Se compra");
+
+  /** Barra de stock: roja si hay que comprar, verde si alcanza y gris si está apagado. */
+  const barraStock = (insumo: Insumo) => {
     const stock = estadoStock(insumo);
-    return (<div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-foreground">{insumo.stockActual}</span>
-                      {insumo.estado === "activo" && stock === "sin-stock" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300 whitespace-nowrap">
-                          Sin stock
-                        </span>
-                      )}
-                      {insumo.estado === "activo" && stock === "bajo" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 whitespace-nowrap">
-                          Stock bajo
-                        </span>
-                      )}
-                      {insumo.estado === "activo" && stock === "ok" && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 whitespace-nowrap">
-                          OK
-                        </span>
-                      )}
-                    </div>);
+    const apagado = insumo.estado === "inactivo";
+    const color = apagado ? "var(--borde-campo)" : stock === "ok" ? "var(--verde)" : "var(--rojo)";
+    const relleno = insumo.stockMinimo > 0
+      ? Math.max(0, Math.min(1, insumo.stockActual / insumo.stockMinimo))
+      : insumo.stockActual > 0 ? 1 : 0;
+    const frase = apagado
+      ? "Apagado · no se cuenta para comprar"
+      : stock === "sin-stock" ? "Se acabó · comprar"
+        : stock === "bajo" ? "Por debajo del mínimo · comprar"
+          : "Alcanza bien";
+    return (
+      <div className="pn-stock">
+        <div className="pn-stock__nums">
+          <span>Hay {fmtCant(insumo.stockActual, insumo.unidadMedida)}</span>
+          <span>Mínimo {fmtCant(insumo.stockMinimo, insumo.unidadMedida)}</span>
+        </div>
+        <div
+          className="pn-stock__barra"
+          role="img"
+          aria-label={`Hay ${fmtCant(insumo.stockActual, insumo.unidadMedida)} y el mínimo es ${fmtCant(insumo.stockMinimo, insumo.unidadMedida)}`}
+        >
+          <div style={{ width: `${Math.round(relleno * 100)}%`, background: color }} />
+        </div>
+        <p className="pn-stock__frase" style={{ color: apagado ? "var(--gris-texto)" : stock === "ok" ? "var(--verde-texto)" : "var(--rojo-texto)" }}>
+          {frase}
+        </p>
+      </div>
+    );
   };
-  const estadoIns = (insumo: Insumo) => (<EstadoSelect
-                      value={insumo.estado}
-                      onChange={nuevoEstado => {
-                        if (nuevoEstado === insumo.estado) return;
-                        toggleEstado(insumo.id);
-                      }}
-                      options={[
-                        { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-                        { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-                      ]}
-                    />);
-  const accionesIns = (insumo: Insumo) => {
-    const esProductoInsumo = insumo.tipo === "ProductoInsumo";
-    const inactivo = insumo.estado === "inactivo";
-    return (<div className="flex items-center gap-1.5">
-                      <ActionIcons
-                        onView={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}
-                        onEdit={() => openEdit(insumo)}
-                        editDisabled={inactivo}
-                        editTitle={inactivo ? "Activa el insumo para editarlo" : "Editar"}
-                        onDelete={() => intentarEliminar(insumo.id)}
-                      />
-                      {esProductoInsumo && (
-                        <button
-                          onClick={() => abrirOrdenProduccion?.(insumo.id)}
-                          disabled={!fichaVigente(fichas, insumo) || inactivo}
-                          title={
-                            inactivo ? "Producto Insumo inactivo" :
-                            !fichaVigente(fichas, insumo) ? "Registra su ficha técnica primero" :
-                            "Programar producción"
-                          }
-                          className="p-1.5 max-md:p-3.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <ChefHat className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>);
+
+  // Un solo grupo de botones para los filtros de siempre (estado, tipo, aviso de
+  // stock bajo) más la categoría.
+  const chip = filtroStockBajo ? "comprar"
+    : filtroEstado === "inactivos" ? "apagados"
+      : filtroTipo === "insumos" ? "compra"
+        : filtroTipo === "productos" ? "preparamos"
+          : filtroCategoria ? `cat:${filtroCategoria}` : "todos";
+  const cambiarChip = (v: string) => {
+    setPage(1);
+    setFiltroStockBajo(v === "comprar");
+    setFiltroEstado(v === "apagados" ? "inactivos" : "todos");
+    setFiltroTipo(v === "compra" ? "insumos" : v === "preparamos" ? "productos" : "todos");
+    setFiltroCategoria(v.startsWith("cat:") ? v.slice(4) : "");
   };
+
+  const cerrarDetalle = () => setShowDetalleModal(false);
+  const nombresAComprar = insumosStockBajo.slice(0, 4).map(i => i.nombre).join(", ")
+    + (insumosStockBajo.length > 4 ? ` y ${insumosStockBajo.length - 4} más` : "");
+
+  // Qué dialogo de confirmación toca (apagar, encender, borrar, salir sin guardar…).
+  const regConfirm = confirmState.id ? insumos.find(i => i.id === confirmState.id) ?? null : null;
+  const nombreConfirm = regConfirm?.nombre ?? "";
+  const bloqueo =
+    confirmState.tipo === "no-eliminar"
+      ? {
+          id: confirmState.id,
+          nombre: nombreConfirm,
+          razones: [`Se usa en las recetas de: ${(confirmState.usadosEn ?? []).join(", ")}`],
+        }
+      : bloqueoBorrado
+        ? { id: bloqueoBorrado.id, nombre: bloqueoBorrado.nombre, razones: [bloqueoBorrado.mensaje] }
+        : null;
+  const cerrarBloqueo = () => { setBloqueoBorrado(null); cancelarConfirmacion(); };
+  const regBloqueo = bloqueo?.id ? insumos.find(i => i.id === bloqueo.id) ?? null : null;
+
+  const sufijoMinimo = tipoForm === "producto-insumo"
+    ? (presentacionProducto
+        ? ` (× ${etiquetaContenidoProducto})`
+        : esOtraPresentacion(piUnidadMedida)
+          ? ` (× ${etiquetaContenido(piUnidadMedida, contenidoPresentacion, unidadBaseDeSeleccion(piUnidadMedida)!)})`
+          : piUnidadMedida ? ` (${piUnidadMedida})` : "")
+    : (presentacionUnidad
+        ? ` (× ${etiquetaContenido(unidad, presentacionUnidad.contenido, presentacionUnidad.unidadBase)})`
+        : esOtraPresentacion(unidad)
+          ? ` (× ${etiquetaContenido(unidad, contenidoPresentacion, unidadBaseDeSeleccion(unidad)!)})`
+          : "");
+
+  const esPI = tipoForm === "producto-insumo";
+  const unidadForm = esPI ? piUnidadMedida : unidad;
+  const presentacionForm = esPI ? presentacionProducto : presentacionUnidad;
+  const campoBloqueado = "bg-muted/50 text-muted-foreground cursor-not-allowed";
 
   return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-5 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Gestión de Insumos
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Catálogo de insumos disponibles
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <BotonDescargarExcel onClick={exportExcel} />
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> Crear Insumo
-          </button>
-        </div>
-      </div>
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Insumos"
+        descripcion="Lo que hay en la bodega para cocinar y cuánto queda de cada cosa"
+        acciones={
+          <>
+            <BotonAccion icono={Download} onClick={exportExcel}>Descargar en Excel</BotonAccion>
+            <BotonAccion variante="principal" icono={Plus} onClick={openCreate}>Agregar un insumo</BotonAccion>
+          </>
+        }
+      />
 
-      {/* Search + Filtros */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 shrink-0">
-        <SearchInput
-          value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por nombre, ID o categoría..."
-          wrapperClassName="w-full max-w-sm shrink-0"
-        />
-        <select
-          value={filtroEstado}
-          onChange={e => { setFiltroEstado(e.target.value as "todos" | "activos" | "inactivos"); setPage(1); }}
-          aria-label="Filtrar por estado"
-          className="px-4 py-2.5 max-md:min-h-11 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
-        >
-          <option value="todos">Todos los estados</option>
-          <option value="activos">Activo</option>
-          <option value="inactivos">Inactivo</option>
-        </select>
-        <select
-          value={filtroTipo}
-          onChange={e => { setFiltroTipo(e.target.value as "todos" | "insumos" | "productos"); setPage(1); }}
-          aria-label="Filtrar por tipo"
-          className="px-4 py-2.5 max-md:min-h-11 bg-muted dark:bg-input rounded-full border border-border text-sm font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer appearance-none"
-        >
-          <option value="todos">Todos los tipos</option>
-          <option value="insumos">Insumos</option>
-          <option value="productos">Productos insumo</option>
-        </select>
-      </div>
-
-      {/* A5.5 — Aviso de stock bajo (solo insumos activos): el texto es un
-          BOTÓN que filtra el listado y muestra solo esos insumos; el segundo
-          clic lo apaga. Sigue a la vista mientras el filtro esté activo, así
-          que siempre se puede salir. El detalle completo de los nombres queda
-          en el `title`. */}
       {insumosStockBajo.length > 0 && (
-        <button
-          type="button"
-          onClick={() => {
-            setFiltroStockBajo(v => !v);
-            setPage(1);
-          }}
-          aria-pressed={filtroStockBajo}
-          title={`${insumosStockBajo.length} insumo${insumosStockBajo.length === 1 ? "" : "s"} con stock bajo: ${insumosStockBajo
-            .map(i => `${i.nombre} (${fmtCant(i.stockActual, i.unidadMedida)}${estadoStock(i) === "sin-stock" ? ", sin stock" : ""})`)
-            .join(" · ")}${filtroStockBajo ? " — clic para quitar el filtro" : " — clic para filtrar el listado"}`}
-          className={`inline-flex max-w-full items-center gap-2 mb-4 px-4 py-2 max-md:min-h-11 rounded-xl border text-sm cursor-pointer transition-all ${
-            filtroStockBajo
-              ? "bg-amber-500 border-amber-600 text-white shadow-md font-bold"
-              : "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-500/15 dark:border-amber-500/40 dark:text-amber-300 font-semibold hover:bg-amber-200 dark:hover:bg-amber-500/25"
-          }`}
-        >
-          {filtroStockBajo && <span aria-hidden>✓</span>}
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span className="font-bold whitespace-nowrap">
-            {insumosStockBajo.length} insumo{insumosStockBajo.length === 1 ? "" : "s"} con stock bajo
-          </span>
-          <span className="truncate">
-            · {insumosStockBajo.slice(0, 3).map(i => i.nombre).join(", ")}
-            {insumosStockBajo.length > 3 ? ` y ${insumosStockBajo.length - 3} más` : ""}
-          </span>
-        </button>
+        <div style={{ marginBottom: 20 }}>
+          <AvisoBanner
+            titulo={`Hay que comprar ${insumosStockBajo.length} ${insumosStockBajo.length === 1 ? "insumo" : "insumos"}`}
+            boton={abrirOrdenCompra ? <BotonAccion onClick={abrirOrdenCompra}>Hacer el pedido al proveedor</BotonAccion> : undefined}
+          >
+            {nombresAComprar}
+          </AvisoBanner>
+        </div>
       )}
 
-      {/* Carga desde la API: mientras carga o si falla se muestra el estado
-          con "Reintentar"; nunca se vuelve a datos de ejemplo. */}
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un insumo"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre o la categoría"
+        />
+        <FiltrosChips
+          valor={chip}
+          onChange={cambiarChip}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos" },
+            ...(insumosStockBajo.length > 0 ? [{ valor: "comprar", etiqueta: "Hay que comprar", contador: insumosStockBajo.length }] : []),
+            ...categoriasActivas.map(c => ({ valor: `cat:${c.id}`, etiqueta: c.nombre })),
+            { valor: "compra", etiqueta: "Se compra" },
+            { valor: "preparamos", etiqueta: "Lo preparamos aquí" },
+            { valor: "apagados", etiqueta: "Apagados" },
+          ]}
+        />
+      </div>
+
       {cargando ? (
-        <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
-          Cargando insumos…
-        </div>
+        <p role="status" className="pn-nota">Cargando los insumos…</p>
       ) : errorCarga ? (
-        <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
-          <p className="font-semibold text-foreground">{errorCarga}</p>
-          {onReintentar && (
-            <button
-              type="button"
-              onClick={onReintentar}
-              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
-            >
-              Reintentar
-            </button>
-          )}
-        </div>
+        <AvisoBanner
+          titulo="No pudimos cargar los insumos"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={Package} titulo="No encontramos ningún insumo">
+          Revisa cómo lo escribiste, cambia el filtro o agrega uno nuevo con «Agregar un insumo».
+        </VacioEstado>
       ) : (
-      <>
-      {/* Menos de 768 px: cada insumo como tarjeta. Reutiliza las mismas piezas
-          y botones de la tabla (nombreIns, stockIns, accionesIns…). */}
-      <div className="md:hidden space-y-3 mb-3">
-        {paged.length === 0 ? (
-          <div className="bg-white dark:bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
-            <p className="font-medium">No hay resultados</p>
-          </div>
-        ) : (
-          paged.map((insumo) => (
-            <div key={insumo.id} className={`rounded-2xl border border-border bg-white dark:bg-card p-4 ${insumo.estado === "inactivo" ? "opacity-50" : ""}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-mono font-bold text-foreground">{formatearId(insumo.id)}</p>
-                  <div className="mt-0.5 text-base font-medium text-foreground break-words">{nombreIns(insumo)}</div>
-                </div>
-                <div className="shrink-0">{estadoIns(insumo)}</div>
-              </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Categoría</dt>
-                  <dd className="mt-0.5 text-foreground">{categoriaDe(insumo.categoriaId)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Unidad</dt>
-                  <dd className="mt-0.5 text-muted-foreground">{unidadIns(insumo)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock mínimo</dt>
-                  <dd className="mt-0.5 font-mono text-muted-foreground">{insumo.stockMinimo}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Stock actual</dt>
-                  <dd className="mt-0.5">{stockIns(insumo)}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesIns(insumo)}</div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Tabla: desde 768 px */}
-      <div className="bg-white dark:bg-card border border-border rounded-2xl overflow-hidden mb-3 max-md:hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px]">
-          <colgroup>
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "18%" }} />
-            <col style={{ width: "29%" }} />
-            <col style={{ width: "6%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "11%" }} />
-          </colgroup>
-          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              {["ID", "CATEGORÍA", "NOMBRE", "UNIDAD", "STOCK ACTUAL", "STOCK MÍN.", "ESTADO", "ACCIONES"].map(h => (
-                <th key={h} className="px-3 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {paged.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-3 py-14 text-center text-muted-foreground">
-                  <Package className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium">No hay resultados</p>
-                </td>
-              </tr>
-            ) : paged.map(insumo => {
-              const esProductoInsumo = insumo.tipo === "ProductoInsumo";
-              // A5.5: "Sin stock" en rojo cuando vale 0; "Stock bajo" en
-              // ámbar solo si es mayor a 0 y llegó al mínimo.
-              const stock = estadoStock(insumo);
-              const inactivo = insumo.estado === "inactivo";
-              return (
-                <tr key={insumo.id} className={`hover:bg-muted/20 dark:hover:bg-muted/10 transition-colors ${inactivo ? "opacity-50" : ""}`}>
-                  <td className="px-3 py-3.5 text-sm font-mono font-bold text-foreground">{formatearId(insumo.id)}</td>
-                  <td className="px-3 py-3.5 text-sm text-foreground break-words">
-                    {categoriaDe(insumo.categoriaId)}
-                  </td>
-                  <td className="px-3 py-3.5 text-sm text-foreground break-words">
-                    {nombreIns(insumo)}
-                  </td>
-                  <td className="px-3 py-3.5 text-sm text-muted-foreground">
-                    {unidadIns(insumo)}
-                  </td>
-                  <td className="px-3 py-3.5">
-                    {stockIns(insumo)}
-                  </td>
-                  <td className="px-3 py-3.5 text-sm font-mono text-muted-foreground">{insumo.stockMinimo}</td>
-                  <td className="px-3 py-3.5">
-                    {/* Pill de estado (diseño de Proveedores). Mantiene el
-                        flujo de siempre: elegir la opción contraria pide la
-                        confirmación y si es la actual no hace nada. */}
-                    {estadoIns(insumo)}
-                  </td>
-                  <td className="px-3 py-3.5">
-                    {accionesIns(insumo)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="pn-lista">
+          {paged.map(insumo => {
+            const apagado = insumo.estado === "inactivo";
+            return (
+              <TarjetaFila
+                key={insumo.id}
+                resaltada={!apagado && estadoStock(insumo) !== "ok" ? "rojo" : undefined}
+                nombre={insumo.nombre}
+                detalle={`${categoriaDe(insumo.categoriaId)} · ${etiquetaTipo(insumo)}`}
+                centro={barraStock(insumo)}
+                estado={<EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>}
+                acciones={
+                  <BotonAccion variante="normal" onClick={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}>
+                    Ver y cambiar
+                  </BotonAccion>
+                }
+              />
+            );
+          })}
         </div>
-      </div>
-      </>
       )}
 
-      {/* Pagination */}
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
-      )}
+      <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
 
-      {/* ─────────────────────────── Modal Crear/Editar Insumo ─────────────────────────── */}
-      <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              /* El modal se ensancha SOLO cuando el tipo es "Producto insumo"
-                 (dos columnas); el cambio de ancho tiene transición suave. */
-              className={`bg-white dark:bg-card rounded-2xl w-full ${
-                tipoForm === "producto-insumo" ? "max-h-[calc(100dvh-2rem)]" : "max-h-[90dvh]"
-              } shadow-2xl border border-border flex flex-col transition-[max-width] duration-300 ease-out ${
-                tipoForm === "producto-insumo" ? "max-w-4xl" : "max-w-md"
-              }`}
-            >
-              <div className="px-6 py-4 border-b border-border shrink-0">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                    {editingId
-                      ? editandoProducto ? "Editar Producto Insumo" : "Editar Insumo"
-                      : tipoForm === "producto-insumo" ? "Crear Producto Insumo" : "Crear Insumo"}
-                  </h3>
-                  <button
-                    onClick={tipoForm === "producto-insumo" ? handleCancelarProducto : cerrarModal}
-                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {editingId && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {editandoProducto
-                      ? "Solo se puede modificar la ficha técnica."
-                      : "Solo se puede modificar el stock mínimo."}
-                  </p>
-                )}
+      {/* ───────────── Formulario crear / cambiar (el mismo para los dos) ───────────── */}
+      {showModal && (
+        <Dialog.Root open onOpenChange={abierto => { if (!abierto) (esPI ? handleCancelarProducto() : cerrarModal()); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
+              <div className="pn-modal__cab">
+                <Dialog.Title className="pn-modal__titulo">
+                  {editingId ? `Cambiar «${nombre}»` : "Agregar un insumo"}
+                </Dialog.Title>
               </div>
 
-              {/* Tipo * — fila superior fija, a todo el ancho. Al editar queda
-                  bloqueado (no se puede cambiar de categoría a mitad de edición). */}
-              <div className="shrink-0 px-6 pt-4">
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Tipo *</label>
-                <SegmentadoButtons
-                  valor={tipoForm}
-                  opciones={[
-                    { valor: "insumo", etiqueta: "Insumo" },
-                    { valor: "producto-insumo", etiqueta: "Producto insumo" },
-                  ]}
-                  onChange={cambiarTipo}
-                  disabled={!!editingId}
-                  title={editingId ? "El tipo no se puede cambiar al editar" : undefined}
-                  fullWidth={tipoForm === "producto-insumo"}
-                />
-              </div>
+              <div className="grid gap-5" style={{ maxWidth: 980 }}>
+                <SeccionFormulario numero={1} titulo="¿Cómo se consigue?" ayuda={editingId ? "Esto no se puede cambiar después de creado." : undefined}>
+                  <OpcionesBotones
+                    etiqueta="Cómo se consigue"
+                    valor={tipoForm}
+                    onChange={cambiarTipo}
+                    deshabilitado={!!editingId}
+                    opciones={[
+                      { valor: "insumo", etiqueta: "Se compra" },
+                      { valor: "producto-insumo", etiqueta: "Lo preparamos aquí" },
+                    ]}
+                  />
+                </SeccionFormulario>
 
-              {tipoForm === "producto-insumo" ? (
-                /* ── Producto Insumo: grid de dos columnas de igual alto, con
-                    divisor vertical y scroll interno independiente. ── */
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[38%_62%] divide-y lg:divide-y-0 lg:divide-x divide-border overflow-y-auto lg:overflow-hidden">
-                  {/* Columna izquierda: Datos + resumen */}
-                  <div className="flex min-h-0 flex-col gap-3 px-6 py-3 pb-4 lg:overflow-y-auto">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Datos
-                    </p>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
+                <SeccionFormulario numero={2} titulo="Sus datos" ayuda={editingId ? (editandoProducto ? "Aquí solo se puede cambiar la receta." : "Aquí solo se puede cambiar cuánto trae cada paquete y el mínimo.") : undefined}>
+                  <div className="pn-grilla">
+                    <CampoFormulario etiqueta="Nombre" error={errorDe("nombre", errores.nombre)}>
+                      {(p) => (
                         <input
+                          {...p}
                           data-producto-insumo-campo="nombre"
                           value={nombre}
                           onChange={e => escribirNombre(e.target.value)}
-                          placeholder="Ej: Guacamole"
+                          placeholder={esPI ? "Ej: Guacamole" : "Ej: Queso mozzarella"}
                           disabled={!!editingId}
-                          className={`${ICLS_MODAL} ${
-                            editingId ? "text-muted-foreground cursor-not-allowed" : ""
-                          }`}
                         />
-                        {errorDe("nombre", errores.nombre) && (
-                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.nombre}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
+                      )}
+                    </CampoFormulario>
+
+                    <CampoFormulario etiqueta="Categoría" error={errorDe("categoria", errores.categoria)}>
+                      {(p) => (
                         <select
+                          {...p}
                           data-producto-insumo-campo="categoria"
                           value={categoriaId}
                           onChange={e => { setCategoriaId(e.target.value); tocar("categoria"); }}
                           onBlur={() => tocar("categoria")}
                           disabled={!!editingId}
-                          className={`${ICLS_MODAL} ${
-                            editingId ? "text-muted-foreground cursor-not-allowed" : "cursor-pointer"
-                          }`}
                         >
-                          <option value="">Selecciona una categoría</option>
+                          <option value="">Escoge una categoría</option>
                           {categoriasActivas.map(c => (
                             <option key={c.id} value={c.id}>{c.nombre}</option>
                           ))}
                         </select>
-                        {errorDe("categoria", errores.categoria) && (
-                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.categoria}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de medida *</label>
-                        <div className="flex items-start gap-2">
-                          <UnidadSelect
-                            value={piUnidadMedida}
-                            onChange={(value) => {
-                              setPiUnidadMedida(value);
-                              setContenidoPresentacion(0);
-                            }}
-                            disabled={editandoProducto}
-                            unidades={UNIDADES_Y_PRESENTACIONES_INSUMO}
-                            placeholder="Unidad"
-                            ariaLabel="Unidad de medida"
-                            dataField="unidad"
-                            mostrarValorSeleccionadoCorto
-                            fieldClassName={`h-12 border border-border ${
-                              editandoProducto
-                                ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
-                                : "bg-muted dark:bg-input text-foreground"
-                            }`}
-                          />
-                          {esOtraPresentacion(piUnidadMedida) && (
-                            <div className="w-36 shrink-0">
-                              <div className="relative">
-                                <input
-                                  type="number"
-                                  min={0.01}
-                                  step={0.01}
-                                  data-producto-insumo-campo="contenidoPresentacion"
-                                  value={contenidoPresentacion || ""}
-                                  placeholder="Contenido *"
-                                  onChange={(e) => setContenidoPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                                  className="h-12 w-full rounded-xl border border-border bg-muted px-3 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                />
-                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                                  {piUnidadMedida === OTRA_PRESENTACION_G ? "g" : "ml"}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {esOtraPresentacion(piUnidadMedida) && errorDe("contenidoPresentacion", errores.contenidoPresentacion) && (
-                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.contenidoPresentacion}</p>
-                        )}
-                        {errorDe("unidad", errores.unidad) && (
-                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.unidad}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                          Stock Mínimo{presentacionProducto
-                            ? ` (× ${etiquetaContenidoProducto})`
-                            : esOtraPresentacion(piUnidadMedida)
-                              ? ` (× ${etiquetaContenido(piUnidadMedida, contenidoPresentacion, unidadBaseDeSeleccion(piUnidadMedida)! )})`
-                              : piUnidadMedida ? ` (${piUnidadMedida})` : ""} *
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            data-producto-insumo-campo="stockMinimo"
-                            min={0}
-                            step={presentacionProducto || esOtraPresentacion(piUnidadMedida) ? 0.01 : undefined}
-                            value={stockMinimo === 0 ? "" : stockMinimo}
-                            placeholder="0"
-                            onChange={e => {
-                              setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)));
-                              tocar("stockMinimo");
-                            }}
-                            onBlur={() => tocar("stockMinimo")}
-                            disabled={!!editingId}
-                            className={`${ICLS_MODAL} h-12 ${piUnidadMedida ? "pr-16" : ""} ${
-                              editingId ? "text-muted-foreground cursor-not-allowed" : ""
-                            }`}
-                          />
-                          {piUnidadMedida && !presentacionProducto && !esOtraPresentacion(piUnidadMedida) && (
-                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                              {piUnidadMedida}
+                      )}
+                    </CampoFormulario>
+
+                    <CampoFormulario
+                      etiqueta="Se mide en"
+                      error={esPI ? errorDe("unidad", errores.unidad) : undefined}
+                    >
+                      <div className="flex items-start gap-2">
+                        <UnidadSelect
+                          value={unidadForm}
+                          onChange={(value) => {
+                            if (esPI) setPiUnidadMedida(value); else setUnidad(value);
+                            setContenidoPresentacion(0);
+                          }}
+                          disabled={!!editingId}
+                          unidades={UNIDADES_Y_PRESENTACIONES_INSUMO}
+                          placeholder="Escoge la unidad"
+                          ariaLabel="Se mide en"
+                          dataField={esPI ? "unidad" : undefined}
+                          mostrarValorSeleccionadoCorto
+                          fieldClassName={`h-[60px] border-2 border-[var(--borde-campo)] rounded-[14px] text-[20px] ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
+                        />
+                        {esOtraPresentacion(unidadForm) && (
+                          <div className="relative w-40 shrink-0">
+                            <input
+                              type="number"
+                              min={0.01}
+                              step={0.01}
+                              data-producto-insumo-campo="contenidoPresentacion"
+                              value={contenidoPresentacion || ""}
+                              placeholder="¿Cuánto trae?"
+                              aria-label="Contenido"
+                              onChange={(e) => setContenidoPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
+                              style={{ paddingRight: 44 }}
+                            />
+                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
+                              {unidadForm === OTRA_PRESENTACION_G ? "g" : "ml"}
                             </span>
-                          )}
-                        </div>
-                        {presentacionProducto && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {formatoCantidad.format(stockMinimo)} × {etiquetaContenidoProducto} ={" "}
-                            {formatoCantidad.format(stockMinimo * presentacionProducto.contenido)} {presentacionProducto.unidadBase}
-                          </p>
-                        )}
-                        {errorDe("stockMinimo", errores.stockMinimo) && (
-                          <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.stockMinimo}</p>
+                          </div>
                         )}
                       </div>
-                    </div>
+                      {esOtraPresentacion(unidadForm) && errorDe("contenidoPresentacion", errores.contenidoPresentacion) && (
+                        <p className="pn-campo__error" role="alert"><span>{errores.contenidoPresentacion}</span></p>
+                      )}
+                    </CampoFormulario>
 
-                    <div className="mt-auto rounded-xl border border-border bg-muted/40 p-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        Resumen
-                      </p>
-                      <div className="mt-2 space-y-1.5 text-sm">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">Insumos agregados</span>
-                          <span className="font-semibold text-foreground">{piFicha.insumos.length}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">Tiempo de preparación</span>
-                          <span className="font-semibold text-foreground">
-                            {piFicha.tiempoPreparacion > 0 ? `${piFicha.tiempoPreparacion} min` : "—"}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">Unidades (porciones)</span>
-                          <span className="font-semibold text-foreground">
-                            {piFicha.rendimiento && piFicha.rendimiento > 0 && presentacionProducto
-                              ? `${formatoCantidad.format(piFicha.rendimiento)} × ${etiquetaContenidoProducto} (${formatoCantidad.format(cantidadProductoGuardada)} ${presentacionProducto.unidadBase})`
-                              : piFicha.rendimiento && piFicha.rendimiento > 0
-                                ? `${piFicha.rendimiento}${piUnidadMedida ? ` ${piUnidadMedida}` : ""}`
-                              : "—"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    {!esPI && (
+                      <CampoFormulario
+                        etiqueta="¿Cuánto trae cada paquete?"
+                        ayuda={`En ${unidadPeso === "g" ? "gramos" : unidadPeso === "ml" ? "mililitros" : unidadPeso}. Ej.: una bolsa de 500 g`}
+                        error={errorDe("pesoMedida", errores.pesoMedida)}
+                      >
+                        {(p) => (
+                          <div className="relative">
+                            <input
+                              {...p}
+                              type="number"
+                              min={0.01}
+                              step={0.01}
+                              value={pesoMedida === 0 ? "" : pesoMedida}
+                              placeholder="Ej: 500"
+                              onChange={e => {
+                                setPesoMedida(numeroDeInput(limpiarNumeroInput(e.target.value)));
+                                tocar("pesoMedida");
+                              }}
+                              onBlur={() => tocar("pesoMedida")}
+                              style={{ paddingRight: 56 }}
+                            />
+                            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
+                              {unidadPeso}
+                            </span>
+                          </div>
+                        )}
+                      </CampoFormulario>
+                    )}
+
+                    <CampoFormulario
+                      etiqueta={`Avísame cuando quede menos de${sufijoMinimo}`}
+                      ayuda={presentacionForm ? `${formatoCantidad.format(stockMinimo)} × ${esPI ? etiquetaContenidoProducto : etiquetaContenido(unidad, presentacionForm.contenido, presentacionForm.unidadBase)} = ${formatoCantidad.format(stockMinimo * presentacionForm.contenido)} ${presentacionForm.unidadBase}` : undefined}
+                      error={errorDe("stockMinimo", errores.stockMinimo)}
+                    >
+                      {(p) => (
+                        <input
+                          {...p}
+                          type="number"
+                          data-producto-insumo-campo="stockMinimo"
+                          min={0}
+                          step={presentacionForm || esOtraPresentacion(unidadForm) ? 0.01 : undefined}
+                          value={stockMinimo === 0 ? "" : stockMinimo}
+                          placeholder="0"
+                          onChange={e => {
+                            setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)));
+                            tocar("stockMinimo");
+                          }}
+                          onBlur={() => tocar("stockMinimo")}
+                          disabled={esPI && !!editingId}
+                        />
+                      )}
+                    </CampoFormulario>
+
+                    {!esPI && editingId && (
+                      <CampoFormulario etiqueta="Hay ahora en bodega" ayuda="Esto lo mueven las compras y la cocina, no se cambia aquí.">
+                        {(p) => <input {...p} type="number" value={stockActual === 0 ? "" : stockActual} placeholder="0" disabled />}
+                      </CampoFormulario>
+                    )}
                   </div>
+                </SeccionFormulario>
 
-                  {/* Columna derecha: Ficha técnica */}
-                  <div className="flex min-h-0 flex-col px-6 py-4 pb-4 lg:overflow-y-auto">
-                    <p className="shrink-0 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                      Ficha Técnica
-                    </p>
-                    <div className="min-h-0 lg:flex-1">
+                {esPI && (
+                  <SeccionFormulario
+                    numero={3}
+                    titulo="Receta (ficha técnica)"
+                    ayuda="Cuánto sale de cada tanda, cuánto se demora y qué insumos lleva."
+                  >
+                    <div className="pn-ficha">
                       <FichaTecnicaEditor
                         ficha={piFicha}
                         onChange={cambiarFichaPI}
@@ -1610,441 +1447,178 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                         errorInsumos={errorDe("insumos", errores.insumos)}
                       />
                     </div>
-                  </div>
-                </div>
-              ) : (
-                /* ── Insumo normal: un solo campo, exactamente como siempre ── */
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="px-6 py-5 space-y-4">
-                  {/* Nombre */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nombre *</label>
-                    <input
-                      value={nombre}
-                      onChange={e => escribirNombre(e.target.value)}
-                      placeholder="Ej: Queso Mozzarella"
-                      disabled={!!editingId}
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm focus:outline-none ${
-                        editingId
-                          ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30"
-                      }`}
-                    />
-                    {errorDe("nombre", errores.nombre) && (
-                      <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.nombre}</p>
-                    )}
-                  </div>
-                  {/* Categoría + Unidad */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Categoría *</label>
-                      <select
-                        value={categoriaId}
-                        onChange={e => { setCategoriaId(e.target.value); tocar("categoria"); }}
-                        onBlur={() => tocar("categoria")}
-                        disabled={!!editingId}
-                        className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm focus:outline-none ${
-                          editingId
-                            ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                            : "bg-muted dark:bg-input text-foreground focus:ring-2 focus:ring-primary/30 cursor-pointer"
-                        }`}
-                      >
-                        <option value="">Selecciona una categoría</option>
-                        {categoriasActivas.map(c => (
-                          <option key={c.id} value={c.id}>{c.nombre}</option>
-                        ))}
-                      </select>
-                      {errorDe("categoria", errores.categoria) && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.categoria}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unidad de Medida *</label>
-                      {/* Select personalizado (Radix, igual que los estados): el
-                          `<select>` nativo desplegaba la lista CUADRADA y con el
-                          azul del navegador. */}
-                      {/* A5.2: UNA sola lista de unidades (UNIDADES_INSUMO),
-                          la misma que la del Producto Insumo y la de cada
-                          fila de la ficha. */}
-                      <div className="flex items-start gap-2">
-                        <UnidadSelect
-                          value={unidad}
-                          onChange={(value) => {
-                            setUnidad(value);
-                            setContenidoPresentacion(0);
-                          }}
-                          disabled={!!editingId}
-                          unidades={UNIDADES_Y_PRESENTACIONES_INSUMO}
-                          mostrarValorSeleccionadoCorto
-                          fieldClassName={
-                            editingId
-                              ? "bg-muted/50 dark:bg-muted/30 text-muted-foreground"
-                              : "bg-muted dark:bg-input text-foreground"
-                          }
-                        />
-                        {esOtraPresentacion(unidad) && (
-                          <div className="relative w-36 shrink-0">
-                            <input
-                              type="number"
-                              min={0.01}
-                              step={0.01}
-                              data-producto-insumo-campo="contenidoPresentacion"
-                              value={contenidoPresentacion || ""}
-                              placeholder="Contenido *"
-                              onChange={(e) => setContenidoPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                              className="h-full min-h-[2.875rem] w-full rounded-xl border border-border bg-muted px-3 py-2.5 max-md:min-h-11 pr-10 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                            />
-                            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                              {unidad === OTRA_PRESENTACION_G ? "g" : "ml"}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      {esOtraPresentacion(unidad) && errorDe("contenidoPresentacion", errores.contenidoPresentacion) && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.contenidoPresentacion}</p>
-                      )}
-                    </div>
-                  </div>
-                  {/* Peso de medida: cantidad exacta de una unidad del insumo
-                      (ej. 1200 g). Obligatorio al crear; los insumos antiguos
-                      lo tienen en NULL y se completan al editar. */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Peso de medida *</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        min={0.01}
-                        step={0.01}
-                        value={pesoMedida === 0 ? "" : pesoMedida}
-                        placeholder="Ej: 1200"
-                        onChange={e => {
-                          setPesoMedida(numeroDeInput(limpiarNumeroInput(e.target.value)));
-                          tocar("pesoMedida");
-                        }}
-                        onBlur={() => tocar("pesoMedida")}
-                        className="w-full px-3 py-2.5 max-md:min-h-11 pr-14 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                        {unidadPeso}
-                      </span>
-                    </div>
-                    {errorDe("pesoMedida", errores.pesoMedida) && (
-                      <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.pesoMedida}</p>
-                    )}
-                  </div>
-                  {/* Punto 10: el Stock Actual solo aparece al EDITAR (al crear
-                      el stock se carga después de dar de alta el insumo). Es
-                      SOLO LECTURA: el stock lo mueven Compras (suma) y
-                      Producción (resta); aquí solo se edita el Stock Mínimo. */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {editingId && (
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Stock Actual</label>
-                        {/* 0 = vacío (punto B1): al borrar no reaparece el 0. */}
-                        <input
-                          type="number"
-                          min={0}
-                          value={stockActual === 0 ? "" : stockActual}
-                          placeholder="0"
-                          disabled
-                          className="w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm bg-muted/50 dark:bg-muted/30 text-muted-foreground cursor-not-allowed"
-                        />
-                      </div>
-                    )}
-                    {/* En creación toma las dos columnas: no está el Stock Actual. */}
-                    <div className={editingId ? "" : "sm:col-span-2"}>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                        Stock Mínimo{presentacionUnidad
-                          ? ` (× ${etiquetaContenido(unidad, presentacionUnidad.contenido, presentacionUnidad.unidadBase)})`
-                          : esOtraPresentacion(unidad)
-                            ? ` (× ${etiquetaContenido(unidad, contenidoPresentacion, unidadBaseDeSeleccion(unidad)! )})`
-                            : ""} *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0}
-                          step={presentacionUnidad || esOtraPresentacion(unidad) ? 0.01 : undefined}
-                          value={stockMinimo === 0 ? "" : stockMinimo}
-                          placeholder="0"
-                          onChange={e => {
-                            setStockMinimo(numeroDeInput(limpiarNumeroInput(e.target.value)));
-                            tocar("stockMinimo");
-                          }}
-                          onBlur={() => tocar("stockMinimo")}
-                          className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl text-sm bg-muted dark:bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${presentacionUnidad || esOtraPresentacion(unidad) ? "pr-20" : ""}`}
-                        />
-                        {(!presentacionUnidad && esOtraPresentacion(unidad)) && (
-                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                            {etiquetaContenido(unidad, contenidoPresentacion, unidadBaseDeSeleccion(unidad)!)}
-                          </span>
-                        )}
-                      </div>
-                      {presentacionUnidad && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {formatoCantidad.format(stockMinimo)} × {etiquetaContenido(unidad, presentacionUnidad.contenido, presentacionUnidad.unidadBase)} ={" "}
-                          {formatoCantidad.format(stockMinimo * presentacionUnidad.contenido)} {presentacionUnidad.unidadBase}
-                        </p>
-                      )}
-                      {errorDe("stockMinimo", errores.stockMinimo) && (
-                        <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">{errores.stockMinimo}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                </div>
-              )}
+                  </SeccionFormulario>
+                )}
 
-              <div className={`flex gap-3 px-6 py-4 border-t border-border shrink-0 ${
-                tipoForm === "producto-insumo" ? "bg-card" : ""
-              }`}>
-                <button
-                  onClick={tipoForm === "producto-insumo" ? handleCancelarProducto : cerrarModal}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={tipoForm === "producto-insumo" ? handleGuardarProducto : handleSave}
-                  disabled={guardando}
-                  className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
-                    guardando ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer active:scale-95"
-                  }`}
-                >
-                  <Check className="w-4 h-4" />
-                  {guardando
-                    ? "Guardando…"
-                    : editingId
-                      ? "Guardar"
-                      : tipoForm === "producto-insumo" ? "Crear Producto Insumo" : "Crear Insumo"}
-                </button>
+                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={esPI ? handleCancelarProducto : cerrarModal}>Cancelar</BotonAccion>
+                  <BotonAccion
+                    variante="principal"
+                    icono={Check}
+                    disabled={guardando}
+                    onClick={esPI ? handleGuardarProducto : handleSave}
+                  >
+                    {guardando ? "Guardando…" : editingId ? "Guardar cambios" : "Agregar el insumo"}
+                  </BotonAccion>
+                </div>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
-      {/* ─────────────────────────── Modal Detalle ─────────────────────────── */}
-      <AnimatePresence>
-        {showDetalleModal && detalleItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white dark:bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border flex flex-col max-h-[90vh]"
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-                <h3
-                  className="min-w-0 flex-1 pr-3 text-lg font-bold text-foreground break-words"
-                  style={{ fontFamily: SERIF }}
-                >
-                  {/* Título según el campo `tipo` del registro (no por el
-                      prefijo del ID): un solo modal, un solo título dinámico. */}
-                  {detalleItem.tipo === "ProductoInsumo" ? "Detalle de Producto Insumo" : "Detalle de Insumo"}
-                </h3>
-                <button onClick={() => setShowDetalleModal(false)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground shrink-0">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="px-6 py-5 space-y-3 overflow-y-auto">
-                {(() => {
-                  if ("tipo" in detalleItem && (detalleItem as ProductoInsumo).tipo === "ProductoInsumo") {
-                    const d = detalleItem as Insumo;
-                    const guardadas = fichas[d.id] ?? [];
-                    const fv = guardadas.length > 0 ? guardadas[guardadas.length - 1] : fichaDesdeLegacyInsumo(d);
-                    return (
-                      <>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">ID</label>
-                          <p className="text-sm font-mono font-bold text-foreground">{formatearId(d.id)}</p>
+      {/* ───────────── Ver y cambiar (detalle) ───────────── */}
+      {showDetalleModal && detalleItem && (() => {
+        const d = detalleItem as Insumo;
+        const esProd = d.tipo === "ProductoInsumo";
+        const apagado = d.estado === "inactivo";
+        const stock = estadoStock(d);
+        const guardadas = esProd ? (fichas[d.id] ?? []) : [];
+        const fv = esProd ? (guardadas.length > 0 ? guardadas[guardadas.length - 1] : fichaDesdeLegacyInsumo(d)) : null;
+        return (
+          <Dialog.Root open onOpenChange={abierto => { if (!abierto) cerrarDetalle(); }}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="pn-dialogo-fondo" />
+              <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+                <div className="pn-modal__cab">
+                  <Dialog.Title className="pn-modal__titulo">{d.nombre}</Dialog.Title>
+                  {apagado
+                    ? <EstadoPill tono="gris">Apagado</EstadoPill>
+                    : <EstadoPill tono={stock === "ok" ? "verde" : "rojo"}>{stock === "ok" ? "Alcanza bien" : "Hay que comprar"}</EstadoPill>}
+                </div>
+                <p className="pn-seccion__ayuda" style={{ marginTop: -6 }}>{categoriaDe(d.categoriaId)} · {etiquetaTipo(d)}</p>
+
+                <div className="grid gap-4">
+                  <SeccionFormulario titulo="Cuánto hay">
+                    <DatosDetalle datos={[
+                      { etiqueta: "Hay en bodega", valor: fmtCant(d.stockActual, d.unidadMedida) },
+                      { etiqueta: "Mínimo en bodega", valor: fmtCant(d.stockMinimo, d.unidadMedida) },
+                      ...(!esProd ? [
+                        { etiqueta: "Cada paquete trae", valor: d.pesoMedida != null ? `${formatoCantidad.format(d.pesoMedida)} ${d.unidadMedida}` : "—" },
+                        { etiqueta: "Costo", valor: fmtCOP(d.costoUnitario) },
+                        { etiqueta: "IVA", valor: d.iva !== null ? `${d.iva}%` : "—" },
+                      ] : [
+                        { etiqueta: "Rinde cada tanda", valor: fv?.rendimiento && fv.rendimiento > 0 ? `${formatoCantidad.format(fv.rendimiento)} ${d.unidadMedida}` : "—" },
+                        { etiqueta: "Se demora", valor: fv && fv.tiempoPreparacion > 0 ? `${fv.tiempoPreparacion} min` : "—" },
+                      ]),
+                    ]} />
+                  </SeccionFormulario>
+
+                  {esProd && (
+                    <SeccionFormulario titulo="Receta (ficha técnica)">
+                      {fv && fv.insumos.length > 0 ? (
+                        <div className="pn-permisos">
+                          {fv.insumos.map((r, i) => (
+                            <div key={`${r.nombre}-${i}`} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,1fr) auto" }}>
+                              <strong>{r.nombre}</strong>
+                              <span>{formatoCantidad.format(r.cantidad)} {r.unidad}</span>
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre</label>
-                          <p className="text-sm text-foreground">{d.nombre}</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
-                          <p className="text-sm text-foreground">{categoriaDe(d.categoriaId)}</p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock actual</label>
-                            <p className="text-sm font-mono font-bold text-foreground">{d.stockActual} {d.unidadMedida}</p>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock mínimo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.stockMinimo}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                          <p className={`text-sm font-mono font-bold ${d.estado === "activo" ? "text-emerald-600" : "text-gray-500"}`}>
-                            {d.estado === "activo" ? "Activo" : "Inactivo"}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Ficha técnica</label>
-                          {fv ? (
-                            <FichaTecnicaDetalle
-                              v={fv}
-                              readCls="w-full px-3 py-2 max-md:min-h-11 bg-muted/50 rounded-xl border border-border text-sm text-foreground"
-                              modo="insumo"
-                              unidadCantidad={d.unidadMedida}
-                            />
-                          ) : (
-                            <p className="text-sm text-muted-foreground italic">Sin ficha técnica</p>
-                          )}
-                        </div>
-                      </>
-                    );
-                  } else {
-                    const d = detalleItem as Insumo;
-                    return (
-                      <>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">ID</label>
-                          <p className="text-sm font-mono font-bold text-foreground">{formatearId(d.id)}</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre</label>
-                          <p className="text-sm text-foreground">{d.nombre}</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Categoría</label>
-                          <p className="text-sm text-foreground">{categoriaDe(d.categoriaId)}</p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad</label>
-                            <p className="text-sm text-foreground">{d.unidadMedida}</p>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Actual</label>
-                            <p className="text-sm font-mono font-bold text-foreground">{d.stockActual}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Peso de medida</label>
-                          <p className="text-sm font-mono text-foreground">
-                            {d.pesoMedida != null
-                              ? `${formatoCantidad.format(d.pesoMedida)} ${d.unidadMedida}`
-                              : "—"}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Stock Mínimo</label>
-                            <p className="text-sm font-mono text-muted-foreground">{d.stockMinimo}</p>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">IVA</label>
-                            <p className="text-sm font-mono font-bold text-foreground">{d.iva !== null ? `${d.iva}%` : "-"}</p>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Costo Unitario</label>
-                          <p className="text-sm font-mono font-bold text-foreground">{fmtCOP(d.costoUnitario)}</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                          <p className="text-sm font-mono font-bold text-foreground">{d.estado === "activo" ? "Activo" : "Inactivo"}</p>
-                        </div>
-                      </>
-                    );
-                  }
-                })()}
-              </div>
-              <div className="flex gap-3 px-6 py-4 border-t border-border">
-                {(() => {
-                  if (!("tipo" in detalleItem && (detalleItem as ProductoInsumo).tipo === "ProductoInsumo")) return null;
-                  const d = detalleItem as Insumo;
-                  return (
-                    <button
-                      onClick={() => { setShowDetalleModal(false); abrirOrdenProduccion?.(d.id); }}
-                      disabled={!fichaVigente(fichas, d) || d.estado === "inactivo"}
-                      title={d.estado === "inactivo" ? "Producto Insumo inactivo" : !fichaVigente(fichas, d) ? "Registra su ficha técnica primero" : "Programar producción"}
-                      className="flex-1 py-2.5 max-md:min-h-11 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      ) : (
+                        <p className="pn-seccion__ayuda">Todavía no tiene receta. Regístrala con «Cambiar datos».</p>
+                      )}
+                    </SeccionFormulario>
+                  )}
+                </div>
+
+                <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                  {esProd && (
+                    <BotonAccion
+                      variante="principal"
+                      icono={ChefHat}
+                      disabled={!fichaVigente(fichas, d) || apagado}
+                      title={apagado ? "Está apagado" : !fichaVigente(fichas, d) ? "Registra su receta primero" : undefined}
+                      onClick={() => { cerrarDetalle(); abrirOrdenProduccion?.(d.id); }}
                     >
-                      Programar producción
-                    </button>
-                  );
-                })()}
-                <button
-                  onClick={() => setShowDetalleModal(false)}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                      Programar una tanda
+                    </BotonAccion>
+                  )}
+                  <BotonAccion
+                    variante="normal"
+                    disabled={apagado}
+                    title={apagado ? "Enciéndelo para poder cambiarlo" : undefined}
+                    onClick={() => { cerrarDetalle(); openEdit(d); }}
+                  >
+                    Cambiar datos
+                  </BotonAccion>
+                  <BotonAccion variante="normal" onClick={() => { cerrarDetalle(); toggleEstado(d.id); }}>
+                    {apagado ? "Encender" : "Apagar"}
+                  </BotonAccion>
+                  <BotonAccion variante="peligro" onClick={() => { cerrarDetalle(); intentarEliminar(d.id); }}>Borrar</BotonAccion>
+                  <BotonAccion variante="oscuro" onClick={cerrarDetalle}>Cerrar</BotonAccion>
+                </div>
+                {apagado && <p className="pn-campo__ayuda" style={{ marginTop: 10 }}>Para cambiar sus datos, primero enciéndelo.</p>}
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        );
+      })()}
 
-      {/* ─────────────────────────── Modal Confirmación ─────────────────────────── */}
-      <AnimatePresence>
-        {confirmState.tipo === "no-eliminar" && (() => {
-          const reg = confirmState.id ? insumos.find(i => i.id === confirmState.id) : null;
-          return (
-            <ConfirmDialog
-              titulo="No se puede eliminar"
-              icono={
-                <span className="inline-flex w-10 h-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                </span>
-              }
-              mensaje={
-                <>
-                  No se puede eliminar «{reg?.nombre}» porque se usa en:{" "}
-                  {(confirmState.usadosEn ?? []).join(", ")}. Puedes inactivarlo.
-                </>
-              }
-              soloConfirmar
-              textoConfirmar="Entendido"
-              cerrarConEscYOverlay
-              enfocarCancelar
-              onConfirmar={cancelarConfirmacion}
-              onCancelar={cancelarConfirmacion}
-            />
-          );
-        })()}
-        {confirmState.tipo && confirmState.tipo !== "no-eliminar" && (
-          <ConfirmDialog
-            mensaje={
-              regAEliminar
-                ? `Vas a eliminar «${regAEliminar.nombre}» (ID ${regAEliminar.id}). Esta acción no se puede deshacer.`
-                : confirmState.mensaje
-            }
-            titulo={
-              confirmState.tipo === "eliminar"
-                ? regAEliminar?.tipo === "ProductoInsumo"
-                  ? "¿Eliminar producto insumo?"
-                  : "¿Eliminar insumo?"
-                : undefined
-            }
-            icono={
-              confirmState.tipo === "eliminar" ? (
-                <span className="inline-flex w-10 h-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                </span>
-              ) : undefined
-            }
-            textoConfirmar={
-              guardando
-                ? "Guardando…"
-                : confirmState.tipo === "eliminar" ? "Eliminar" : "Confirmar"
-            }
-            cerrarConEscYOverlay={confirmState.tipo === "eliminar"}
-            enfocarCancelar={confirmState.tipo === "eliminar"}
-            onConfirmar={() => {
-              if (guardando) return;
-              void ejecutarConfirmacion();
-            }}
-            onCancelar={cancelarConfirmacion}
+      {/* ───────────── Confirmaciones ───────────── */}
+      {bloqueo ? (
+        <DialogoConfirmacion
+          variante="bloqueo"
+          abierto
+          onCambiarAbierto={a => { if (!a) cerrarBloqueo(); }}
+          titulo={`No se puede borrar «${bloqueo.nombre}»`}
+          porQueNo={[...bloqueo.razones, "Lo que ya tiene movimientos no se borra: se apaga y queda guardado"]}
+          textoAlternativa={regBloqueo?.estado === "activo" ? "Apagarlo en vez de borrarlo" : undefined}
+          onAlternativa={() => { if (bloqueo.id) toggleEstado(bloqueo.id); }}
+        />
+      ) : confirmState.tipo === "eliminar" ? (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
+          titulo={`¿Borrar «${nombreConfirm}»?`}
+          queVaAPasar={["Se borra para siempre", "No se puede deshacer"]}
+          textoAccion="Sí, borrar"
+          onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
+        />
+      ) : confirmState.tipo === "cambiar-estado" ? (
+        confirmState.nuevoEstado === "inactivo" ? (
+          <DialogoConfirmacion
+            abierto
+            onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
+            titulo={`¿Apagar «${nombreConfirm}»?`}
+            queVaAPasar={["Deja de salir en las listas y en las recetas nuevas", "Lo que hay en bodega no se borra", "Lo puedes volver a encender cuando quieras"]}
+            textoAccion="Sí, apagar"
+            onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
           />
-        )}
-      </AnimatePresence>
+        ) : (
+          <DialogoConfirmacion
+            abierto
+            onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
+            titulo={`¿Volver a encender «${nombreConfirm}»?`}
+            queVaAPasar={["Vuelve a salir en las listas y en las recetas nuevas", "Se cuenta de nuevo para saber qué hay que comprar"]}
+            textoSeguro="No, dejarlo apagado"
+            textoAccion="Sí, encender"
+            onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
+          />
+        )
+      ) : confirmState.tipo === "crear-producto" ? (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
+          titulo={editandoProducto ? "¿Guardar los cambios de la receta?" : "¿Agregar este insumo con su receta?"}
+          queVaAPasar={editandoProducto
+            ? ["Se guarda la receta nueva", "Las tandas ya hechas no cambian"]
+            : ["Se guarda el insumo con su receta", "Se manda una orden a la cocina para preparar la primera tanda"]}
+          textoSeguro="No, volver a revisar"
+          textoAccion={editandoProducto ? "Sí, guardar" : "Sí, agregarlo"}
+          onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
+        />
+      ) : confirmState.tipo === "cancelar-producto" ? (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
+          titulo="¿Salir sin guardar?"
+          queVaAPasar={["Se pierde lo que escribiste", "El insumo no se guarda"]}
+          textoSeguro="No, seguir escribiendo"
+          textoAccion="Sí, salir sin guardar"
+          onConfirmar={() => void ejecutarConfirmacion()}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,15 @@
+import { ChefHat, Download } from "lucide-react";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import { useState, useMemo, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
 import { motion, AnimatePresence } from "motion/react";
@@ -555,7 +567,7 @@ export const INITIAL_ORDENES: OrdenProduccion[] = [
   },
 ];
 
-const PER_PAGE = 5;
+const PER_PAGE = 10;
 
 const emptyForm = (tipo: TipoOrden = "preparacion"): OrdenForm => ({
   tipo,
@@ -734,40 +746,41 @@ function AvisoFaltantes({
   const productosInsumo = insumos ? reales.filter((f) => esFaltanteProductoInsumo(f, insumos)) : [];
   const crudos = reales.filter((f) => !productosInsumo.includes(f));
   return (
-    <div className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-1.5">
-      <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
-        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-        <span>No hay la cantidad suficiente de insumos. Por favor, disminuye la cantidad.</span>
-      </p>
+    <div className="pn-aviso" style={{ display: "block" }}>
+      <h2 style={{ marginBottom: 6 }}>Faltan insumos para empezar</h2>
+      <p style={{ fontSize: 18, marginBottom: 8 }}>No hay lo suficiente en la bodega. Baja la cantidad o compra lo que falta.</p>
       {faltantes.map((f) => (
-        <div key={f.insumoId} className="pl-6 text-xs text-red-700">
+        <div key={f.insumoId} className="text-lg" style={{ color: "var(--ambar-texto)" }}>
           {esInsumoInactivo(f) ? (
             <p>
               Insumo inactivo: {f.nombre}.{" "}
               <button
                 type="button"
                 onClick={onIrInsumos}
-                className="font-semibold underline underline-offset-2 cursor-pointer"
+                className="pn-boton pn-boton--normal" style={{ minHeight: 46, marginLeft: 8 }}
               >
-                Ve a Insumos para habilitarlo
+                Ir a Insumos
               </button>
             </p>
           ) : (
-            <p>
-              {f.motivo
-                ? motivoFaltante(f)
-                : `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`}
+            <p className="flex flex-wrap items-center gap-3" style={{ margin: "4px 0" }}>
+              <EstadoPill tono="rojo">Falta</EstadoPill>
+              <span>
+                {f.motivo
+                  ? motivoFaltante(f)
+                  : `${f.nombre}: faltan ${fmtCant(f.falta, f.unidad)} (hay ${fmtCant(f.stock, f.unidad)})`}
+              </span>
             </p>
           )}
         </div>
       ))}
       {((onComprar && crudos.length > 0) || (onPreparar && productosInsumo.length > 0)) && (
-        <div className="pl-6 pt-1 flex flex-wrap gap-2">
+        <div className="pt-2 flex flex-wrap gap-3">
           {onComprar && crudos.length > 0 && (
             <button
               type="button"
               onClick={() => onComprar(crudos)}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+              className="pn-boton pn-boton--principal"
             >
               Comprar insumos faltantes
             </button>
@@ -777,7 +790,7 @@ function AvisoFaltantes({
               key={f.insumoId}
               type="button"
               onClick={() => onPreparar(f)}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+              className="pn-boton pn-boton--principal"
             >
               Preparar {f.nombre}
             </button>
@@ -1104,7 +1117,7 @@ function TablaInsumosRequeridos({
   return (
     <div className="space-y-3">
     <div className="rounded-xl border border-border overflow-hidden">
-      <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+      <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-base font-bold uppercase tracking-wide text-muted-foreground">
         <span className="col-span-2">Insumo</span>
         <span className="text-right">Requerido</span>
         <span className="text-right">Stock actual</span>
@@ -1125,13 +1138,13 @@ function TablaInsumosRequeridos({
           ? calculoFaltante?.falta ?? 0
           : 0;
         return (
-          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-xs border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
+          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-base border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
             <span className="col-span-2 font-medium text-foreground truncate">{r.nombre}</span>
             <span className="text-right tabular-nums font-semibold text-foreground">{fmtCant(r.cantidad, r.unidad)}</span>
             <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, insumo?.unidadMedida ?? r.unidad)}</span>
             <span className="flex flex-col items-end gap-1 text-right">
               {descontados
-                ? <span className="text-emerald-600 font-semibold">Descontado ✓</span>
+                ? <EstadoPill tono="verde">Descontado ✓</EstadoPill>
                 : noExiste
                 ? <span className="text-amber-600 font-semibold" title="El insumo no está dado de alta en Gestión de Insumos">No está en el catálogo</span>
                 : inactivo
@@ -1141,8 +1154,8 @@ function TablaInsumosRequeridos({
                 : unidadIncompatible
                   ? <span className="text-amber-600 font-semibold">{motivoFaltante(calculoFaltante!)}</span>
                 : falta > 0
-                  ? <span className="text-red-600 font-semibold">Faltan {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</span>
-                  : <span className="text-emerald-600 font-semibold">Alcanza</span>}
+                  ? <EstadoPill tono="rojo">Falta {fmtCant(falta, calculoFaltante?.unidad ?? r.unidad)}</EstadoPill>
+                  : <EstadoPill tono="verde">✓ Alcanza</EstadoPill>}
             </span>
           </div>
         );
@@ -1155,13 +1168,13 @@ function TablaInsumosRequeridos({
           <span>Faltan insumos para iniciar esta orden</span>
         </p>
         {inactivos.map((f) => (
-          <div key={`i-${f.insumoId}`} className="pl-6 text-xs text-red-700 flex flex-wrap items-center gap-2">
+          <div key={`i-${f.insumoId}`} className="pl-6 text-base text-red-700 flex flex-wrap items-center gap-2">
             <span>· Insumo inactivo: {f.nombre}</span>
             {onIrInsumos && (
               <button
                 type="button"
                 onClick={onIrInsumos}
-                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+                className="pn-boton pn-boton--principal"
               >
                 Ir a Insumos
               </button>
@@ -1169,22 +1182,22 @@ function TablaInsumosRequeridos({
           </div>
         ))}
         {faltantesCrudos.map((f) => (
-          <p key={`c-${f.insumoId}`} className="pl-6 text-xs text-red-700">
+          <p key={`c-${f.insumoId}`} className="text-lg" style={{ color: "var(--ambar-texto)" }}>
             · Debes comprar {fmtCant(f.falta, f.unidad)} de {f.nombre}
           </p>
         ))}
         {faltantesPreparar.map((f) => (
-          <p key={`p-${f.insumoId}`} className="pl-6 text-xs text-red-700">
+          <p key={`p-${f.insumoId}`} className="text-lg" style={{ color: "var(--ambar-texto)" }}>
             · Debes preparar {fmtCant(f.falta, f.unidad)} de {f.nombre}
           </p>
         ))}
         {((onIrCompras && faltantesCrudos.length > 0) || (onPreparar && faltantesPreparar.length > 0)) && (
-          <div className="pl-6 pt-1 flex flex-wrap gap-2">
+          <div className="pt-2 flex flex-wrap gap-3">
             {onIrCompras && faltantesCrudos.length > 0 && (
               <button
                 type="button"
                 onClick={() => onIrCompras(faltantesCrudos)}
-                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+                className="pn-boton pn-boton--principal"
               >
                 Comprar insumos faltantes
               </button>
@@ -1194,7 +1207,7 @@ function TablaInsumosRequeridos({
                 key={f.insumoId}
                 type="button"
                 onClick={() => onPreparar(f)}
-                className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-red-700 cursor-pointer transition-colors"
+                className="pn-boton pn-boton--principal"
               >
                 Preparar {f.nombre}
               </button>
@@ -1289,8 +1302,8 @@ function LineaPreparacion({
     <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            Producto a preparar
+          <label className="pn-etiqueta">
+            ¿Qué se va a preparar?
           </label>
           <SegmentadoButtons
             valor={tipoSelector}
@@ -1322,14 +1335,14 @@ function LineaPreparacion({
             onSelect={elegir}
           />
           {bajo && (
-            <span className="inline-block mt-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+            <span className="inline-block mt-1.5 text-base font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
               Stock bajo
             </span>
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-2.5">
-            {esPizza ? "Cantidad de pizzas" : `Cantidad a producir (${tipoSelector === "producto" ? "und" : linea.unidad})`}
+          <label className="pn-etiqueta">
+            {esPizza ? "Cantidad de pizzas" : `¿Cuántos? (${tipoSelector === "producto" ? "und" : linea.unidad})`}
           </label>
           <>
               {/* 0 = vacío con placeholder "0" (punto B1); al guardar se cuenta
@@ -1345,26 +1358,21 @@ function LineaPreparacion({
                 className={INPUT_LINEA_CLS}
               />
               {linea.idProducto && linea.cantidadEstimada < 1 && (
-                <p className="mt-1 text-[11px] font-semibold text-amber-700">
+                <p className="mt-1 text-base font-semibold text-amber-700">
                   La cantidad mínima es 1 {linea.unidad}
                 </p>
               )}
           </>
         </div>
         {puedeQuitar && (
-          <button
-            type="button"
-            onClick={onRemove}
-            title="Quitar línea"
-            className="w-[54px] h-[54px] grid place-items-center border border-border rounded-[14px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-5 h-5" />
+          <button type="button" onClick={onRemove} title="Quitar este producto" className="pn-boton pn-boton--peligro">
+            Quitar
           </button>
         )}
       </div>
 
       {esPizza && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           {linea.tamano ? `Orden antigua: corte ${linea.tamano}. ` : ""}
           Cada pizza da 8 porciones medianas o 6 porciones grandes
           {linea.cantidadEstimada > 0 && ` = hasta ${linea.cantidadEstimada * 8} medianas o ${linea.cantidadEstimada * 6} grandes`}.
@@ -1374,32 +1382,32 @@ function LineaPreparacion({
       {(pi || ficha) && (
         <div className="space-y-3">
           {sinTamanos ? (
-            <p className="text-[11px] text-muted-foreground">Agrega una cantidad para calcular los insumos</p>
+            <p className="text-base text-muted-foreground">Agrega una cantidad para calcular los insumos</p>
           ) : (
             <>
               {necesita && (
                 // C8: lo que esta línea gasta en total, con el factor de su
                 // tamaño y con las unidades contables sin multiplicar. Es el
                 // mismo número que descuenta Insumos al Iniciar.
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   Necesita: <span className="font-semibold text-foreground">{necesita}</span>
                 </p>
               )}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos requeridos</p>
+                <p className="text-base font-semibold text-muted-foreground mb-1.5">Insumos requeridos</p>
                 <TablaInsumosRequeridos requeridos={requeridos} insumos={insumos} />
               </div>
             </>
           )}
           <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-1.5">Descripción de la preparación</p>
-            <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
+            <p className="text-base font-semibold text-muted-foreground mb-1.5">Descripción de la preparación</p>
+            <p className="text-base text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
               {linea.fichaSnapshot?.pasos.join("\n") || (tipoSelector === "producto"
                 ? "Este producto no tiene descripción de preparación."
                 : "Este Producto Insumo no tiene descripción de preparación.")}
             </p>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-base text-muted-foreground">
             <Clock className="w-3.5 h-3.5 shrink-0" />
             Tiempo estimado:{" "}
             <strong className="text-foreground">
@@ -2063,6 +2071,18 @@ export function OrdenProduccionScreen({
   };
   const mostrarTamanoPizza = (p: Producto, tamano: "Mediana" | "Grande"): boolean =>
     tamanosDeOrden(p).has(tamano);
+  const pizzasConPrecioCompletar = pizzasCompletar.filter(pizza => tamanosDeOrden(pizza).size > 0);
+  const cantidadesCompletar = completarEsPedido ? [] : (completarItem?.lineas ?? []).map((l, i) => {
+    const realTxt = reales[i] ?? "";
+    const calculo = l.idDetalleOp == null ? undefined : calculosDebidos[l.idDetalleOp];
+    const debida = calculo?.cantidad_debida;
+    const real = Number(realTxt);
+    const realInvalida = realTxt.trim() === "" || !Number.isSafeInteger(real) || real < 0;
+    const realExcede = !realInvalida && debida != null && real > debida;
+    const invalido = realInvalida || debida == null;
+    const merma = invalido ? 0 : Math.max(0, debida - real);
+    return { realTxt, calculo, debida, real, realInvalida, realExcede, invalido, merma };
+  });
   const preciosCompletarOk = pizzasCompletar.every((p) =>
     Array.from(tamanosDeOrden(p)).every((t) => precioEfectivoPizza(p, t) > 0)
     && !grandeNoMayorQueMediana(p));
@@ -2175,7 +2195,7 @@ export function OrdenProduccionScreen({
   };
 
   // ── Modales ────────────────────────────────────────────────────────
-  const Modal = ({ title, onClose, onConfirm, label, ancho, deshabilitado, crear, children }: {
+  const Modal = ({ title, onClose, onConfirm, label, deshabilitado, children }: {
     title: string; onClose: () => void; onConfirm: () => void; label: string;
     ancho?: string;
     /** C6: bloquea el botón de confirmar (preparaciones con cantidad < 1). */
@@ -2183,24 +2203,17 @@ export function OrdenProduccionScreen({
     crear?: boolean;
     children: React.ReactNode;
   }) => (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-        className={`bg-card rounded-2xl w-full ${ancho ?? "max-w-lg"} shadow-2xl border border-border max-h-[90vh] flex flex-col my-4`}>
-        <div className={`shrink-0 flex items-center justify-between ${crear ? "px-9 py-7" : "px-5 py-4"} border-b border-border`}>
-          <h3 className={`${crear ? "text-2xl" : "text-lg"} font-bold text-foreground`} style={{ fontFamily: SERIF }}>{title}</h3>
-          <button onClick={onClose} className={`${crear ? "p-2.5 max-md:p-3 max-md:-m-1" : "p-1.5 max-md:p-3.5 max-md:-m-2"} rounded-lg hover:bg-muted cursor-pointer text-muted-foreground`}><X className={crear ? "w-5 h-5" : "w-4 h-4"} /></button>
+    <>
+      <div className="pn-dialogo-fondo" onClick={onClose} />
+      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 900px)" }}>
+        <div className="pn-modal__cab"><h2 className="pn-modal__titulo">{title}</h2></div>
+        <div className="pn-campo">{children}</div>
+        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+          <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
+          <BotonAccion variante="principal" onClick={onConfirm} disabled={deshabilitado}>{label}</BotonAccion>
         </div>
-        <div className={`flex-1 overflow-y-auto ${crear ? "px-9 pt-7 pb-2" : "px-5 py-4"}`}>{children}</div>
-        <div className={`shrink-0 flex gap-3 ${crear ? "px-9 pt-3 pb-7" : "px-5 py-4"} border-t border-border`}>
-          <button onClick={onClose} className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} border border-border font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors`}>Cancelar</button>
-          <button onClick={onConfirm} disabled={deshabilitado}
-            className={`flex-1 ${crear ? "h-[58px] rounded-2xl text-base" : "py-2.5 rounded-xl text-sm"} bg-primary text-white font-semibold transition-colors active:scale-95 ${
-              deshabilitado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"
-            }`}>{label}</button>
-        </div>
-      </motion.div>
-    </div>
+      </div>
+    </>
   );
 
   const confirmarPedidoListo = async () => {
@@ -2258,54 +2271,146 @@ export function OrdenProduccionScreen({
     </div>
   );
 
+  // ── Lista como la ve la cocina ──
+  const [verOtras, setVerOtras] = useState(false);
+  const [empezarItem, setEmpezarItem] = useState<OrdenProduccion | null>(null);
+  const [bloqueoEmpezar, setBloqueoEmpezar] = useState<{ orden: OrdenProduccion; faltantes: ReturnType<typeof faltantesPara> } | null>(null);
+  const hoyLocal = new Date().toLocaleDateString("en-CA");
+  const esHoy = (iso: string) => !!iso && new Date(iso).toLocaleDateString("en-CA") === hoyLocal;
+  const numeroOP = (id: string) => id.replace("OP-", "");
+  const enCocina = filtradas.filter((o) => o.estadoOrden === "en-proceso");
+  const porEmpezar = filtradas.filter((o) => o.estadoOrden === "pendiente");
+  const terminadasHoy = filtradas.filter((o) => o.estadoOrden === "completada" && esHoy(ultimoCambio(o)));
+  const idsAgrupadas = new Set([...enCocina, ...porEmpezar, ...terminadasHoy].map((o) => o.id));
+  const otras = filtradas.filter((o) => !idsAgrupadas.has(o.id));
+  const totalPagesOtras = Math.ceil(otras.length / PER_PAGE);
+  const pagedOtras = otras.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const ESTADO_GLORIA: Record<EstadoOrden, string> = {
+    pendiente: "Por empezar",
+    "en-proceso": "En la cocina",
+    completada: "Terminada",
+    cancelada: "Cancelada",
+  };
+  const TONO_ESTADO: Record<EstadoOrden, TonoPill> = { pendiente: "ambar", "en-proceso": "azul", completada: "verde", cancelada: "gris" };
+
+  const faltantesDe = (o: OrdenProduccion) =>
+    o.tipo === "preparacion" && o.estadoOrden === "pendiente" ? faltantesPara(o.insumosRequeridos, 1, insumos) : [];
+
+  const tarjetaOrden = (o: OrdenProduccion) => {
+    const falt = faltantesDe(o);
+    const esPedido = o.tipo === "pedido";
+    const productosTxt = o.lineas.map((l) => l.nombre).join(", ") || "—";
+    const paraQuien = esPedido
+      ? `Para ${o.cliente ?? "un cliente"}${o.ventaNumero ? ` · pedido #${o.ventaNumero}` : ""}${o.fechaSolicitada ? ` · recoge ${formatearFechaHora(o.fechaSolicitada, o.horaSolicitada)}` : ""}${o.ventaLocal ? " · venta del local" : ""}`
+      : o.observacion?.trim() || "Para tener listo en la bodega";
+    const tiempo =
+      o.estadoOrden === "en-proceso"
+        ? (esPedido && o.finCalentamientoMs != null
+            ? `Listo en ${tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}`
+            : !esPedido && o.finPreparacionMs != null
+              ? `Listo en ${tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}`
+              : "Se está preparando")
+        : o.estadoOrden === "completada"
+          ? `Terminada ${formatearFechaHora(ultimoCambio(o))}`
+          : o.estadoOrden === "cancelada"
+            ? `Cancelada ${formatearFechaHora(ultimoCambio(o))}`
+            : o.tiempoPreparacionMin
+              ? `Tiempo de preparación ${o.tiempoPreparacionMin} minutos`
+              : "Por empezar";
+    return (
+      <TarjetaFila
+        key={o.id}
+        resaltada={o.estadoOrden === "en-proceso" ? "azul" : undefined}
+        pre={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            Orden OP-{numeroOP(o.id)}
+            <EstadoPill tono={esPedido ? "azul" : "ambar"}>{esPedido ? "Pedido de cliente" : "Para tener listo"}</EstadoPill>
+          </span>
+        }
+        nombre={productosTxt}
+        detalle={paraQuien}
+        datos={[{ etiqueta: "Tiempo", valor: <span style={{ color: o.estadoOrden === "en-proceso" ? "var(--azul-texto)" : o.estadoOrden === "completada" ? "var(--verde-texto)" : undefined }}>{tiempo}</span> }]}
+        estado={
+          <div className="grid gap-2 justify-items-start">
+            <EstadoPill tono={TONO_ESTADO[o.estadoOrden]}>{ESTADO_GLORIA[o.estadoOrden]}</EstadoPill>
+            {falt.length > 0 && <EstadoPill tono="ambar">Faltan insumos</EstadoPill>}
+            <EstimacionPedido orden={o} />
+          </div>
+        }
+        acciones={
+          <>
+            {o.estadoOrden === "pendiente" && (
+              <BotonAccion
+                variante="principal"
+                disabled={iniciandoId !== null}
+                onClick={() => (falt.length > 0 ? setBloqueoEmpezar({ orden: o, faltantes: falt }) : setEmpezarItem(o))}
+              >
+                Empezar a preparar
+              </BotonAccion>
+            )}
+            {o.estadoOrden === "en-proceso" && o.tipo !== "pedido" && (
+              <BotonAccion variante="bien" onClick={() => abrirCompletar(o.id)}>Ya está listo</BotonAccion>
+            )}
+            {canEdit && o.estadoOrden === "en-proceso" && esPedido && (
+              <BotonAccion variante="bien" disabled={marcandoLista} onClick={() => setOrdenLista(o)}>Ya está listo</BotonAccion>
+            )}
+            {o.estadoOrden === "completada" && (
+              <BotonAccion variante="principal" onClick={() => setDetailItem(o)}>Ver qué se usó</BotonAccion>
+            )}
+            <BotonAccion variante="normal" onClick={() => setDetailItem(o)}>Ver la orden</BotonAccion>
+            {(o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso") && (
+              <BotonAccion variante="peligro" onClick={() => openDarBaja(o)}>Dar de baja</BotonAccion>
+            )}
+            {canDelete && o.estadoOrden === "pendiente" && o.tipo !== "pedido" && (
+              <BotonAccion variante="peligro" onClick={() => setDeleteId(o.id)}>Borrar</BotonAccion>
+            )}
+          </>
+        }
+      />
+    );
+  };
+
+  const grupo = (titulo: string, lista: OrdenProduccion[]) =>
+    lista.length === 0 ? null : (
+      <section key={titulo} style={{ marginBottom: 28 }}>
+        <h2 className="pn-h2" style={{ marginBottom: 12 }}>{titulo}</h2>
+        <div className="pn-lista">{lista.map(tarjetaOrden)}</div>
+      </section>
+    );
+
   return (
-    <div className="px-4 sm:px-6 py-6">
-      {ordenLista && (
-        <ConfirmDeleteModal
-          title="Marcar como listo"
-          message={`¿El pedido de la venta ${ordenLista.ventaNumero ?? ordenLista.ventaId} está listo?`}
-          confirmLabel="Sí"
-          loading={marcandoLista}
-          onCancel={() => setOrdenLista(null)}
-          onConfirm={() => void confirmarPedidoListo()}
-        />
-      )}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Orden Producción</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{ordenes.length} órdenes registradas</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setMostrarParametrosCostos(true)}
-            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-3 max-md:min-h-11 text-sm font-semibold text-foreground hover:bg-muted"
-          >
-            <Calculator className="h-4 w-4" />
-            Parámetros de costos
-          </button>
-          {canExportExcel && <BotonDescargarExcel onClick={() => exportExcel(ordenes)} />}
-          {canCreate && (
-            <button onClick={async () => {
-              try {
-                const recargaExitosa = await recargarProduccion?.();
-                if (recargaExitosa === false) {
-                  toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
-                }
-              } catch {
-                toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
-              } finally {
-                setForm(emptyForm());
-                setShowCreate(true);
-              }
-            }}
-              className="inline-flex items-center gap-2 px-5 py-3 max-md:min-h-11 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm">
-              <Plus className="w-4 h-4" /> Crear Orden de Producción
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Orden de Producción"
+        descripcion="Lo que la cocina tiene que preparar: los pedidos de los clientes y lo que se hace para tener listo"
+        acciones={
+          <>
+            <BotonAccion icono={Calculator} onClick={() => setMostrarParametrosCostos(true)}>Costos de preparación</BotonAccion>
+            {canExportExcel && <BotonAccion icono={Download} onClick={() => exportExcel(ordenes)}>Descargar en Excel</BotonAccion>}
+            {canCreate && (
+              <BotonAccion
+                variante="principal"
+                icono={Plus}
+                onClick={async () => {
+                  try {
+                    const recargaExitosa = await recargarProduccion?.();
+                    if (recargaExitosa === false) {
+                      toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+                    }
+                  } catch {
+                    toast.warning("No se pudieron actualizar los productos y fichas. Se abrirá el formulario con los datos actuales.");
+                  } finally {
+                    setForm(emptyForm());
+                    setShowCreate(true);
+                  }
+                }}
+              >
+                Mandar a preparar
+              </BotonAccion>
+            )}
+          </>
+        }
+      />
 
       {mostrarParametrosCostos && (
         <ParametrosCostosModal
@@ -2319,234 +2424,123 @@ export function OrdenProduccionScreen({
         />
       )}
 
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <SearchInput
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar una orden"
           value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por ID, venta, cliente o producto..."
-          wrapperClassName="flex-1 max-w-sm"
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el número, el pedido, el cliente o el producto"
         />
-        <select value={filtroTipo} onChange={e => { setFiltroTipo(e.target.value as typeof filtroTipo); setPage(1); }}
-          aria-label="Filtrar por tipo" className={sCls + " sm:w-48"}>
-          <option value="todos">Todo tipo</option>
-          <option value="preparacion">Preparación</option>
-          <option value="pedido">Pedido</option>
-        </select>
-        <select value={filtroEstado} onChange={e => { setFiltroEstado(e.target.value as typeof filtroEstado); setPage(1); }}
-          aria-label="Filtrar por estado" className={sCls + " sm:w-48"}>
-          <option value="todos">Todo estado</option>
-          {ORDEN_ESTADOS.map((e) => <option key={e} value={e}>{ESTADO_LABEL[e]}</option>)}
-        </select>
+        {verOtras && (
+          <>
+            <FiltrosChips
+              titulo="Clase:"
+              valor={filtroTipo}
+              onChange={(v) => { setFiltroTipo(v as typeof filtroTipo); setPage(1); }}
+              opciones={[
+                { valor: "todos", etiqueta: "Todas" },
+                { valor: "pedido", etiqueta: "Pedidos de clientes" },
+                { valor: "preparacion", etiqueta: "Para tener listo" },
+              ]}
+            />
+            <FiltrosChips
+              valor={filtroEstado}
+              onChange={(v) => { setFiltroEstado(v as typeof filtroEstado); setPage(1); }}
+              opciones={[{ valor: "todos", etiqueta: "Todos" }, ...ORDEN_ESTADOS.map((e) => ({ valor: e, etiqueta: ESTADO_GLORIA[e] }))]}
+            />
+          </>
+        )}
       </div>
 
-      {/* Listado. La carga desde la API y su error se muestran con
-          "Reintentar": nunca se vuelve a datos de ejemplo. */}
       {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
-          Cargando órdenes de producción…
-        </div>
+        <p role="status" className="pn-nota">Cargando las órdenes…</p>
       ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-3">
-          <p className="font-semibold text-foreground">{errorCarga}</p>
-          {onReintentar && (
-            <button
-              type="button"
-              onClick={onReintentar}
-              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
-            >
-              Reintentar
-            </button>
-          )}
-        </div>
+        <AvisoBanner
+          titulo="No pudimos cargar las órdenes"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
       ) : (
-      <div className="bg-card border border-border rounded-2xl mb-3">
-          <table className="hidden md:table w-full table-fixed">
-            <colgroup>
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "32%" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "12%" }} />
-              <col style={{ width: "15%" }} />
-              <col style={{ width: "15%" }} />
-            </colgroup>
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["ID", "Tipo", "Producto(s)", "Cant. real", "Estado", "Fecha de estado", "Acciones"].map(h => (
-                  <th key={h} title={h} className="px-1 py-2 text-left align-middle font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-14 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
-                </td></tr>
-              ) : paged.map(o => {
-                const soloPendiente = o.estadoOrden === "pendiente";
-                const merma = totalMerma(o.lineas);
-                const completada = o.estadoOrden === "completada";
-                // Bloque 4: ¿faltan insumos para esta orden según el stock de
-                // hoy? Misma foto que usa Iniciar (`insumosRequeridos` guardado
-                // vs `insumos` actual). Solo en Pendiente: al pasar a En
-                // proceso los insumos ya se descontaron y comparar otra vez
-                // daría faltantes falsos.
-                const faltantesFila = o.tipo === "preparacion" && soloPendiente
-                  ? faltantesPara(o.insumosRequeridos, 1, insumos)
-                  : [];
-                return (
-                  <tr key={o.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-1 py-2 align-middle">
-                      {/* Solo el número: de "OP-004" muestra "004". `o.id` y
-                          `o.ventaNumero` no cambian: los siguen usando el
-                          buscador, el Excel, el detalle y la creación. */}
-                      <p className="text-sm font-mono font-semibold text-foreground break-all">{o.id.replace("OP-", "")}</p>
-                    </td>
-                    <td className="px-1 py-2 align-middle">
-                      <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${
-                        o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"
-                      }`}>
-                        {etiquetaAsignacion(o, productos)}
-                      </span>
-                      {o.ventaLocal && (
-                        <span className="block mt-1 text-[10px] font-semibold text-muted-foreground">Venta en el local</span>
-                      )}
-                    </td>
-                    <td className="px-1 py-2 align-middle min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground" title={resumenProductos(o)}>{resumenProductos(o)}</p>
-                      {o.tipo === "pedido" && o.ventaNumero && (
-                        <p className="truncate text-[11px] text-muted-foreground" title={`Venta ${o.ventaNumero}${o.cliente ? ` · ${o.cliente}` : ""}`}>
-                          Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-1 py-2 align-middle text-sm [overflow-wrap:anywhere]">
-                      {!completada || o.lineas.some((l) => l.cantidadReal == null) ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <>
-                          <span className="font-semibold text-foreground tabular-nums">
-                            {o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                              ? resumenCantidadPizzas(o, true)
-                              : o.lineas.some(esPizzaOrdenLinea)
-                                ? o.lineas.map((linea) => esPizzaOrdenLinea(linea)
-                                  ? `${cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)}${o.tipo === "preparacion" && resumenCortes(linea) ? ` (${resumenCortes(linea)})` : ""}`
-                                  : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
-                              : o.lineas.length === 1
-                                ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad)
-                                : fmtCant(totalReal(o.lineas), "und")}
-                          </span>
-                          {merma > 0 && (
-                            <p className="text-[11px] font-semibold text-red-600 tabular-nums">−{resumenMerma(o.lineas)} de pérdida</p>
-                          )}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-1 py-2 align-middle">
-                      <div className="flex flex-col items-start gap-1.5">
-                        <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-1 py-1 rounded-full [overflow-wrap:anywhere] ${ESTADO_COLOR[o.estadoOrden]}`}>
-                          {ESTADO_LABEL[o.estadoOrden]}
-                        </span>
-                        {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
-                          <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</span>
-                        )}
-                        <EstimacionPedido orden={o} />
-                        {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
-                          <span className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</span>
-                        )}
-                        {/* Bloque 4: la fila dice enseguida si a la orden aún
-                            no le alcanza el inventario (solo Pendientes).
-                            El título detalla cada faltante al pasar el mouse. */}
-                        {faltantesFila.length > 0 && (
-                          <span
-                            title={faltantesFila
-                              .map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`)
-                              .join("\n")}
-                            className="inline-flex max-w-full items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 [overflow-wrap:anywhere]"
-                          >
-                            <AlertTriangle className="w-3 h-3" /> Faltan insumos
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-1 py-2 align-middle text-xs text-muted-foreground tabular-nums [overflow-wrap:anywhere]">
-                      {formatearFechaHora(ultimoCambio(o))}
-                    </td>
-                    <td className="px-1 py-2 align-middle">
-                      {accionesListado(o, faltantesFila.length > 0)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="md:hidden divide-y divide-border">
-            {paged.length === 0 ? (
-              <div className="px-4 py-14 text-center text-muted-foreground">
-                <p className="text-4xl mb-3">👨‍🍳</p><p>No se encontraron órdenes</p>
-              </div>
-            ) : paged.map((o) => {
-              const faltantes = o.tipo === "preparacion" && o.estadoOrden === "pendiente"
-                ? faltantesPara(o.insumosRequeridos, 1, insumos) : [];
-              return (
-                <div key={o.id} className="p-4 space-y-2 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-mono font-semibold text-foreground">{o.id}</span>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[o.estadoOrden]}`}>{ESTADO_LABEL[o.estadoOrden]}</span>
-                  </div>
-                  {o.tipo === "pedido" && o.estadoOrden === "en-proceso" && o.finCalentamientoMs != null && (
-                    <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finCalentamientoMs, ahoraCalentamiento)}</p>
-                  )}
-                  <EstimacionPedido orden={o} />
-                  {o.tipo === "preparacion" && o.estadoOrden === "en-proceso" && o.finPreparacionMs != null && (
-                    <p className="text-xs tabular-nums">⏱ {tiempoRestante(o.finPreparacionMs, ahoraCalentamiento)}</p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${o.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(o, productos)}</span>
-                    {o.ventaLocal && <span className="text-[10px] font-semibold text-muted-foreground">Venta en el local</span>}
-                    {faltantes.length > 0 && (
-                      <span title={faltantes.map(f => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})${f.motivo ? ` — ${motivoFaltante(f)}` : ""}`).join("\n")}
-                        className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                        <AlertTriangle className="w-3 h-3" /> Faltan insumos
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-medium text-foreground break-words">{resumenProductos(o)}</p>
-                  {o.tipo === "pedido" && o.ventaNumero && <p className="text-xs text-muted-foreground break-words">Venta {o.ventaNumero}{o.cliente ? ` · ${o.cliente}` : ""}</p>}
-                  <p className="text-xs text-muted-foreground">Cant. real: {o.estadoOrden !== "completada" || o.lineas.some((l) => l.cantidadReal == null)
-                    ? "—"
-                    : o.lineas.length > 0 && o.lineas.every(esPizzaOrdenLinea)
-                      ? resumenCantidadPizzas(o, true)
-                      : o.lineas.some(esPizzaOrdenLinea)
-                        ? o.lineas.map((linea) => esPizzaOrdenLinea(linea) ? `${cantidadLineaOrden(o, linea, linea.cantidadReal ?? 0)}${o.tipo === "preparacion" && resumenCortes(linea) ? ` (${resumenCortes(linea)})` : ""}` : fmtCant(linea.cantidadReal ?? 0, linea.unidad)).join(" · ")
-                        : o.lineas.length === 1 ? fmtCant(o.lineas[0].cantidadReal ?? 0, o.lineas[0].unidad) : fmtCant(totalReal(o.lineas), "und")}</p>
-                  {o.estadoOrden === "completada" && o.tipo !== "pedido" && totalMerma(o.lineas) > 0 && (
-                    <p className="text-xs font-semibold text-red-600">−{resumenMerma(o.lineas)} de pérdida</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">Fecha/Hora de estado: {formatearFechaHora(ultimoCambio(o))}</p>
-                  {accionesListado(o, faltantes.length > 0)}
-                </div>
-              );
-            })}
+        <>
+          {enCocina.length + porEmpezar.length + terminadasHoy.length === 0 && !verOtras && (
+            <VacioEstado icono={ChefHat} titulo="La cocina está tranquila">
+              No hay nada en la cocina ni por empezar. Cuando llegue un pedido o mandes a preparar algo, aparecerá aquí.
+            </VacioEstado>
+          )}
+          {grupo("En la cocina ahora", enCocina)}
+          {grupo("Por empezar", porEmpezar)}
+          {grupo("Terminadas hoy", terminadasHoy)}
+
+          <div style={{ margin: "8px 0 20px" }}>
+            <BotonAccion variante="normal" onClick={() => { setVerOtras((v) => !v); setPage(1); }}>
+              {verOtras ? "Esconder las órdenes de días anteriores" : "Ver órdenes de días anteriores y canceladas"}
+            </BotonAccion>
           </div>
-      </div>
+          {verOtras && (
+            <section>
+              <h2 className="pn-h2" style={{ marginBottom: 12 }}>Días anteriores y canceladas</h2>
+              {otras.length === 0 ? (
+                <p className="pn-nota">No hay más órdenes con estos filtros.</p>
+              ) : (
+                <div className="pn-lista">{pagedOtras.map(tarjetaOrden)}</div>
+              )}
+              <PaginadorGrande pagina={page} total={otras.length} porPagina={PER_PAGE} onCambiar={setPage} />
+            </section>
+          )}
+        </>
       )}
 
-      {/* Paginación (unificada, fuera de la card) */}
-      {filtradas.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      {/* Confirmaciones */}
+      <DialogoConfirmacion
+        abierto={!!ordenLista}
+        onCambiarAbierto={(a) => { if (!a && !marcandoLista) setOrdenLista(null); }}
+        titulo={`¿El pedido #${ordenLista?.ventaNumero ?? ordenLista?.ventaId ?? ""} ya está listo?`}
+        queVaAPasar={["La orden queda terminada", "Se descuentan de la bodega los insumos usados", "La venta sigue su camino hacia la entrega"]}
+        textoSeguro="No, todavía no"
+        textoAccion={marcandoLista ? "Guardando…" : "Sí, ya está listo"}
+        onConfirmar={() => void confirmarPedidoListo()}
+      />
+      <DialogoConfirmacion
+        abierto={!!empezarItem}
+        onCambiarAbierto={(a) => { if (!a) setEmpezarItem(null); }}
+        titulo={`¿Empezar la orden OP-${numeroOP(empezarItem?.id ?? "")}?`}
+        queVaAPasar={[
+          empezarItem?.tiempoPreparacionMin ? `El tiempo empieza a correr: ${empezarItem.tiempoPreparacionMin} minutos` : "El tiempo empieza a correr",
+          "Se descuentan de la bodega los insumos que necesita",
+        ]}
+        textoSeguro="No, todavía no"
+        textoAccion="Sí, empezar"
+        onConfirmar={() => { if (empezarItem) void iniciarDirecto(empezarItem); }}
+      />
+      {bloqueoEmpezar && (
+        <DialogoConfirmacion
+          variante="bloqueo"
+          abierto
+          onCambiarAbierto={(a) => { if (!a) setBloqueoEmpezar(null); }}
+          titulo={`No alcanza para empezar la orden OP-${numeroOP(bloqueoEmpezar.orden.id)}`}
+          porQueNo={bloqueoEmpezar.faltantes.map((f) => `Faltan ${fmtCant(f.falta, f.unidad)} de ${f.nombre} (hay ${fmtCant(f.stock, f.unidad)})`)}
+          textoEntendido="Cerrar"
+          textoAlternativa="Pedirlo al proveedor"
+          onAlternativa={() => onNavigateTo?.("orden-compra")}
+        />
       )}
+      <DialogoConfirmacion
+        abierto={!!deleteId}
+        onCambiarAbierto={(a) => { if (!a) setDeleteId(null); }}
+        titulo={`¿Borrar la orden OP-${numeroOP(deleteId ?? "")}?`}
+        queVaAPasar={["No se ha empezado", "No se puede deshacer"]}
+        textoAccion="Sí, borrar la orden"
+        onConfirmar={() => { if (deleteId) void handleDelete(deleteId); }}
+      />
 
       {/* ── Modal: Crear ── */}
       <AnimatePresence>
         {showCreate && Modal({
-          title: "Crear Orden de Producción",
+          title: "Mandar a preparar",
           onClose: () => setShowCreate(false),
           onConfirm: handleCreate,
-          label: "Crear Orden",
+          label: "Mandar a la cocina",
           ancho: "max-w-[800px]",
           crear: true,
           // C6: Crear bloqueado mientras alguna línea no tenga producto o su
@@ -2558,7 +2552,7 @@ export function OrdenProduccionScreen({
             <div className="space-y-6">
               {/* Solo se crean Preparaciones en lote: los pedidos los crea el
                   backend al aceptar una venta. */}
-              <p className="text-[15px] font-semibold text-muted-foreground">Preparación en lote (Producto Insumo)</p>
+              <h3 className="text-xl font-bold" style={{ fontFamily: SERIF }}>1 · ¿Qué hay que preparar?</h3>
               <div className="space-y-4">
                 {form.lineas.map((l, idx) => (
                   <LineaPreparacion
@@ -2576,11 +2570,18 @@ export function OrdenProduccionScreen({
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
                 className="inline-flex items-center justify-center gap-2.5 w-full h-[54px] border-[1.5px] border-dashed border-border rounded-[14px] text-[15px] font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                <Plus className="w-[18px] h-[18px]" /> Agregar Producto Insumo
+                <Plus className="w-[18px] h-[18px]" /> Agregar otro producto
               </button>
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
                   deshabilitado y aquí se ven el mensaje y la lista. */}
+              <h3 className="text-xl font-bold" style={{ fontFamily: SERIF }}>2 · ¿Alcanza lo de la bodega?</h3>
+              {faltantesForm.length === 0 && (
+                <p className="flex items-center gap-3 text-lg" style={{ margin: 0 }}>
+                  <EstadoPill tono="verde">✓ Alcanza</EstadoPill>
+                  <span>Hay insumos suficientes para lo que escogiste.</span>
+                </p>
+              )}
               <AvisoFaltantes
                 faltantes={faltantesForm}
                 onIrInsumos={() => onNavigateTo?.("supplies")}
@@ -2589,8 +2590,9 @@ export function OrdenProduccionScreen({
                 onPreparar={(f) => prepararFaltante(f, true)}
               />
 
+              <h3 className="text-xl font-bold" style={{ fontFamily: SERIF }}>3 · Detalles</h3>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2.5">Observación</label>
+                <label className="pn-etiqueta">Nota para la cocina <span style={{ fontWeight: 400 }}>(opcional)</span></label>
                 <textarea value={form.observacion} onChange={e => setForm(p => ({ ...p, observacion: e.target.value }))}
                   rows={2} placeholder="Notas adicionales sobre esta orden..." className={OBS_CREAR_CLS} />
               </div>
@@ -2602,10 +2604,10 @@ export function OrdenProduccionScreen({
       {/* ── Modal: Editar (solo Pendiente) ── */}
       <AnimatePresence>
         {editItem && Modal({
-          title: `Editar — ${editItem.id}`,
+          title: `Cambiar la orden OP-${editItem.id.replace("OP-", "")}`,
           onClose: () => setEditItem(null),
           onConfirm: handleEdit,
-          label: "Guardar",
+          label: "Guardar cambios",
           ancho: "max-w-2xl",
           // C6: ídem Crear; Bloque 4: además deshabilitado mientras falten
           // insumos para la preparación (sin "Guardar igual": eso es de pedido).
@@ -2639,7 +2641,7 @@ export function OrdenProduccionScreen({
                   <button type="button"
                     onClick={() => setEditItem(x => x && ({ ...x, lineas: [...x.lineas, nuevaLinea("preparacion")] }))}
                     className="inline-flex items-center gap-1.5 px-3 py-2 border border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> Agregar Producto Insumo
+                    <Plus className="w-4 h-4" /> Agregar otro producto
                   </button>
                 </div>
               ) : (
@@ -2668,10 +2670,17 @@ export function OrdenProduccionScreen({
 
               {/* Bloque 4: ídem Crear — mensaje y lista mientras falten
                   insumos; el botón Guardar queda deshabilitado. */}
+              <h3 className="text-xl font-bold" style={{ fontFamily: SERIF }}>¿Alcanza lo de la bodega?</h3>
+              {faltantesForm.length === 0 && (
+                <p className="flex items-center gap-3 text-lg" style={{ margin: 0 }}>
+                  <EstadoPill tono="verde">✓ Alcanza</EstadoPill>
+                  <span>Hay insumos suficientes para lo que escogiste.</span>
+                </p>
+              )}
               <AvisoFaltantes faltantes={faltantesForm} onIrInsumos={() => onNavigateTo?.("supplies")} />
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Observación</label>
+                <label className="pn-etiqueta">Nota para la cocina <span style={{ fontWeight: 400 }}>(opcional)</span></label>
                 <textarea value={editItem.observacion} onChange={e => setEditItem(x => x && ({ ...x, observacion: e.target.value }))}
                   rows={2} className={tCls} />
               </div>
@@ -2689,18 +2698,18 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  Completar orden — {completarItem.id}
+                  Terminar la orden OP-{completarItem.id.replace("OP-", "")}
                 </h3>
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 pn-campo">
                 <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted p-3">
                   <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground">Tipo</p>
+                    <p className="text-base font-semibold text-muted-foreground">Tipo</p>
                     <p className="text-sm font-semibold text-foreground">{completarEsPedido ? "Pedido" : "Preparación"}</p>
                   </div>
                   <div>
-                    <p className="text-[11px] font-semibold text-muted-foreground">
+                    <p className="text-base font-semibold text-muted-foreground">
                       {completarItem.ventaLocal ? "Origen" : completarEsPedido ? "Fecha/hora de recogida" : "Fecha límite"}
                     </p>
                     <p className="text-sm font-semibold text-foreground">
@@ -2712,7 +2721,7 @@ export function OrdenProduccionScreen({
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   {completarEsPedido
                     ? "Revisa los productos y confirma la orden. El pedido no modifica cantidades ni pérdida."
                     : "La cantidad que debí hacer se calcula con los insumos usados al Generar y no se puede editar. La pérdida es esa cantidad menos la cantidad real, mínimo 0."}
@@ -2721,203 +2730,223 @@ export function OrdenProduccionScreen({
                   <p role="status" className="text-sm text-muted-foreground">Calculando la cantidad que debí hacer…</p>
                 )}
                 {completarEsPedido && completarItem.lineas.some((linea) => esBebida(linea, productos)) && (
-                  <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800">
+                  <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-base font-semibold text-blue-800">
                     El stock de las bebidas se descontó al aceptar la venta.
                   </p>
                 )}
-                {completarItem.lineas.map((l, i) => completarEsPedido ? (
-                  <div key={i} className="p-4 border border-border rounded-2xl bg-card">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{nombreLineaOrden(l)}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
-                        <p className="text-base font-bold text-foreground tabular-nums">
-                          {cantidadLineaOrden(completarItem, l)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  (() => {
-                    const realTxt = reales[i] ?? "";
-                    const calculo = l.idDetalleOp == null ? undefined : calculosDebidos[l.idDetalleOp];
-                    const debida = calculo?.cantidad_debida;
-                    const real = Number(realTxt);
-                    const realInvalida = realTxt.trim() === "" || !Number.isSafeInteger(real) || real < 0;
-                    const realExcede = !realInvalida && debida != null && real > debida;
-                    const invalido = realInvalida || debida == null;
-                    const merma = invalido ? 0 : Math.max(0, debida - real);
-                    return (
-                      <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
-                        <p className="text-sm font-semibold text-foreground">{nombreLineaOrden(l)}</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad estimada original{esPizzaOrdenLinea(l) ? " (pizzas)" : ""}
-                            </label>
-                            <input
-                              value={esPizzaOrdenLinea(l) ? `${l.cantidadEstimada} ${l.cantidadEstimada === 1 ? "pizza" : "pizzas"}` : fmtCant(l.cantidadEstimada, l.unidad)}
-                              readOnly
-                              className={iCls + " opacity-70 cursor-default"}
-                            />
+                <SeccionFormulario
+                  numero={completarEsPedido ? undefined : 1}
+                  titulo={completarEsPedido ? "Revisa lo que se hizo" : "¿Cuántas salieron bien?"}
+                >
+                  <div className="grid gap-3">
+                    {completarItem.lineas.map((l, i) => completarEsPedido ? (
+                      <div key={i} className="p-4 border border-border rounded-2xl bg-card">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-base font-semibold text-foreground">{nombreLineaOrden(l)}</p>
                           </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad que debí hacer ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
-                            </label>
-                            <input
-                              value={debida == null ? "" : esPizzaOrdenLinea(l)
-                                ? `${debida} ${debida === 1 ? "pizza" : "pizzas"}`
-                                : fmtCant(debida, l.unidad)}
-                              readOnly
-                              className={iCls + " opacity-70 cursor-default"}
-                            />
-                            {calculo?.calculada_al_verificar && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">
-                                Calculada al completar esta orden antigua.
-                              </p>
-                            )}
-                            {debida != null && debida < l.cantidadEstimada && (
-                              <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                El cálculo es menor que la cantidad estimada; la pérdida se calcula desde este valor.
-                              </p>
-                            )}
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                              Cantidad real hecha ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
-                            </label>
-                            <input
-                              type="number" min={0} max={debida ?? undefined} step={1}
-                              value={realTxt}
-                              placeholder="0"
-                              onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
-                              className={iCls + (realInvalida || realExcede ? " ring-2 ring-red-400" : "")}
-                            />
-                            {esPizzaOrdenLinea(l) && !realInvalida && !realExcede && (
-                              <p className="mt-1 text-[11px] font-semibold text-emerald-700">
-                                Ingresan {real} × 24 partes = hasta {real * 8} porciones medianas o {real * 6} grandes.
-                              </p>
-                            )}
-                            {realExcede && (
-                              <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                No puede ser mayor que la cantidad que debías hacer ({debida}).
-                              </p>
-                            )}
-                            {realInvalida && (
-                              <p className="mt-1 text-[11px] font-semibold text-red-600">
-                                Ingresa un entero mayor o igual a cero.
-                              </p>
-                            )}
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
+                            <p className="text-base font-bold text-foreground tabular-nums">
+                              {cantidadLineaOrden(completarItem, l)}
+                            </p>
                           </div>
                         </div>
-                        {!invalido && !realExcede && (
-                          <p className={`text-xs font-semibold ${merma > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-                            Pérdida: {fmtCant(merma, l.unidad)}
-                          </p>
-                        )}
                       </div>
-                    );
-                  })()
-                ))}
-                {pizzasCompletar.filter((pz) => tamanosDeOrden(pz).size > 0).map((pz) => (
-                  <div key={pz.id} className="p-4 border border-border rounded-2xl bg-card space-y-2">
-                    <p className="text-sm font-semibold text-foreground">
-                      Precio de venta por porción{pizzasCompletar.length > 1 ? ` — ${pz.nombre}` : ""}
-                    </p>
-                    {grandeNoMayorQueMediana(pz) && !(tamanosDeOrden(pz).has("Mediana") && tamanosDeOrden(pz).has("Grande")) && (
-                      <p className="text-[11px] font-semibold text-red-600">
-                        La porción Grande ({formatearCOP(precioEfectivoPizza(pz, "Grande"))}) quedaría igual o más barata que la Mediana
-                        ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))}). Ajusta el precio del tamaño producido o el otro precio en Editar producto.
-                      </p>
-                    )}
-                    <div className={`grid grid-cols-1 gap-3 ${(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).length > 1 ? "sm:grid-cols-2" : ""}`}>
-                      {(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).map((t) => {
-                        const rec = precioRecomendadoPizza(pz, t);
-                        const actual = preciosActualesDe(pz)[t];
-                        const detalle = detalleCostoPizza(pz, t);
-                        const invalido = !(Number(valorPrecioCompletar(pz, t)) > 0);
+                    ) : (
+                      (() => {
+                        const { realTxt, calculo, debida, real, realInvalida, realExcede } = cantidadesCompletar[i];
                         return (
-                          <div key={t} className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
-                            <p className="text-xs font-bold text-foreground">{t}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Precio actual: {formatearCOP(actual)}
-                            </p>
-                            {detalle && (
-                              <div className="space-y-0.5 text-xs">
-                                {([
-                                  ["Insumos", detalle.resumen.insumos],
-                                  ["Mano de obra", detalle.resumen.manoObra],
-                                  ["Gas", detalle.resumen.gas],
-                                ] as const).map(([etiqueta, valor]) => (
-                                  <div key={etiqueta} className="flex items-center justify-between gap-2">
-                                    <span className="text-muted-foreground">{etiqueta}</span>
-                                    <span className="font-semibold text-foreground tabular-nums">{formatearCOP(valor)}</span>
-                                  </div>
-                                ))}
+                          <div key={i} className="p-4 border border-border rounded-2xl bg-card space-y-2">
+                            <p className="text-base font-semibold text-foreground">{nombreLineaOrden(l)}</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="pn-etiqueta">
+                                  Se iban a hacer{esPizzaOrdenLinea(l) ? " (pizzas)" : ""}
+                                </label>
+                                <input
+                                  value={esPizzaOrdenLinea(l) ? `${l.cantidadEstimada} ${l.cantidadEstimada === 1 ? "pizza" : "pizzas"}` : fmtCant(l.cantidadEstimada, l.unidad)}
+                                  readOnly
+                                  className={iCls + " opacity-70 cursor-default"}
+                                />
                               </div>
-                            )}
-                            <p className="text-sm font-bold text-emerald-700">
-                              Precio recomendado: {rec > 0 ? formatearCOP(rec) : "—"}
-                            </p>
-                            {detalle && (
-                              <p className="text-[11px] text-muted-foreground">
-                                Pizza completa: {formatearCOP(detalle.resumen.costoTotal)}
-                              </p>
-                            )}
-                            {t === "Grande" && detalle?.igualado && (
-                              <p className="text-[11px] font-semibold text-amber-700">Ajustado: 10 % más que la porción Mediana</p>
-                            )}
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number" min={0} step={100}
-                                aria-label={`Precio por porción ${t}`}
-                                value={valorPrecioCompletar(pz, t)}
-                                onChange={(e) => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: limpiarNumeroInput(e.target.value) }))}
-                                className={iCls + (invalido ? " ring-2 ring-red-400" : "")}
-                              />
-                              <button
-                                type="button"
-                                disabled={rec <= 0}
-                                onClick={() => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: String(rec) }))}
-                                className="shrink-0 px-3 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Usar recomendado
-                              </button>
+                              <div>
+                                <label className="pn-etiqueta">
+                                  Debían salir ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
+                                </label>
+                                <input
+                                  value={debida == null ? "" : esPizzaOrdenLinea(l)
+                                    ? `${debida} ${debida === 1 ? "pizza" : "pizzas"}`
+                                    : fmtCant(debida, l.unidad)}
+                                  readOnly
+                                  className={iCls + " opacity-70 cursor-default"}
+                                />
+                                {calculo?.calculada_al_verificar && (
+                                  <p className="mt-1 text-base text-muted-foreground">
+                                    Calculada al completar esta orden antigua.
+                                  </p>
+                                )}
+                                {debida != null && debida < l.cantidadEstimada && (
+                                  <p className="mt-1 text-base font-semibold text-red-600">
+                                    El cálculo es menor que la cantidad estimada; la pérdida se calcula desde este valor.
+                                  </p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="pn-etiqueta">
+                                  ¿Cuántas salieron bien? ({esPizzaOrdenLinea(l) ? "pizzas" : l.unidad})
+                                </label>
+                                <input
+                                  type="number" min={0} max={debida ?? undefined} step={1}
+                                  value={realTxt}
+                                  placeholder="0"
+                                  onChange={e => setReales(p => ({ ...p, [i]: limpiarNumeroInput(e.target.value) }))}
+                                  className={iCls + (realInvalida || realExcede ? " ring-2 ring-red-400" : "")}
+                                />
+                                {esPizzaOrdenLinea(l) && !realInvalida && !realExcede && (
+                                  <p className="mt-1 text-base font-semibold text-emerald-700">
+                                    Ingresan {real} × 24 partes = hasta {real * 8} porciones medianas o {real * 6} grandes.
+                                  </p>
+                                )}
+                                {realExcede && (
+                                  <p className="mt-1 text-base font-semibold text-red-600">
+                                    No puede ser mayor que la cantidad que debías hacer ({debida}).
+                                  </p>
+                                )}
+                                {realInvalida && (
+                                  <p className="mt-1 text-base font-semibold text-red-600">
+                                    Ingresa un entero mayor o igual a cero.
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                            {!invalido && (
-                              <p className="text-[11px] text-muted-foreground">
-                                Con este precio, la pizza completa vale {formatearCOP(Number(valorPrecioCompletar(pz, t)) * porcionesPorPizza(t))}
-                              </p>
-                            )}
-                            {t === "Grande" && !invalido
-                              && Number(valorPrecioCompletar(pz, t)) <= precioEfectivoPizza(pz, "Mediana")
-                              && precioEfectivoPizza(pz, "Mediana") > 0 && (
-                              <p className="text-[11px] font-semibold text-red-600">
-                                Debe ser mayor que el precio de la porción Mediana ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))})
-                              </p>
-                            )}
-                            {invalido && (
-                              <p className="text-[11px] font-semibold text-red-600">Ingresa un precio mayor a 0.</p>
-                            )}
-                            {detalle?.sinTiempo && (
-                              <p className="text-[11px] font-semibold text-amber-700">
-                                La ficha no tiene tiempo de preparación: el recomendado no incluye mano de obra ni gas
-                              </p>
-                            )}
                           </div>
                         );
-                      })}
-                    </div>
+                      })()
+                    ))}
                   </div>
-                ))}
+                </SeccionFormulario>
+                {!completarEsPedido && (
+                  <SeccionFormulario numero={2} titulo="¿Qué pasó con las que faltan?">
+                    <ul className="grid gap-2 text-base">
+                      {completarItem.lineas.map((linea, i) => {
+                        const { invalido, realExcede, merma } = cantidadesCompletar[i];
+                        return (
+                          <li key={i} className="rounded-xl bg-muted p-3">
+                            <strong>{nombreLineaOrden(linea)}</strong>
+                            {invalido || realExcede ? (
+                              <p className="text-muted-foreground">La pérdida se muestra cuando la cantidad sea válida.</p>
+                            ) : merma > 0 ? (
+                              <p className="font-semibold text-red-600">Se anotan como pérdida: {fmtCant(merma, linea.unidad)}</p>
+                            ) : (
+                              <p className="text-muted-foreground">No hay pérdida</p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </SeccionFormulario>
+                )}
+                {pizzasConPrecioCompletar.length > 0 && (
+                  <SeccionFormulario numero={3} titulo="Precio de la pizza por porción">
+                    <div className="grid gap-3">
+                      {pizzasConPrecioCompletar.map((pz) => (
+                        <div key={pz.id} className="p-4 border border-border rounded-2xl bg-card space-y-2">
+                          <p className="text-base font-semibold text-foreground">{pz.nombre}</p>
+                          {grandeNoMayorQueMediana(pz) && !(tamanosDeOrden(pz).has("Mediana") && tamanosDeOrden(pz).has("Grande")) && (
+                            <p className="text-base font-semibold text-red-600">
+                              La porción Grande ({formatearCOP(precioEfectivoPizza(pz, "Grande"))}) quedaría igual o más barata que la Mediana
+                              ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))}). Ajusta el precio del tamaño producido o el otro precio en Editar producto.
+                            </p>
+                          )}
+                          <div className={`grid grid-cols-1 gap-3 ${(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).length > 1 ? "sm:grid-cols-2" : ""}`}>
+                            {(["Mediana", "Grande"] as const).filter((t) => mostrarTamanoPizza(pz, t)).map((t) => {
+                              const rec = precioRecomendadoPizza(pz, t);
+                              const actual = preciosActualesDe(pz)[t];
+                              const detalle = detalleCostoPizza(pz, t);
+                              const invalido = !(Number(valorPrecioCompletar(pz, t)) > 0);
+                              return (
+                                <div key={t} className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
+                                  <p className="text-base font-bold text-foreground">{t}</p>
+                                  <p className="text-base text-muted-foreground">
+                                    Precio actual: {formatearCOP(actual)}
+                                  </p>
+                                  {detalle && (
+                                    <div className="space-y-0.5 text-base">
+                                      {([
+                                        ["Insumos", detalle.resumen.insumos],
+                                        ["Mano de obra", detalle.resumen.manoObra],
+                                        ["Gas", detalle.resumen.gas],
+                                      ] as const).map(([etiqueta, valor]) => (
+                                        <div key={etiqueta} className="flex items-center justify-between gap-2">
+                                          <span className="text-muted-foreground">{etiqueta}</span>
+                                          <span className="font-semibold text-foreground tabular-nums">{formatearCOP(valor)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <p className="text-base font-bold text-emerald-700">
+                                    Precio recomendado: {rec > 0 ? formatearCOP(rec) : "—"}
+                                  </p>
+                                  {detalle && (
+                                    <p className="text-base text-muted-foreground">
+                                      Pizza completa: {formatearCOP(detalle.resumen.costoTotal)}
+                                    </p>
+                                  )}
+                                  {t === "Grande" && detalle?.igualado && (
+                                    <p className="text-base font-semibold text-amber-700">Ajustado: 10 % más que la porción Mediana</p>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <input
+                                      type="number" min={0} step={100}
+                                      aria-label={`Precio por porción ${t}`}
+                                      value={valorPrecioCompletar(pz, t)}
+                                      onChange={(e) => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: limpiarNumeroInput(e.target.value) }))}
+                                      className={iCls + (invalido ? " ring-2 ring-red-400" : "")}
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={rec <= 0}
+                                      onClick={() => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: String(rec) }))}
+                                      className="shrink-0 min-h-14 px-3 py-2 rounded-xl border border-border text-base font-semibold text-foreground hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      Usar recomendado
+                                    </button>
+                                  </div>
+                                  {!invalido && (
+                                    <p className="text-base text-muted-foreground">
+                                      Con este precio, la pizza completa vale {formatearCOP(Number(valorPrecioCompletar(pz, t)) * porcionesPorPizza(t))}
+                                    </p>
+                                  )}
+                                  {t === "Grande" && !invalido
+                                    && Number(valorPrecioCompletar(pz, t)) <= precioEfectivoPizza(pz, "Mediana")
+                                    && precioEfectivoPizza(pz, "Mediana") > 0 && (
+                                    <p className="text-base font-semibold text-red-600">
+                                      Debe ser mayor que el precio de la porción Mediana ({formatearCOP(precioEfectivoPizza(pz, "Mediana"))})
+                                    </p>
+                                  )}
+                                  {invalido && (
+                                    <p className="text-base font-semibold text-red-600">Ingresa un precio mayor a 0.</p>
+                                  )}
+                                  {detalle?.sinTiempo && (
+                                    <p className="text-base font-semibold text-amber-700">
+                                      La ficha no tiene tiempo de preparación: el recomendado no incluye mano de obra ni gas
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </SeccionFormulario>
+                )}
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Cancelar
+                  className="flex-1 py-4 min-h-[56px] border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  Todavía no
                 </button>
                 <button
                   disabled={!completarOk || cargandoCalculoDebido}
@@ -2934,10 +2963,10 @@ export function OrdenProduccionScreen({
                     }
                     confirmarCompletar();
                   }}
-                  className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+                  className={`flex-1 py-4 min-h-[56px] bg-primary text-white rounded-2xl text-lg font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
-                  Completar orden
+                  Terminar y sumar a lo que hay
                 </button>
               </div>
             </motion.div>
@@ -2945,7 +2974,7 @@ export function OrdenProduccionScreen({
         )}
       </AnimatePresence>
 
-      {/* ── Modal: Inventario insuficiente al Iniciar (C1) ── Lista de
+      {/* ── Modal: No alcanza para empezar al Iniciar (C1) ── Lista de
           faltantes con su motivo y SOLO botón Cerrar: la orden se queda
           Pendiente y no se descuenta nada. */}
       <AnimatePresence>
@@ -2956,31 +2985,31 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border max-h-[90vh] flex flex-col my-4">
               <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: SERIF }}>
-                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" /> Inventario insuficiente
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0" /> No alcanza para empezar
                 </h3>
                 <button onClick={() => setFaltantesIniciar(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   La orden <strong className="text-foreground">{faltantesIniciar.ordenId}</strong> se queda{" "}
                   <strong className="text-foreground">Pendiente</strong>: no se descontó nada ni cambió de estado.
                 </p>
                 {faltantesIniciar.faltantes.map((f) => (
                   <div key={f.insumoId} className="p-3 rounded-xl bg-red-50 border border-red-200 space-y-0.5">
-                    <p className="text-sm font-semibold text-red-700 flex items-start gap-2">
+                    <p className="text-lg font-semibold text-red-700 flex items-start gap-2">
                       <Minus className="w-3.5 h-3.5 shrink-0 mt-1" />
                       <span>Faltan {fmtCant(f.falta, f.unidad)} de {f.nombre} (hay {fmtCant(f.stock, f.unidad)})</span>
                     </p>
                     {f.motivo && (
-                      <p className="pl-6 text-[11px] text-red-700">{motivoFaltante(f)}</p>
+                      <p className="pl-6 text-base text-red-700">{motivoFaltante(f)}</p>
                     )}
                   </div>
                 ))}
               </div>
               <div className="shrink-0 px-5 py-4 border-t border-border">
                 <button onClick={() => setFaltantesIniciar(null)}
-                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                  Cerrar
+                  className="pn-boton pn-boton--oscuro">
+                  Entendido
                 </button>
               </div>
             </motion.div>
@@ -2995,34 +3024,106 @@ export function OrdenProduccionScreen({
             <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4 max-h-[90vh] flex flex-col">
-              <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.id}</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
+              <div className="shrink-0 flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
+                <div className="min-w-0">
+                  <h3 style={{ font: "700 26px/1.2 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
+                    {detailItem.lineas.map((l) => l.nombre).join(", ") || `Orden OP-${detailItem.id.replace("OP-", "")}`}
+                    {detailItem.tipo === "pedido" && detailItem.cliente ? ` para ${detailItem.cliente}` : ""}
+                  </h3>
+                  <p style={{ fontSize: 18, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+                    {detailItem.tipo === "pedido"
+                      ? `Pedido de cliente${detailItem.ventaNumero ? ` #${detailItem.ventaNumero}` : ""}${detailItem.ventaLocal ? " · venta del local" : detailItem.fechaSolicitada ? ` · recoge ${formatearFechaHora(detailItem.fechaSolicitada, detailItem.horaSolicitada)}` : ""}`
+                      : `Para tener listo · Orden OP-${detailItem.id.replace("OP-", "")}`}
+                  </p>
+                </div>
+                <BotonAccion variante="normal" onClick={() => setDetailItem(null)}>Cerrar</BotonAccion>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-                <EstimacionPedido orden={detailItem} />
-                {esAdministradorSesion && canEdit && detailItem.tipo === "pedido"
-                  && (detailItem.estadoOrden === "pendiente" || detailItem.estadoOrden === "en-proceso") && (
-                  <EditarTiempoPedido
-                    key={detailItem.id}
-                    orden={detailItem}
-                    onGuardar={actualizada => {
-                      setOrdenes(prev => prev.map(o => o.id === actualizada.id ? actualizada : o));
-                      setDetailItem(prev => prev?.id === actualizada.id ? actualizada : prev);
-                    }}
-                  />
+                {/* Los tres pasos de la cocina */}
+                <ol className="pn-pasos" aria-label="En qué paso va la orden" style={{ margin: 0 }}>
+                  {(["Recibida", "En la cocina", "Lista para entregar"] as const).map((paso, i) => {
+                    const actual = detailItem.estadoOrden === "completada" ? 2 : detailItem.estadoOrden === "en-proceso" ? 1 : 0;
+                    const hecho = detailItem.estadoOrden === "cancelada" ? i === 0 : i < actual || (i === 2 && actual === 2);
+                    return (
+                      <li key={paso} aria-current={i === actual && detailItem.estadoOrden !== "cancelada" ? "step" : undefined}
+                        style={{ fontWeight: i === actual ? 700 : 400, color: i === actual ? "var(--texto)" : undefined }}>
+                        {hecho ? "✓ " : ""}{paso}
+                      </li>
+                    );
+                  })}
+                  {detailItem.estadoOrden === "cancelada" && <li><EstadoPill tono="gris">Cancelada</EstadoPill></li>}
+                </ol>
+
+                {/* Contador grande mientras está en la cocina */}
+                {detailItem.estadoOrden === "en-proceso" && (() => {
+                  const fin = detailItem.tipo === "pedido" ? detailItem.finCalentamientoMs : detailItem.finPreparacionMs;
+                  return (
+                    <section style={{ border: "3px solid var(--azul-texto)", background: "var(--azul-suave)", borderRadius: 20, padding: "18px 22px" }}>
+                      <p style={{ fontSize: 19, fontWeight: 600, margin: 0, color: "var(--azul-texto)" }}>Estará lista en</p>
+                      {fin != null ? (
+                        <>
+                          <p style={{ font: "700 52px/1.1 var(--font-titulo)", margin: "4px 0", color: "var(--azul-texto)" }} className="tabular-nums" aria-live="polite">
+                            {tiempoRestante(fin, ahoraCalentamiento)}
+                          </p>
+                          <p style={{ fontSize: 18, margin: 0 }}>
+                            Más o menos a las {new Date(fin).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}
+                          </p>
+                        </>
+                      ) : (
+                        <p style={{ fontSize: 20, margin: "4px 0 0" }}>Se está preparando.</p>
+                      )}
+                      <div style={{ marginTop: 12 }}><EstimacionPedido orden={detailItem} /></div>
+                      {esAdministradorSesion && canEdit && detailItem.tipo === "pedido" && (
+                        <div style={{ marginTop: 14 }}>
+                          <p style={{ fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>¿Se va a demorar más o menos?</p>
+                          <EditarTiempoPedido
+                            key={detailItem.id}
+                            orden={detailItem}
+                            onGuardar={actualizada => {
+                              setOrdenes(prev => prev.map(o => o.id === actualizada.id ? actualizada : o));
+                              setDetailItem(prev => prev?.id === actualizada.id ? actualizada : prev);
+                            }}
+                          />
+                        </div>
+                      )}
+                      {canEdit && detailItem.tipo === "pedido" && (
+                        <div style={{ marginTop: 16 }}>
+                          <BotonAccion variante="bien" className="pn-boton--grande" onClick={() => { const o = detailItem; setDetailItem(null); setOrdenLista(o); }}>
+                            Ya está listo para entregar
+                          </BotonAccion>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })()}
+
+                {detailItem.estadoOrden === "pendiente" && (
+                  <>
+                    <EstimacionPedido orden={detailItem} />
+                    {esAdministradorSesion && canEdit && detailItem.tipo === "pedido" && (
+                      <EditarTiempoPedido
+                        key={detailItem.id}
+                        orden={detailItem}
+                        onGuardar={actualizada => {
+                          setOrdenes(prev => prev.map(o => o.id === actualizada.id ? actualizada : o));
+                          setDetailItem(prev => prev?.id === actualizada.id ? actualizada : prev);
+                        }}
+                      />
+                    )}
+                  </>
                 )}
+
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${detailItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>{etiquetaAsignacion(detailItem, productos)}</span>
-                  {detailItem.ventaLocal && <span className="text-[11px] font-semibold text-muted-foreground">Venta en el local</span>}
-                  <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${ESTADO_COLOR[detailItem.estadoOrden]}`}>{ESTADO_LABEL[detailItem.estadoOrden]}</span>
-                  <span className="text-[11px] text-muted-foreground sm:ml-auto">Estado desde {formatearFechaHora(ultimoCambio(detailItem))}</span>
+                  <EstadoPill tono={detailItem.estadoOrden === "en-proceso" ? "azul" : detailItem.estadoOrden === "completada" ? "verde" : detailItem.estadoOrden === "cancelada" ? "gris" : "ambar"}>
+                    {detailItem.estadoOrden === "pendiente" ? "Por empezar" : detailItem.estadoOrden === "en-proceso" ? "En la cocina" : detailItem.estadoOrden === "completada" ? "Terminada" : "Cancelada"}
+                  </EstadoPill>
+                  <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>Desde {formatearFechaHora(ultimoCambio(detailItem))}</span>
                 </div>
 
                 {detailItem.tipo === "pedido" && (
                   <div className="flex items-center justify-between py-2 border-b border-border gap-4">
-                    <span className="text-sm text-muted-foreground font-medium shrink-0">Venta asociada</span>
-                    <span className="text-sm font-semibold text-foreground text-right">{detailItem.ventaNumero ? `${detailItem.ventaNumero}${detailItem.cliente ? ` · ${detailItem.cliente}` : ""}` : "—"}</span>
+                    <span className="text-lg text-muted-foreground font-medium shrink-0">Venta asociada</span>
+                    <span className="text-lg font-semibold text-foreground text-right">{detailItem.ventaNumero ? `${detailItem.ventaNumero}${detailItem.cliente ? ` · ${detailItem.cliente}` : ""}` : "—"}</span>
                   </div>
                 )}
 
@@ -3034,8 +3135,8 @@ export function OrdenProduccionScreen({
                     { l: "Entrega estimada", v: formatearFechaHora(detailItem.entregaEstimada) },
                   ].map(({ l, v }) => (
                     <div key={l}>
-                      <p className="text-[11px] font-semibold text-muted-foreground">{l}</p>
-                      <p className="text-sm font-semibold text-foreground">{v}</p>
+                      <p className="text-base font-semibold text-muted-foreground">{l}</p>
+                      <p className="text-lg font-semibold text-foreground">{v}</p>
                     </div>
                   ))}
                 </div>
@@ -3047,8 +3148,8 @@ export function OrdenProduccionScreen({
                   if (mermas.length === 0) return null;
                   return (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                      <p className="text-xs font-semibold text-amber-800">Pérdida registrada en Productos no conformes</p>
-                      <p className="text-xs text-amber-700 mt-0.5">
+                      <p className="text-base font-semibold text-amber-800">Pérdida registrada en Productos no conformes</p>
+                      <p className="text-base text-amber-700 mt-0.5">
                         {mermas.map((m) => `${m.nombre} · ${m.cantidadAfectada} ${m.unidadMedida}`).join(", ")}
                       </p>
                     </div>
@@ -3056,10 +3157,10 @@ export function OrdenProduccionScreen({
                 })()}
 
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Cantidades estimadas</p>
+                  <p className="text-base font-semibold text-muted-foreground mb-1.5">Cantidades estimadas</p>
                   <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-muted text-xs text-muted-foreground">
+                    <table className="w-full text-lg text-left">
+                      <thead className="bg-muted text-base text-muted-foreground">
                         <tr><th className="p-3">Producto o insumo</th><th className="p-3">Cantidad estimada</th><th className="p-3">Unidad</th></tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -3076,7 +3177,7 @@ export function OrdenProduccionScreen({
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>
+                  <p className="text-base font-semibold text-muted-foreground mb-1.5">Líneas de la orden</p>
                   <div className="space-y-1.5">
                     {detailItem.lineas.map((l, i) => {
                       // C8: lo que gasta ESTA línea (con el factor de su
@@ -3088,18 +3189,18 @@ export function OrdenProduccionScreen({
                       <div key={i} className="p-3 bg-muted rounded-xl">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-foreground">
+                            <p className="text-lg font-semibold text-foreground">
                               {nombreLineaOrden(l)}
                             </p>
                             {(l.tamano || l.porciones) && !esPizzaOrdenLinea(l) && (
-                              <p className="text-[11px] text-muted-foreground">
+                              <p className="text-base text-muted-foreground">
                                 {[l.tamano ? `Tamaño ${l.tamano}` : null, l.porciones ? `${l.porciones} porciones` : null].filter(Boolean).join(" · ")}
                               </p>
                             )}
                           </div>
                           <div className="text-right shrink-0">
                             {l.cantidadDebida != null && (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                              <p className="text-base text-muted-foreground mt-0.5">
                                 Debí hacer: {esPizzaOrdenLinea(l)
                                   ? `${l.cantidadDebida} ${l.cantidadDebida === 1 ? "pizza" : "pizzas"}`
                                   : fmtCant(l.cantidadDebida, l.unidad)}
@@ -3107,14 +3208,14 @@ export function OrdenProduccionScreen({
                             )}
                             {l.cantidadReal != null && (
                               <>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                <p className="text-base text-muted-foreground mt-0.5">
                                   Real: {cantidadLineaOrden(detailItem, l, l.cantidadReal)}
                                 </p>
                                 {detailItem.tipo === "preparacion" && esPizzaOrdenLinea(l) && resumenCortes(l) && (
-                                  <p className="text-[11px] font-semibold text-foreground">{resumenCortes(l)}</p>
+                                  <p className="text-base font-semibold text-foreground">{resumenCortes(l)}</p>
                                 )}
                                 {(l.merma ?? 0) > 0 && (
-                                  <p className="text-[11px] font-semibold text-red-600">
+                                  <p className="text-base font-semibold text-red-600">
                                     −{esPizzaOrdenLinea(l)
                                       ? cantidadLineaOrden(detailItem, l, l.merma)
                                       : fmtCant(l.merma ?? 0, l.unidad)} de pérdida
@@ -3125,15 +3226,15 @@ export function OrdenProduccionScreen({
                           </div>
                         </div>
                         {detailItem.tipo === "preparacion" && l.sinFicha && (
-                          <p className="mt-1.5 text-[11px] text-muted-foreground italic">Sin preparación · se entrega directo</p>
+                          <p className="mt-1.5 text-base text-muted-foreground italic">Sin preparación · se entrega directo</p>
                         )}
                         {detailItem.tipo === "preparacion" && necesita && (
-                          <p className="mt-1.5 text-[11px] text-muted-foreground">
+                          <p className="mt-1.5 text-base text-muted-foreground">
                             Necesita: <span className="font-semibold text-foreground">{necesita}</span>
                           </p>
                         )}
                         {detailItem.tipo === "preparacion" && l.pasos && l.pasos.length > 0 && (
-                          <ol className="mt-1.5 list-decimal list-inside text-[11px] text-muted-foreground space-y-0.5">
+                          <ol className="mt-1.5 list-decimal list-inside text-base text-muted-foreground space-y-0.5">
                             {l.pasos.map((p, j) => <li key={j}>{p}</li>)}
                           </ol>
                         )}
@@ -3145,7 +3246,7 @@ export function OrdenProduccionScreen({
 
                 {detailItem.tipo === "preparacion" && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Insumos usados</p>
+                    <p className="text-base font-semibold text-muted-foreground mb-1.5">Insumos usados</p>
                     <TablaInsumosRequeridos
                       requeridos={detailItem.insumosRequeridos}
                       insumos={insumos}
@@ -3158,13 +3259,13 @@ export function OrdenProduccionScreen({
                 )}
 
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
+                  <p className="text-base font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
                   {parametrosCostosError ? (
-                    <p className="text-xs text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">
+                    <p className="text-base text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">
                       {parametrosCostosError}
                     </p>
                   ) : !parametrosCostos ? (
-                    <p className="text-xs text-muted-foreground bg-muted/60 rounded-xl border border-border px-3 py-2">
+                    <p className="text-base text-muted-foreground bg-muted/60 rounded-xl border border-border px-3 py-2">
                       Cargando parámetros de costos…
                     </p>
                   ) : (() => {
@@ -3222,22 +3323,22 @@ export function OrdenProduccionScreen({
                       <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Insumos</p>
-                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.insumos)}</p>
+                            <p className="text-base uppercase tracking-wide text-muted-foreground">Insumos</p>
+                            <p className="text-lg font-semibold text-foreground tabular-nums">{formatearCOP(resumen.insumos)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mano de obra</p>
-                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.manoObra)}</p>
+                            <p className="text-base uppercase tracking-wide text-muted-foreground">Mano de obra</p>
+                            <p className="text-lg font-semibold text-foreground tabular-nums">{formatearCOP(resumen.manoObra)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Gas</p>
-                            <p className="text-sm font-semibold text-foreground tabular-nums">{formatearCOP(resumen.gas)}</p>
+                            <p className="text-base uppercase tracking-wide text-muted-foreground">Gas</p>
+                            <p className="text-lg font-semibold text-foreground tabular-nums">{formatearCOP(resumen.gas)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <p className="text-base uppercase tracking-wide text-muted-foreground">
                               {lineaPizzaUnica ? "Costo por pizza" : "Costo por unidad"}
                             </p>
-                            <p className="text-sm font-semibold text-foreground tabular-nums">
+                            <p className="text-lg font-semibold text-foreground tabular-nums">
                               {lineaPizzaUnica
                                 ? cantidadPizzaBase > 0 ? formatearCOP(costoUnidadPizza) : "—"
                                 : cantidadEstimada > 0
@@ -3245,12 +3346,12 @@ export function OrdenProduccionScreen({
                                   : "—"}
                             </p>
                             {lineaPizzaUnica && detailItem.tipo === "preparacion" && cantidadPizzaBase > 0 && (
-                              <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                              <p className="mt-1 text-base font-semibold text-muted-foreground">
                                 Costo por porción: {formatearCOP(costoUnidadPizza / 8)} mediana · {formatearCOP(costoUnidadPizza / 6)} grande
                               </p>
                             )}
                             {lineaPizzaUnica && detailItem.tipo === "pedido" && porcionesPizzaBase > 0 && (
-                              <p className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                              <p className="mt-1 text-base font-semibold text-muted-foreground">
                                 Costo por porción: {cantidadPizzaBase > 0
                                   ? formatearCOP(costoUnidadPizza / porcionesPizzaBase)
                                   : "—"}
@@ -3259,13 +3360,13 @@ export function OrdenProduccionScreen({
                           </div>
                         </div>
                         <div className="border-t border-border pt-2 flex items-center justify-between gap-3">
-                          <span className="text-xs font-bold text-foreground uppercase tracking-wide">Costo total</span>
+                          <span className="text-base font-bold text-foreground uppercase tracking-wide">Costo total</span>
                           <span className="text-lg font-bold text-foreground tabular-nums">{formatearCOP(resumen.costoTotal)}</span>
                         </div>
                         {resumen.avisos.length > 0 && (
                           <div className="space-y-1">
                             {resumen.avisos.map((aviso, index) => (
-                              <p key={`${aviso.nombre}-${index}`} className="text-[11px] text-amber-700">
+                              <p key={`${aviso.nombre}-${index}`} className="text-base text-amber-700">
                                 {aviso.tipo === "sin-costo"
                                   ? `${aviso.nombre} sin costo: regístralo en una compra`
                                   : aviso.tipo === "no-encontrado"
@@ -3283,8 +3384,8 @@ export function OrdenProduccionScreen({
                 {detailItem.tipo === "preparacion" && (
                   <div>
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                      <p className="text-xs font-semibold text-muted-foreground">Descripción de la preparación</p>
-                      <span className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <p className="text-base font-semibold text-muted-foreground">Descripción de la preparación</p>
+                      <span className="text-base text-muted-foreground flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 shrink-0" />
                         Tiempo estimado:{" "}
                         <strong className="text-foreground">
@@ -3295,7 +3396,7 @@ export function OrdenProduccionScreen({
                         )}
                       </span>
                     </div>
-                    <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
+                    <p className="text-base text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 whitespace-pre-wrap leading-relaxed">
                       {detailItem.descripcionPreparacion || "Sin descripción"}
                     </p>
                   </div>
@@ -3303,8 +3404,8 @@ export function OrdenProduccionScreen({
 
                 {detailItem.tipo === "pedido" && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Preparación</p>
-                    <p className="text-xs text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 flex items-center gap-1.5">
+                    <p className="text-base font-semibold text-muted-foreground mb-1.5">Preparación</p>
+                    <p className="text-base text-foreground bg-muted/60 rounded-xl border border-border px-3 py-2 flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                       Tiempo estimado: <strong>{fmtMinutos(HORNEADO_MIN)}</strong>
                       {detailItem.estadoOrden === "en-proceso" && detailItem.finCalentamientoMs != null && (
@@ -3316,8 +3417,8 @@ export function OrdenProduccionScreen({
 
                 {detailItem.notasFaltantes && (
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1.5">Notas de faltantes</p>
-                    <p className="text-xs text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">{detailItem.notasFaltantes}</p>
+                    <p className="text-base font-semibold text-muted-foreground mb-1.5">Notas de faltantes</p>
+                    <p className="text-base text-red-700 bg-red-50 rounded-xl border border-red-200 px-3 py-2">{detailItem.notasFaltantes}</p>
                   </div>
                 )}
 
@@ -3327,9 +3428,9 @@ export function OrdenProduccionScreen({
                   const enColumnas = detailItem.historial.length === 0 && !!detailItem.observacion;
                   const lineaTiempos = (
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1.5">Línea de tiempo de estados</p>
+                      <p className="text-base font-semibold text-muted-foreground mb-1.5">Línea de tiempo de estados</p>
                       {detailItem.historial.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
+                        <p className="text-lg text-muted-foreground italic bg-muted rounded-xl px-3 py-2">
                           Sin transiciones. Creada el {formatearFechaHora(detailItem.creadaEn)}.
                         </p>
                       ) : (() => {
@@ -3341,8 +3442,8 @@ export function OrdenProduccionScreen({
                         <div className="space-y-1.5">
                           {!traeInicial && (
                             <div className="flex items-center justify-between gap-2 bg-muted rounded-xl px-3 py-2">
-                              <span className="text-xs font-semibold text-foreground">Orden creada</span>
-                              <span className="text-[10px] text-muted-foreground shrink-0">{formatearFechaHora(detailItem.creadaEn)}</span>
+                              <span className="text-base font-semibold text-foreground">Orden creada</span>
+                              <span className="text-base text-muted-foreground shrink-0">{formatearFechaHora(detailItem.creadaEn)}</span>
                             </div>
                           )}
                           {pasos.map((h, i) => (
@@ -3351,20 +3452,20 @@ export function OrdenProduccionScreen({
                                 // Paso sin cambio de estado (p. ej. "Creada
                                 // desde Insumos"): manda el motivo, no la
                                 // flecha de transiciones.
-                                <span className="text-xs font-semibold text-foreground">{h.detalle}</span>
+                                <span className="text-base font-semibold text-foreground">{h.detalle}</span>
                               ) : (
                                 <div className="flex items-center gap-2 flex-wrap">
                                   {h.de === null ? (
-                                    <span className="text-xs font-semibold text-foreground">Orden creada</span>
+                                    <span className="text-base font-semibold text-foreground">Orden creada</span>
                                   ) : (
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
+                                    <span className={`text-base font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.de]}`}>{ESTADO_LABEL[h.de]}</span>
                                   )}
-                                  <span className="text-muted-foreground text-xs">→</span>
-                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
-                                  {h.automatico && <span className="text-xs text-muted-foreground">(automático)</span>}
+                                  <span className="text-muted-foreground text-base">→</span>
+                                  <span className={`text-base font-semibold px-2 py-0.5 rounded-full ${ESTADO_COLOR[h.a]}`}>{ESTADO_LABEL[h.a]}</span>
+                                  {h.automatico && <span className="text-base text-muted-foreground">(automático)</span>}
                                 </div>
                               )}
-                              <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{formatearFechaHora(h.fechaHora)}</span>
+                              <span className="text-base text-muted-foreground shrink-0 tabular-nums">{formatearFechaHora(h.fechaHora)}</span>
                             </div>
                           ))}
                         </div>
@@ -3374,8 +3475,8 @@ export function OrdenProduccionScreen({
                   );
                   const observacion = detailItem.observacion ? (
                     <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1">Observación</p>
-                      <p className="text-sm text-foreground bg-muted rounded-xl px-3 py-2">{detailItem.observacion}</p>
+                      <p className="text-base font-semibold text-muted-foreground mb-1">Observación</p>
+                      <p className="text-lg text-foreground bg-muted rounded-xl px-3 py-2">{detailItem.observacion}</p>
                     </div>
                   ) : null;
                   return enColumnas ? (
@@ -3386,8 +3487,8 @@ export function OrdenProduccionScreen({
                 })()}
               </div>
               <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
-                <button onClick={() => setDetailItem(null)} className="w-32 shrink-0 py-2.5 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
-                <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 max-md:min-h-11 bg-primary rounded-xl text-sm font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
+                <button onClick={() => setDetailItem(null)} className="w-32 shrink-0 py-2.5 bg-muted rounded-xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
+                <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 max-md:min-h-11 bg-primary rounded-xl text-lg font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
               </div>
             </motion.div>
           </div>
@@ -3506,7 +3607,7 @@ export function OrdenProduccionScreen({
                 exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
                 className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border my-4">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <h3 className="text-base font-bold text-foreground" style={{ fontFamily: SERIF }}>Dar de baja — {darBajaItem.id}</h3>
+                  <h3 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Dar de baja la orden OP-{darBajaItem.id.replace("OP-", "")}</h3>
                   <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
                     className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
                 </div>
@@ -3515,7 +3616,7 @@ export function OrdenProduccionScreen({
                   {/* C7: la marca dice si hay algo por devolver. Hoy
                       `confirmarDarBaja` solo cancela la orden —nunca devuelve
                       stock—, así que el texto aclara qué pasó con los insumos. */}
-                  <p className={`text-xs rounded-xl px-3 py-2 border ${
+                  <p className={`text-base rounded-xl px-3 py-2 border ${
                     darBajaItem.insumosDescontados
                       ? "bg-amber-50 border-amber-200 text-amber-800"
                       : "bg-muted border-border text-muted-foreground"
@@ -3526,11 +3627,11 @@ export function OrdenProduccionScreen({
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
-                      <p className="text-sm font-semibold text-foreground py-2">{TIPO_LABEL[darBajaItem.tipo]}</p>
+                      <label className="pn-etiqueta">Tipo</label>
+                      <p className="text-lg font-semibold text-foreground py-2">{TIPO_LABEL[darBajaItem.tipo]}</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
+                      <label className="pn-etiqueta">Se mide en</label>
                       <select value={darBajaForm.unidadMedida} onChange={e => setDarBajaForm(f => f && ({ ...f, unidadMedida: e.target.value }))} className={sCls}>
                         {UNIDADES.map(u => <option key={u}>{u}</option>)}
                       </select>
@@ -3538,7 +3639,7 @@ export function OrdenProduccionScreen({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Producto</label>
+                    <label className="pn-etiqueta">Producto</label>
                     <select value={darBajaForm.idProducto}
                       onChange={e => {
                         const pid = e.target.value;
@@ -3555,14 +3656,14 @@ export function OrdenProduccionScreen({
                         <option key={l.idProducto} value={l.idProducto}>{l.nombre}</option>
                       ))}
                     </select>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span className="text-base font-semibold uppercase tracking-wide text-muted-foreground">
                       {darBajaItem.tipo === "preparacion" ? "Producto insumo" : "Producto terminado"}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad afectada</label>
+                      <label className="pn-etiqueta">¿Cuántas se dañaron?</label>
                       {/* Nace con la cantidad estimada de la línea; borra a
                           vacío sin volver a 0 (punto B1). */}
                       <input type="number" min={1}
@@ -3572,24 +3673,24 @@ export function OrdenProduccionScreen({
                         className={iCls} />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
+                      <label className="pn-etiqueta">Fecha</label>
                       <input value={formatearFechaHora(darBajaForm.fechaRegistro)} readOnly className={iCls + " opacity-60 cursor-default"} />
                     </div>
                   </div>
 
                   <div className="border border-border rounded-xl overflow-hidden">
                     <div className="px-3 py-2 bg-muted/60 border-b border-border">
-                      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descripción de la no conformidad</p>
+                      <p className="text-base font-bold uppercase tracking-wide text-muted-foreground">Qué salió mal</p>
                     </div>
                     <div className="p-3 space-y-3">
                       <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Título / motivo principal</label>
+                        <label className="pn-etiqueta">¿Por qué se da de baja?</label>
                         <select value={darBajaForm.motivo} onChange={e => setDarBajaForm(f => f && ({ ...f, motivo: e.target.value }))} className={sCls}>
                           {MOTIVOS.map(m => <option key={m}>{m}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción detallada</label>
+                        <label className="pn-etiqueta">Cuéntanos qué pasó</label>
                         <textarea rows={4} value={darBajaForm.descripcion}
                           onChange={e => setDarBajaForm(f => f && ({ ...f, descripcion: e.target.value }))}
                           placeholder="Describe detalladamente qué ocurrió, síntomas observados, impacto..."
@@ -3599,19 +3700,19 @@ export function OrdenProduccionScreen({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Origen</label>
+                    <label className="pn-etiqueta">Origen</label>
                     <input value={`Orden #${darBajaItem.id}`} readOnly className={iCls + " opacity-60 cursor-default"} />
                   </div>
                 </div>
 
                 <div className="flex gap-3 px-5 py-4 border-t border-border">
                   <button onClick={() => { setDarBajaItem(null); setDarBajaForm(null); }}
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors">
-                    Cancelar
+                    className="pn-boton pn-boton--oscuro">
+                    No, dejarla como está
                   </button>
                   <button onClick={confirmarDarBaja}
-                    className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-colors active:scale-95">
-                    Registrar
+                    className="pn-boton pn-boton--peligro">
+                    Sí, dar de baja la orden
                   </button>
                 </div>
               </motion.div>
@@ -3620,17 +3721,6 @@ export function OrdenProduccionScreen({
         )}
       </AnimatePresence>
 
-      {/* Confirm delete */}
-      <AnimatePresence>
-        {deleteId && (
-          <ConfirmDeleteModal
-            title="Eliminar orden"
-            message={<>¿Seguro que deseas eliminar la orden <strong>{deleteId}</strong>? Esta acción no se puede deshacer.</>}
-            onConfirm={() => handleDelete(deleteId)}
-            onCancel={() => setDeleteId(null)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

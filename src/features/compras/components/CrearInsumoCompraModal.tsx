@@ -16,7 +16,7 @@ import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
 
 const ICLS_MODAL =
-  "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const formatoCantidad = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
 const esOtraPresentacion = (valor: string) =>
   valor === OTRA_PRESENTACION_G || valor === OTRA_PRESENTACION_ML;
@@ -146,7 +146,7 @@ export function CrearInsumoCompraModal({
 
           <div className="px-6 py-5 space-y-4 max-h-[min(70dvh,34rem)] overflow-y-auto">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                 Nombre *
               </label>
               <input
@@ -162,7 +162,7 @@ export function CrearInsumoCompraModal({
                 className={campoConError(errorDe("nombre", errores.nombre))}
               />
               {errorDe("nombre", errores.nombre) && (
-                <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                   {errores.nombre}
                 </p>
               )}
@@ -170,7 +170,7 @@ export function CrearInsumoCompraModal({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                   Categoría *
                 </label>
                 <select
@@ -189,14 +189,14 @@ export function CrearInsumoCompraModal({
                   ))}
                 </select>
                 {errorDe("categoria", errores.categoria) && (
-                  <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                  <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                     {errores.categoria}
                   </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                   Unidad de Medida *
                 </label>
                 <div className="flex items-start gap-2">
@@ -230,21 +230,21 @@ export function CrearInsumoCompraModal({
                           tocar("contenidoPresentacion");
                         }}
                         onBlur={() => tocar("contenidoPresentacion")}
-                        className="h-full min-h-[2.875rem] w-full rounded-xl border border-border bg-muted px-3 py-2.5 max-md:min-h-11 pr-9 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        className="h-full min-h-[2.875rem] w-full rounded-xl border border-border bg-muted px-3 py-2.5 min-h-14 pr-9 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
                         {unidad === OTRA_PRESENTACION_G ? "g" : "ml"}
                       </span>
                     </div>
                   )}
                 </div>
                 {errorDe("unidad", errores.unidad) && (
-                  <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                  <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                     {errores.unidad}
                   </p>
                 )}
                 {esOtraPresentacion(unidad) && errorDe("contenidoPresentacion", errores.contenidoPresentacion) && (
-                  <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                  <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                     {errores.contenidoPresentacion}
                   </p>
                 )}
@@ -254,7 +254,7 @@ export function CrearInsumoCompraModal({
             {/* Peso de medida: cantidad exacta de una unidad del insumo
                 (ej. 1200 g). Obligatorio al crear. */}
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                 Peso de medida *
               </label>
               <div className="relative">
@@ -272,7 +272,7 @@ export function CrearInsumoCompraModal({
                   onBlur={() => tocar("pesoMedida")}
                   className={`${campoConError(errorDe("pesoMedida", errores.pesoMedida))} pr-14`}
                 />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
                   {presentacion?.unidadBase ??
                     (esOtraPresentacion(unidad)
                       ? unidad === OTRA_PRESENTACION_G
@@ -282,14 +282,14 @@ export function CrearInsumoCompraModal({
                 </span>
               </div>
               {errorDe("pesoMedida", errores.pesoMedida) && (
-                <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                   {errores.pesoMedida}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+              <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                 Stock Mínimo{presentacion
                   ? ` (× ${etiquetaContenido(unidad, presentacion.contenido, presentacion.unidadBase)})`
                   : esOtraPresentacion(unidad)
@@ -314,20 +314,20 @@ export function CrearInsumoCompraModal({
                   }`}
                 />
                 {!presentacion && esOtraPresentacion(unidad) && (
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
                     {etiquetaContenido(unidad, contenidoPresentacion, unidadBaseDeSeleccion(unidad)!)}
                   </span>
                 )}
               </div>
               {presentacion && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-base text-muted-foreground">
                   {formatoCantidad.format(stockMinimo)} ×{" "}
                   {etiquetaContenido(unidad, presentacion.contenido, presentacion.unidadBase)} ={" "}
                   {formatoCantidad.format(stockMinimo * presentacion.contenido)} {presentacion.unidadBase}
                 </p>
               )}
               {errorDe("stockMinimo", errores.stockMinimo) && (
-                <p className="text-xs text-red-500 dark:text-red-400 mt-1 leading-tight">
+                <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                   {errores.stockMinimo}
                 </p>
               )}
@@ -339,14 +339,14 @@ export function CrearInsumoCompraModal({
               type="button"
               onClick={onClose}
               disabled={guardando}
-              className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 min-h-14 border border-border rounded-xl text-base font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={guardando}
-              className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 min-h-14 bg-primary text-white rounded-xl text-base font-semibold transition-all inline-flex items-center justify-center gap-2 ${
                 guardando
                   ? "opacity-50 cursor-not-allowed"
                   : "hover:bg-red-700 cursor-pointer active:scale-95"

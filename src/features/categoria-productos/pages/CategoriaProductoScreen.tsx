@@ -7,6 +7,20 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ArrowLeft as IconoVolver, Tag as IconoTag } from "lucide-react";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { MensajeError } from "@/shared/components/campo";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
@@ -329,7 +343,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
       : undefined;
 
   const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const filtered = useMemo(
     () =>
@@ -428,12 +442,8 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
   /** Abre la confirmación de borrado solo si se puede borrar; si no, avisa
       con el mismo mensaje que daría el backend. */
   const pedirEliminar = (c: CategoriaProducto) => {
-    if (CATEGORIAS_FIJAS.has(c.id)) {
-      toast.error(MENSAJE_FIJA_ELIMINAR);
-      return;
-    }
-    if ((c.totalProductos ?? 0) > 0) {
-      toast.error(MENSAJE_CON_PRODUCTOS);
+    if (CATEGORIAS_FIJAS.has(c.id) || (c.totalProductos ?? 0) > 0) {
+      setBloqueoBorrar(c);
       return;
     }
     setDeleteItem(c);
@@ -469,748 +479,288 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
     }
   };
 
-  // Ancho amplio (igual que Proveedores/Gestión de Insumos): el listado usa
-  // el ancho completo del panel en vez del antiguo max-w-3xl.
-  // Piezas de una fila de categoría. Las usan la tabla (desde 768 px) y las tarjetas
-  // (menos de 768 px) para mostrar exactamente los mismos botones y controles.
-  const nombreCat = (c: CategoriaProducto) => (<span className="inline-flex items-center gap-2">
-                        {/* Emoji (columna emoji): text-3xl ≈ los 32 px del
-                            ícono anterior; la fila sigue midiendo 61 px. */}
-                        {c.icono && (
-                          <span
-                            aria-hidden="true"
-                            className="text-3xl leading-none shrink-0"
-                          >
-                            {c.icono}
-                          </span>
-                        )}
-                        {c.nombre}
-                      </span>);
-  const descripcionCat = (c: CategoriaProducto) => (<span
-                        className="block max-w-[420px] truncate"
-                        title={c.descripcion?.trim() || undefined}
-                      >
-                        {c.descripcion?.trim() ? c.descripcion : "—"}
-                      </span>);
-  const estadoCat = (c: CategoriaProducto) => (<EstadoSelect
-                        value={estadoDe(c)}
-                        disabled={!canEdit}
-                        onChange={(next) => {
-                          if (next === estadoDe(c)) return;
-                          setConfirmEstado({
-                            id: c.id,
-                            nombre: c.nombre,
-                            current: estadoDe(c),
-                            next,
-                            productosMenu: c.productosMenu ?? 0,
-                          });
-                        }}
-                        options={OPCIONES_ESTADO_CATEGORIA}
-                      />);
-  const accionesCat = (c: CategoriaProducto) => (<ActionIcons
-                        onView={() => setDetailItem(c)}
-                        onEdit={
-                          canEdit
-                            ? () => {
-                                setEditErrors({});
-                                setEditItem({ ...c });
-                                // Grupo del selector donde vive el emoji
-                                // actual, para que al abrir Editar el grupo
-                                // activo sea el del ícono de la categoría
-                                // (índice 0 si no se encuentra).
-                                setGrupoIconoEdicion(
-                                  Math.max(
-                                    0,
-                                    GRUPOS_ICONOS.findIndex((g) =>
-                                      g.iconos.includes(c.icono ?? ""),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : undefined
-                        }
-                        onDelete={canDelete ? () => pedirEliminar(c) : undefined}
-                      />);
+  const cuentaMenu = (c: CategoriaProducto) =>
+    `${c.productosMenu ?? 0} de ${c.totalProductos ?? 0} ${(c.totalProductos ?? 0) === 1 ? "producto está" : "productos están"} en el menú`;
+  const apagada = (c: CategoriaProducto) => estadoDe(c) === "Inactivo";
+  const pedirCambioEstado = (c: CategoriaProducto) =>
+    setConfirmEstado({
+      id: c.id,
+      nombre: c.nombre,
+      current: estadoDe(c),
+      next: apagada(c) ? "Activo" : "Inactivo",
+      productosMenu: c.productosMenu ?? 0,
+    });
+  const abrirEditar = (c: CategoriaProducto) => {
+    setEditErrors({});
+    setEditItem({ ...c });
+    // Grupo del selector donde vive el emoji actual (0 si no se encuentra).
+    setGrupoIconoEdicion(Math.max(0, GRUPOS_ICONOS.findIndex((g) => g.iconos.includes(c.icono ?? ""))));
+  };
+  const abrirCrear = () => {
+    setFormNombre("");
+    setFormIcono("");
+    setGrupoIconoSeleccionado(0);
+    setFormDescripcion("");
+    setFormEstado("Activo");
+    setCreateErrors({});
+    setShowCreate(true);
+  };
 
-  return (
-    <div className="px-4 sm:px-6 py-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1
-            className="text-3xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            Categoría Producto
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {categorias.length} categorías registradas
-          </p>
-        </div>
-        {canCreate && (
-          <button
-            onClick={() => {
-              setFormNombre("");
-              setFormIcono("");
-              setGrupoIconoSeleccionado(0);
-              setFormDescripcion("");
-              setFormEstado("Activo");
-              setCreateErrors({});
-              setShowCreate(true);
-            }}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md text-sm"
-          >
-            <Plus className="w-4 h-4" /> Crear Categoría
-          </button>
-        )}
-      </div>
+  // Estado que la gente ve: «Se ve en el menú» / «Apagada».
+  const PillEstado = ({ c }: { c: CategoriaProducto }) => (
+    <EstadoPill tono={apagada(c) ? "gris" : "verde"}>{apagada(c) ? "Apagada" : "Se ve en el menú"}</EstadoPill>
+  );
 
-      {/* Carga y error de la API (igual que Productos No Conformes): nunca se
-          muestran datos de ejemplo. */}
-      {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-4">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
-          <p className="text-sm">Cargando categorías…</p>
-        </div>
-      ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-4">
-          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
-          {onReintentar && (
-            <button onClick={onReintentar}
-              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
-              Reintentar
-            </button>
-          )}
-        </div>
+  // Cuando no se puede borrar, se explica en un diálogo (antes era un aviso pasajero).
+  const [bloqueoBorrar, setBloqueoBorrar] = useState<CategoriaProducto | null>(null);
+  const motivosBloqueo = (c: CategoriaProducto) =>
+    CATEGORIAS_FIJAS.has(c.id)
+      ? ["Es una de las categorías originales (Pizza, Lasaña y Bebidas)", "Esas vienen con el sistema y no se borran"]
+      : [`Tiene ${c.totalProductos ?? 0} ${(c.totalProductos ?? 0) === 1 ? "producto" : "productos"}`, "Primero hay que pasarlos a otra categoría o borrarlos"];
+
+  /** Un solo formulario para crear y para cambiar. */
+  const formulario = (modo: "crear" | "editar") => {
+    const e = modo === "editar" ? editItem : null;
+    if (modo === "editar" && !e) return null;
+    const fija = !!e && CATEGORIAS_FIJAS.has(e.id);
+    const nombre = e ? e.nombre : formNombre;
+    const descripcion = e ? e.descripcion ?? "" : formDescripcion;
+    const estado: EstadoCategoria = e ? estadoDe(e) : formEstado;
+    const icono = e ? e.icono ?? "" : formIcono;
+    const errs = e ? editErrors : createErrors;
+    const grupo = e ? grupoIconoEdicion : grupoIconoSeleccionado;
+    const setGrupo = e ? setGrupoIconoEdicion : setGrupoIconoSeleccionado;
+    const cerrar = () => (e ? setEditItem(null) : setShowCreate(false));
+    return (
+      <Dialog.Root open onOpenChange={a => { if (!a) cerrar(); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="pn-dialogo-fondo" />
+          <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+            <div className="pn-modal__cab">
+              <Dialog.Title className="pn-modal__titulo">{e ? `Cambiar «${e.nombre}»` : "Agregar una categoría"}</Dialog.Title>
+            </div>
+            <div className="grid gap-5">
+              <SeccionFormulario titulo="Datos de la categoría">
+                <div className="grid gap-4">
+                  <CampoFormulario etiqueta="Nombre" ayuda={fija ? "Las categorías originales no cambian de nombre" : "Así sale en el menú"} error={errs.nombre}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        value={nombre}
+                        disabled={fija}
+                        maxLength={MAX_NOMBRE}
+                        placeholder="Ej: Postres"
+                        onChange={ev => (e ? setEditItem(x => x && ({ ...x, nombre: ev.target.value })) : setFormNombre(ev.target.value))}
+                      />
+                    )}
+                  </CampoFormulario>
+                  <div>
+                    <p className="pn-etiqueta">¿Se ve en el menú?</p>
+                    <OpcionesBotones
+                      etiqueta="Se ve en el menú"
+                      valor={estado}
+                      onChange={v => (e ? setEditItem(x => x && ({ ...x, estado: v as EstadoCategoria })) : setFormEstado(v as EstadoCategoria))}
+                      opciones={[{ valor: "Activo", etiqueta: "Sí, mostrarla" }, { valor: "Inactivo", etiqueta: "Todavía no" }]}
+                    />
+                  </div>
+                  <CampoFormulario etiqueta="Descripción" opcional error={errs.descripcion}>
+                    {(p) => (
+                      <textarea
+                        {...p}
+                        rows={3}
+                        value={descripcion}
+                        placeholder="Ej: Postres y dulces para cerrar la comida"
+                        onChange={ev => (e ? setEditItem(x => x && ({ ...x, descripcion: ev.target.value })) : setFormDescripcion(ev.target.value))}
+                      />
+                    )}
+                  </CampoFormulario>
+                </div>
+              </SeccionFormulario>
+
+              <SeccionFormulario
+                titulo="Dibujo que la acompaña"
+                ayuda={fija ? "Las categorías originales no cambian de dibujo." : "Escoge un grupo y después el dibujo."}
+              >
+                <div className="flex items-center gap-4 mb-4">
+                  <span aria-hidden="true" style={{ fontSize: 64, lineHeight: 1 }}>{icono || "·"}</span>
+                  <span style={{ fontSize: 18, color: "var(--gris-texto)" }}>{icono ? "Así se verá en el menú" : "Todavía no escoges ninguno"}</span>
+                </div>
+                {!fija && (
+                  <>
+                    <div className="pn-opciones" role="group" aria-label="Grupo de dibujos" style={{ marginBottom: 14 }}>
+                      {GRUPOS_ICONOS.map((g, idx) => (
+                        <button key={g.nombre} type="button" className="pn-chip" aria-pressed={grupo === idx} onClick={() => setGrupo(idx)}>
+                          {g.nombre}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="pn-dibujos" role="group" aria-label="Dibujos del grupo">
+                      {GRUPOS_ICONOS[grupo].iconos.map(ic => (
+                        <button
+                          key={ic}
+                          type="button"
+                          aria-label={`Dibujo ${ic}`}
+                          aria-pressed={icono === ic}
+                          className="pn-dibujo"
+                          onClick={() => {
+                            if (e) { setEditItem(x => x && ({ ...x, icono: ic })); setEditErrors(p => ({ ...p, icono: "" })); }
+                            else { setFormIcono(ic); setCreateErrors(p => ({ ...p, icono: "" })); }
+                          }}
+                        >
+                          {ic}
+                        </button>
+                      ))}
+                    </div>
+                    {errs.icono && <p className="pn-campo__error" role="alert"><span>Escoge un dibujo para la categoría</span></p>}
+                  </>
+                )}
+              </SeccionFormulario>
+
+              <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                <BotonAccion variante="normal" onClick={cerrar}>Cancelar</BotonAccion>
+                <BotonAccion variante="principal" disabled={guardando} onClick={() => void (e ? handleEdit() : handleCreate())}>
+                  {guardando ? "Guardando…" : e ? "Guardar cambios" : "Agregar la categoría"}
+                </BotonAccion>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    );
+  };
+
+  const dialogos = (
+    <>
+      {showCreate && formulario("crear")}
+      {editItem && formulario("editar")}
+      <DialogoConfirmacion
+        abierto={!!confirmEstado}
+        onCambiarAbierto={a => { if (!a) setConfirmEstado(null); }}
+        titulo={confirmEstado?.next === "Inactivo" ? `¿Apagar la categoría ${confirmEstado?.nombre ?? ""}?` : `¿Volver a mostrar la categoría ${confirmEstado?.nombre ?? ""}?`}
+        queVaAPasar={confirmEstado?.next === "Inactivo"
+          ? [
+              (confirmEstado?.productosMenu ?? 0) === 1 ? "Su producto se esconde del menú" : `Sus ${confirmEstado?.productosMenu ?? 0} productos se esconden del menú`,
+              "No se borra nada",
+              "La puedes volver a prender",
+            ]
+          : ["Sus productos vuelven a salir en el menú de la página", "Los que estén agotados siguen sin poder pedirse"]}
+        textoSeguro={confirmEstado?.next === "Inactivo" ? "No, dejarla como está" : "No, dejarla apagada"}
+        textoAccion={confirmEstado?.next === "Inactivo" ? "Sí, apagarla" : "Sí, mostrarla"}
+        onConfirmar={() => { void handleCambiarEstado(); }}
+      />
+      {bloqueoBorrar ? (
+        <DialogoConfirmacion
+          variante="bloqueo"
+          abierto
+          onCambiarAbierto={a => { if (!a) setBloqueoBorrar(null); }}
+          titulo={`No se puede borrar la categoría ${bloqueoBorrar.nombre}`}
+          porQueNo={motivosBloqueo(bloqueoBorrar)}
+          textoAlternativa={!apagada(bloqueoBorrar) && canEdit ? "Apagarla" : undefined}
+          onAlternativa={() => pedirCambioEstado(bloqueoBorrar)}
+        />
       ) : (
-      <>
-      {/* Search */}
-      <SearchInput
-        value={search}
-        onChange={(v) => {
-          setSearch(v);
-          setPage(1);
-        }}
-        placeholder="Buscar por ID o nombre..."
+        <DialogoConfirmacion
+          abierto={!!deleteItem}
+          onCambiarAbierto={a => { if (!a) setDeleteItem(null); }}
+          titulo={`¿Borrar la categoría ${deleteItem?.nombre ?? ""}?`}
+          queVaAPasar={["No tiene productos, así que no se pierde nada más", "No se puede deshacer"]}
+          textoAccion="Sí, borrarla"
+          onConfirmar={() => { if (deleteItem) void handleDelete(deleteItem.id); }}
+        />
+      )}
+    </>
+  );
+
+  // ── Detalle ──
+  if (detailItem) {
+    const c = categorias.find(x => x.id === detailItem.id) ?? detailItem;
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 900 }}>
+        <BotonRuta>
+          <BotonAccion icono={IconoVolver} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+        <div className="flex flex-wrap items-center gap-4 mb-2">
+          <span aria-hidden="true" style={{ fontSize: 64, lineHeight: 1 }}>{c.icono}</span>
+          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Categoría: {c.nombre}</h1>
+          <PillEstado c={c} />
+        </div>
+        <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>{c.descripcion?.trim() || "Todavía no tiene descripción"}</p>
+        <SeccionFormulario titulo="Sus productos">
+          <p style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
+          <p className="pn-seccion__ayuda" style={{ margin: "8px 0 0" }}>Para ver y cambiar cada producto, entra a Productos.</p>
+        </SeccionFormulario>
+        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+          {canEdit && <BotonAccion variante="principal" onClick={() => abrirEditar(c)}>Cambiar nombre o dibujo</BotonAccion>}
+          {canEdit && (
+            <BotonAccion variante={apagada(c) ? "bien" : "normal"} onClick={() => pedirCambioEstado(c)}>{apagada(c) ? "Encender" : "Apagar"}</BotonAccion>
+          )}
+          {canDelete && <BotonAccion variante="peligro" onClick={() => pedirEliminar(c)}>Borrar</BotonAccion>}
+        </div>
+        {dialogos}
+      </div>
+    );
+  }
+
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Categoría Productos"
+        descripcion="Los grupos en que se ordena el menú de la página: pizzas, lasañas, bebidas…"
+        acciones={canCreate && <BotonAccion variante="principal" icono={Plus} onClick={abrirCrear}>Agregar una categoría</BotonAccion>}
       />
 
-      {/* Menos de 768 px: cada categoría como tarjeta. Reutiliza las mismas piezas
-          y controles de la tabla (nombreCat, estadoCat, accionesCat…). */}
-      <div className="md:hidden space-y-3">
-        {filtered.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p className="text-4xl mb-3">🏷️</p>
-            <p>No se encontraron categorías</p>
+      {cargando ? (
+        <p role="status" className="pn-nota">Cargando las categorías…</p>
+      ) : errorCarga ? (
+        <AvisoBanner
+          titulo="No pudimos cargar las categorías"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : (
+        <>
+          <div style={{ marginBottom: 24 }}>
+            <BuscadorGrande
+              etiqueta="Buscar una categoría"
+              value={search}
+              onChange={ev => { setSearch(ev.target.value); setPage(1); }}
+              placeholder="Escribe el nombre de la categoría"
+            />
           </div>
-        ) : (
-          paged.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 text-base font-medium text-foreground break-words">{nombreCat(c)}</div>
-                <div className="shrink-0">{estadoCat(c)}</div>
-              </div>
-              <dl className="mt-3 text-sm">
-                <dt className="text-xs uppercase tracking-wider text-muted-foreground">ID</dt>
-                <dd className="mt-0.5 font-mono font-semibold text-foreground">{c.id}</dd>
-                <dt className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">Descripción</dt>
-                <dd className="mt-0.5 text-muted-foreground [&>span]:!max-w-none [&>span]:!whitespace-normal [&>span]:!overflow-visible [&>span]:!text-clip break-words">{descripcionCat(c)}</dd>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesCat(c)}</div>
-            </div>
-          ))
-        )}
-      </div>
 
-      {/* Table: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
-                text-xs en mayúsculas, celdas px-4 py-2.5 con texto text-sm y
-                filas de 61 px, idénticas a las de Gestión de Producto. */}
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {[
-                  "ID",
-                  "Nombre Categoría",
-                  "Descripción",
-                  "Estado",
-                  "Acciones",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2 text-left font-semibold whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-4 py-14 text-center text-muted-foreground"
-                  >
-                    <p className="text-4xl mb-3">🏷️</p>
-                    <p>No se encontraron categorías</p>
-                  </td>
-                </tr>
-              ) : (
-                paged.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="hover:bg-muted/20 transition-colors h-[61px]"
-                  >
-                    <td className="px-4 py-2.5 text-sm font-mono font-semibold text-foreground">
-                      {/* id_categoria de la base (1, 2, 3…). */}
-                      {c.id}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm font-medium text-foreground">
-                      {nombreCat(c)}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                      {/* Descripción (P17a): campo OPCIONAL, así que sin dato
-                          (undefined o en blanco) se muestra un guion en gris
-                          en vez de una celda vacía. El ancho queda acotado y el
-                          texto va en una sola línea con elipsis —el completo se
-                          ve en el tooltip— para que una descripción larga no se
-                          lleve todo el ancho de la tabla ni rompa las filas de
-                          61 px; el resto del ancho lo toma la columna Nombre. */}
-                      {descripcionCat(c)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {/* Pill de estado (diseño de Proveedores). Elegir la opción
-                          contraria pide confirmación, igual que en Gestión de
-                          Producto; sin permiso de edición queda la pill sola. */}
-                      {estadoCat(c)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {accionesCat(c)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
-      )}
-      </>
-      )}
-
-      {/* ── Crear ── */}
-      <AnimatePresence>
-        {showCreate && (
-          <SmModal
-            title="Crear Categoría"
-            onClose={() => setShowCreate(false)}
-            onConfirm={handleCreate}
-            confirmLabel="Crear"
-            ancho="max-w-3xl"
-            scroll
-          >
-            <div className="space-y-4">
-              {/* Zona superior en 2 columnas (apiladas en móvil): a la
-                  izquierda los campos, a la derecha la vista previa de cómo
-                  quedará la categoría en el listado y en el inicio. */}
-              <div className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr] gap-4">
-                <div className="space-y-3">
-                  {/* Sin campo ID (P17a): el id lo asigna el sistema solo y ya se
-                      ve en el listado y en Ver detalle; en el formulario solo
-                      estorbaba. */}
-                  <div>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <label className="block text-xs font-semibold text-muted-foreground">
-                        Nombre Categoría *
-                      </label>
-                      <span className="text-[11px] text-muted-foreground">
-                        {formNombre.length}/{MAX_NOMBRE}
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      value={formNombre}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setFormNombre(v);
-                        setCreateErrors((p) => ({
-                          ...p,
-                          nombre: validarCategoria(v, formIcono).nombre,
-                        }));
-                      }}
-                      placeholder="Ej. Parrilladas"
-                      maxLength={MAX_NOMBRE}
-                      className={campoCls(createErrors.nombre)}
-                    />
-                    <MensajeError err={createErrors.nombre} />
+          {filtered.length === 0 ? (
+            <VacioEstado icono={IconoTag} titulo="No encontramos ninguna categoría">
+              Revisa cómo lo escribiste o agrega una nueva.
+            </VacioEstado>
+          ) : (
+            <div className="pn-cat-grid">
+              {paged.map(c => (
+                <article key={c.id} className="pn-tarjeta" style={apagada(c) ? { background: "var(--gris-suave)" } : undefined}>
+                  <div className="flex items-center gap-4">
+                    <span aria-hidden="true" style={{ fontSize: 56, lineHeight: 1 }}>{c.icono}</span>
+                    <h2 className="pn-tarjeta__nombre" style={{ fontSize: 26 }}>{c.nombre}</h2>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Estado
-                    </label>
-                    {/* Nueva categoría: siempre empieza como Activo. */}
-                    <EstadoSelect
-                      value={formEstado}
-                      onChange={(v) => setFormEstado(v)}
-                      options={OPCIONES_ESTADO_CATEGORIA}
-                    />
-                  </div>
-                  {/* Descripción (P17a): OPCIONAL y sin validación — la única
-                      regla del formulario sigue siendo el nombre. */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                      Descripción <span className="font-normal">(opcional)</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={formDescripcion}
-                      onChange={(e) => {
-                        setFormDescripcion(e.target.value);
-                        setCreateErrors((p) => ({ ...p, descripcion: "" }));
-                      }}
-                      placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
-                      maxLength={MAX_DESCRIPCION}
-                      className={inputCls + " resize-y"}
-                    />
-                    <MensajeError err={createErrors.descripcion} />
-                  </div>
-                </div>
-                <div className="bg-muted/50 border border-border rounded-xl p-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                    Vista previa
+                  <div><PillEstado c={c} /></div>
+                  <p style={{ fontSize: 18, margin: 0, color: c.descripcion?.trim() ? "var(--texto)" : "var(--gris-texto)" }}>
+                    {c.descripcion?.trim() || "Todavía no tiene descripción"}
                   </p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-card overflow-hidden shrink-0 flex items-center justify-center">
-                      {formIcono ? (
-                        <span className="text-3xl leading-none">
-                          {formIcono}
-                        </span>
-                      ) : (
-                        <span className="w-full h-full rounded-full border-2 border-dashed border-border" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p
-                          className={`text-sm font-bold truncate ${
-                            formNombre.trim()
-                              ? "text-foreground"
-                              : "text-muted-foreground font-normal"
-                          }`}
-                        >
-                          {formNombre.trim() || "Nombre de la categoría"}
-                        </p>
-                        <span
-                          className={`text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 ${
-                            OPCIONES_ESTADO_CATEGORIA.find(
-                              (o) => o.value === formEstado,
-                            )?.color ?? ""
-                          }`}
-                        >
-                          {formEstado}
-                        </span>
-                      </div>
-                      {formDescripcion.trim() && (
-                        <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
-                          {formDescripcion}
-                        </p>
-                      )}
-                    </div>
+                  <p style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
+                  <div className="pn-tarjeta__botones">
+                    <BotonAccion variante="normal" onClick={() => setDetailItem(c)}>Ver sus productos</BotonAccion>
+                    {canEdit && <BotonAccion variante="normal" onClick={() => abrirEditar(c)}>Cambiar nombre</BotonAccion>}
                   </div>
-                  <div
-                    className={`mt-3 w-full h-[130px] rounded-xl flex items-center justify-center ${
-                      formIcono
-                        ? "bg-card border border-border p-2"
-                        : "border-2 border-dashed border-border"
-                    }`}
-                  >
-                    {formIcono ? (
-                      <span className="text-[80px] leading-none">
-                        {formIcono}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        Elige un ícono
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-2">
-                    Así se verá en el listado y en la página de inicio
-                  </p>
-                </div>
-              </div>
-              {/* Zona inferior: el selector de ícono por grupos (chips de
-                  grupo y, debajo, la fila del grupo elegido). */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-muted-foreground">
-                    Ícono *
-                  </label>
-                  <span className="text-xs text-muted-foreground">
-                    Elige un emoji para representar la categoría
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {GRUPOS_ICONOS.map((grupo, idx) => (
-                    <button
-                      key={grupo.nombre}
-                      type="button"
-                      onClick={() => setGrupoIconoSeleccionado(idx)}
-                      className={`px-3 py-1 max-md:min-h-11 max-md:px-4 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                        grupoIconoSeleccionado === idx
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-border"
-                      }`}
-                    >
-                      {grupo.nombre}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
-                  {GRUPOS_ICONOS[grupoIconoSeleccionado].iconos.map((icono) => (
-                    <button
-                      key={icono}
-                      type="button"
-                      title={icono}
-                      aria-label={icono}
-                      aria-pressed={formIcono === icono}
-                      onClick={() => {
-                        setFormIcono(icono);
-                        setCreateErrors((p) => ({ ...p, icono: "" }));
-                      }}
-                      className={`shrink-0 w-11 h-11 rounded-full border text-xl leading-none flex items-center justify-center transition-colors cursor-pointer ${
-                        formIcono === icono
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-muted hover:bg-border"
-                      }`}
-                    >
-                      {icono}
-                    </button>
-                  ))}
-                </div>
-                <MensajeError err={createErrors.icono} />
-              </div>
+                </article>
+              ))}
             </div>
-          </SmModal>
-        )}
-      </AnimatePresence>
+          )}
 
-      {/* ── Editar ── */}
-      <AnimatePresence>
-        {editItem && (
-          <SmModal
-            // Sin el ID en el título ni en el formulario (P17a): el código
-            // se ve en el listado y en Ver detalle; aquí basta el nombre.
-            title={`Editar — ${editItem.nombre}`}
-            onClose={() => setEditItem(null)}
-            onConfirm={handleEdit}
-            confirmLabel="Guardar"
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Nombre Categoría *
-                  </label>
-                  <input
-                    type="text"
-                    value={editItem.nombre}
-                    disabled={CATEGORIAS_FIJAS.has(editItem.id)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEditItem((x) => (x ? { ...x, nombre: v } : x));
-                      setEditErrors((p) => ({
-                        ...p,
-                        nombre: validarCategoria(
-                          v,
-                          editItem.icono ?? "",
-                          editItem.id,
-                        ).nombre,
-                      }));
-                    }}
-                    placeholder="Ej. Parrilladas"
-                    maxLength={MAX_NOMBRE}
-                    className={
-                      campoCls(
-                        CATEGORIAS_FIJAS.has(editItem.id)
-                          ? undefined
-                          : editErrors.nombre,
-                      ) +
-                      (CATEGORIAS_FIJAS.has(editItem.id)
-                        ? " bg-muted/60 text-muted-foreground cursor-not-allowed"
-                        : "")
-                    }
-                  />
-                  <MensajeError err={editErrors.nombre} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Estado
-                  </label>
-                  {/* Editable también para las categorías originales: solo su
-                      nombre y su ícono quedan fijos. */}
-                  <EstadoSelect
-                    value={estadoDe(editItem)}
-                    onChange={(next) =>
-                      setEditItem((x) => (x ? { ...x, estado: next } : x))
-                    }
-                    options={OPCIONES_ESTADO_CATEGORIA}
-                  />
-                </div>
-              </div>
-              {/* Descripción (P17a): OPCIONAL y sin validación. Se edita
-                  también en las categorías originales: su bloqueo es de nombre
-                  e ícono, no de este dato nuevo. */}
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                  Descripción <span className="font-normal">(opcional)</span>
-                </label>
-                <textarea
-                  rows={2}
-                  value={editItem.descripcion ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setEditItem((x) => (x ? { ...x, descripcion: v } : x));
-                    setEditErrors((p) => ({ ...p, descripcion: "" }));
-                  }}
-                  placeholder="Ej: Pizzas al horno de leña, tamaño familiar…"
-                  maxLength={MAX_DESCRIPCION}
-                  className={inputCls + " resize-y"}
-                />
-                <MensajeError err={editErrors.descripcion} />
-              </div>
-              {!CATEGORIAS_FIJAS.has(editItem.id) && (
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                    Ícono *
-                  </label>
-                  {/* Selector por grupos, con el grupo y el emoji actuales
-                      marcados. Las categorías originales no lo muestran: su
-                      ícono es fijo. */}
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {GRUPOS_ICONOS.map((grupo, idx) => (
-                      <button
-                        key={grupo.nombre}
-                        type="button"
-                        onClick={() => setGrupoIconoEdicion(idx)}
-                        className={`px-3 py-1 max-md:min-h-11 max-md:px-4 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-                          grupoIconoEdicion === idx
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:bg-border"
-                        }`}
-                      >
-                        {grupo.nombre}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1">
-                    {GRUPOS_ICONOS[grupoIconoEdicion].iconos.map((icono) => (
-                      <button
-                        key={icono}
-                        type="button"
-                        title={icono}
-                        aria-label={icono}
-                        aria-pressed={editItem.icono === icono}
-                        onClick={() => {
-                          setEditItem((x) => (x ? { ...x, icono } : x));
-                          setEditErrors((p) => ({ ...p, icono: "" }));
-                        }}
-                        className={`shrink-0 w-11 h-11 rounded-full border text-xl leading-none flex items-center justify-center transition-colors cursor-pointer ${
-                          editItem.icono === icono
-                            ? "border-primary bg-primary/10"
-                            : "border-border bg-muted hover:bg-border"
-                        }`}
-                      >
-                        {icono}
-                      </button>
-                    ))}
-                  </div>
-                  <MensajeError err={editErrors.icono} />
-                </div>
-              )}
-            </div>
-          </SmModal>
-        )}
-      </AnimatePresence>
-
-      {/* ── Ver detalle ── */}
-      <AnimatePresence>
-        {detailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border"
-            >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3
-                  className="text-lg font-bold text-foreground"
-                  style={{ fontFamily: SERIF }}
-                >
-                  Detalle — {detailItem.id}
-                </h3>
-                <button
-                  onClick={() => setDetailItem(null)}
-                  className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {[
-                  {
-                    label: "ID Categoría",
-                    value: detailItem.id,
-                  },
-                  {
-                    label: "Nombre Categoría",
-                    value: detailItem.nombre,
-                  },
-                  {
-                    label: "Descripción",
-                    // Opcional (P17a): sin dato se muestra un guion, nunca un
-                    // campo vacío ni el ID.
-                    value: detailItem.descripcion || "—",
-                  },
-                  {
-                    label: "Estado",
-                    // La misma pill de la tabla, aquí en solo lectura.
-                    value: (
-                      <EstadoSelect
-                        value={estadoDe(detailItem)}
-                        disabled
-                        options={OPCIONES_ESTADO_CATEGORIA}
-                      />
-                    ),
-                  },
-                  {
-                    label: "Ícono",
-                    // Emoji (columna emoji): texto text-3xl, presente en toda
-                    // categoría, incluidas las originales.
-                    value: detailItem.icono ? (
-                      <span aria-hidden="true" className="text-3xl leading-none">
-                        {detailItem.icono}
-                      </span>
-                    ) : (
-                      "—"
-                    ),
-                  },
-                ].map(({ label, value }) => (
-                  <div
-                    key={label}
-                    className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4"
-                  >
-                    <span className="text-sm text-muted-foreground font-medium shrink-0">
-                      {label}
-                    </span>
-                    <span className="text-sm font-semibold text-foreground text-right">
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="px-5 py-4 border-t border-border">
-                <button
-                  onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Confirmar cambio de estado ── */}
-      <AnimatePresence>
-        {confirmEstado && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border p-6"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
-                </div>
-                <h3
-                  className="text-lg font-bold text-foreground"
-                  style={{ fontFamily: SERIF }}
-                >
-                  ¿Desea cambiar el estado de la categoría?
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground mb-2">
-                La categoría{" "}
-                <strong className="text-foreground">{confirmEstado.nombre}</strong>{" "}
-                pasará de:
-              </p>
-              <div className="flex items-center gap-3 mb-5 px-3 py-3 rounded-xl bg-muted/50 border border-border">
-                <EstadoSelect
-                  value={confirmEstado.current}
-                  disabled
-                  options={OPCIONES_ESTADO_CATEGORIA}
-                />
-                <span className="text-muted-foreground text-sm">→</span>
-                <EstadoSelect
-                  value={confirmEstado.next}
-                  disabled
-                  options={OPCIONES_ESTADO_CATEGORIA}
-                />
-              </div>
-              {confirmEstado.next === "Inactivo" && (
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
-                  La categoría dejará de mostrarse en el landing y en el selector
-                  de Categoría de producto.{" "}
-                  {confirmEstado.productosMenu > 0
-                    ? `Se ocultarán ${confirmEstado.productosMenu} ${
-                        confirmEstado.productosMenu === 1 ? "producto" : "productos"
-                      } del menú público`
-                    : "No tiene productos visibles en el menú público"}{" "}
-                  y no se podrán crear productos en ella.
-                </p>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setConfirmEstado(null)}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCambiarEstado()}
-                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
-                >
-                  Confirmar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Eliminar ── */}
-      <AnimatePresence>
-        {deleteItem && (
-          <ConfirmDeleteModal
-            title="Eliminar categoría"
-            message={`¿Seguro que deseas eliminar la categoría ${deleteItem.nombre}? Esta acción no se puede deshacer.`}
-            onConfirm={() => void handleDelete(deleteItem.id)}
-            onCancel={() => setDeleteItem(null)}
-          />
-        )}
-      </AnimatePresence>
+          <PaginadorGrande pagina={Math.min(page, Math.max(1, totalPages))} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+          <p className="pn-nota">Si apagas una categoría, sus productos se esconden del menú de la página. No se borra nada.</p>
+        </>
+      )}
+      {dialogos}
     </div>
   );
 }
