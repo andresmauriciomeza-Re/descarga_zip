@@ -1,10 +1,9 @@
 import React from "react";
-import { Package, Pencil, Trash2 } from "lucide-react";
+import { Package } from "lucide-react";
 import { calcularLineaIva, chipIvaSinPrefijo, etiquetaModoIvaSimple, formatearModoIvaEnTabla } from "@/features/compras/services/iva";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
-import { CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
 
 export interface InsumoSolicitadoRow {
   rowId: string;
@@ -151,7 +150,7 @@ export function InsumosSolicitadosTable({
     IVA: sinScrollX ? 68 : 82,
     Subtotal: sinScrollX ? 78 : 88,
   };
-  const ANCHO_ACCIONES = sinScrollX ? 66 : 66;
+  const ANCHO_ACCIONES = 112;
   const ANCHO_MINIMO = 500;
   const colgroup = (
     <colgroup>
@@ -168,7 +167,7 @@ export function InsumosSolicitadosTable({
         <tr>
           <td
             colSpan={columnCount}
-            className={"text-center max-md:text-left text-xs text-muted-foreground px-3 max-md:px-4 " + (enPagina ? "py-6" : "py-8")}
+            className={"text-center max-md:text-left text-base text-muted-foreground px-3 max-md:px-4 " + (enPagina ? "py-6" : "py-8")}
           >
             {enPagina ? (
               <span className="inline-flex items-center gap-2">
@@ -191,7 +190,7 @@ export function InsumosSolicitadosTable({
               key={item.rowId}
               className={`hover:bg-muted/20 transition-colors ${enEdicion ? "bg-primary/5" : ""}`}
             >
-              <td className={tdBase + " text-sm font-medium text-foreground min-w-0"}>
+              <td className={tdBase + " text-lg font-medium text-foreground min-w-0"}>
                 <div
                   className={sinScrollX ? "truncate" : "line-clamp-2 break-words"}
                   title={item.nombre}
@@ -202,7 +201,7 @@ export function InsumosSolicitadosTable({
                     línea y, si es producto, su precio de venta al público
                     (dato informativo: NO entra en los cálculos de la factura,
                     que usan siempre el monto unitario). */}
-                <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
+                <div className="text-base font-normal text-muted-foreground mt-0.5 break-words">
                   {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
                   {modoIvaSimple(item)}
                   {(item.tipoItem ?? "insumo") === "producto" &&
@@ -212,19 +211,19 @@ export function InsumosSolicitadosTable({
                 </div>
               </td>
 
-              <td className={tdBase + " text-sm"}>
+              <td data-etiqueta="Cantidad" className={tdBase + " text-lg"}>
                 <span>{item.cantidad}</span>
-                <span className={`block text-[11px] text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase, item.pesoMedida, item.tamanoUnidad)}>
+                <span className={`block text-base text-muted-foreground ${esEmpaque(item.unidad) ? "break-words" : "truncate"}`} title={etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase, item.pesoMedida, item.tamanoUnidad)}>
                   {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase, item.pesoMedida, item.tamanoUnidad)}
                 </span>
               </td>
 
-              <td className={tdBase + " text-sm"}>
+              <td data-etiqueta="Monto unitario" className={tdBase + " text-lg"}>
                 {fmtCOP(item.precioUnitario)}
               </td>
 
               {mostrarIva && (
-                <td className={tdBase + " text-[10px] text-muted-foreground"}>
+                <td data-etiqueta="IVA" className={tdBase + " text-base text-muted-foreground"}>
                   <span
                     className="inline-flex max-w-full rounded-full bg-muted px-1.5 py-1 font-semibold whitespace-nowrap"
                     title={`${etiquetaModoIva(item)} · IVA ${fmtCOP(ivaDeLinea(item))}`}
@@ -237,7 +236,7 @@ export function InsumosSolicitadosTable({
               )}
 
               {mostrarSubtotal && (
-                <td className={tdBase + " text-sm font-semibold"}>
+                <td data-etiqueta="Subtotal" className={tdBase + " text-lg font-semibold"}>
                   {fmtCOP(calcularLinea(item).subtotalConIva)}
                 </td>
               )}
@@ -247,7 +246,7 @@ export function InsumosSolicitadosTable({
                   {/* Mientras la fila está cargada en el formulario se
                       ocultan sus acciones (sin mover la columna). */}
                   <div
-                    className={`flex items-center gap-1${enEdicion ? " invisible" : ""}`}
+                    className={`flex flex-wrap items-start gap-1${enEdicion ? " invisible" : ""}`}
                     aria-hidden={enEdicion || undefined}
                   >
                     {onEdit && (
@@ -255,18 +254,18 @@ export function InsumosSolicitadosTable({
                         type="button"
                         onClick={() => onEdit(item)}
                         title="Editar ítem"
-                        className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                        className="pn-boton pn-boton--normal"
                       >
-                        <Pencil className="w-4 h-4" />
+                        Cambiar
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => onRemove?.(item.rowId)}
                       title="Eliminar insumo"
-                      className={`${CLASE_BASE} ${CLASE_HOVER}`}
+                      className="pn-boton pn-boton--peligro"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      Quitar
                     </button>
                   </div>
                 </td>
@@ -288,12 +287,12 @@ export function InsumosSolicitadosTable({
           <tr>
             <td
               colSpan={colSpanPie}
-              className={"px-1.5 py-2 text-xs font-bold text-right uppercase tracking-wider " +
+              className={"px-1.5 py-2 text-base font-bold text-right uppercase tracking-wider " +
                 (esAmber ? "text-amber-700" : "text-muted-foreground")}
             >
               {labelSubtotal}
             </td>
-            <td className={"px-1.5 py-2 text-sm font-bold " + (esAmber ? "text-amber-700" : "text-foreground")}>
+            <td className={"px-1.5 py-2 text-base font-bold " + (esAmber ? "text-amber-700" : "text-foreground")}>
               {fmtCOP(subtotalGeneral)}
             </td>
             {showActions && <td />}
@@ -302,11 +301,11 @@ export function InsumosSolicitadosTable({
             <tr>
               <td
                 colSpan={colSpanPie}
-                className="px-1.5 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                className="px-1.5 py-2 text-base font-bold text-muted-foreground text-right uppercase tracking-wider"
               >
                 IVA
               </td>
-              <td className="px-1.5 py-2 text-sm font-bold text-foreground">
+              <td className="px-1.5 py-2 text-base font-bold text-foreground">
                 {fmtCOP(ivaGeneral)}
               </td>
               {showActions && <td />}
@@ -316,11 +315,11 @@ export function InsumosSolicitadosTable({
             <tr>
               <td
                 colSpan={colSpanPie}
-                className="px-1.5 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                className="px-1.5 py-2 text-base font-bold text-muted-foreground text-right uppercase tracking-wider"
               >
                 {totalLabel}
               </td>
-              <td className="px-1.5 py-2 text-sm font-bold text-foreground">
+              <td className="px-1.5 py-2 text-base font-bold text-foreground">
                 {fmtCOP(total)}
               </td>
               {showActions && <td />}
@@ -334,28 +333,28 @@ export function InsumosSolicitadosTable({
   const renderTotalesExternos = () =>
     enPagina && items.length > 0 && (
       <div className="flex items-baseline justify-end gap-5 shrink-0 px-3 py-1.5 border-t border-border">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">
           {labelSubtotal}
         </span>
-        <span className="text-sm font-semibold text-foreground">
+        <span className="text-base font-semibold text-foreground">
           {fmtCOP(subtotalGeneral)}
         </span>
         {mostrarIva && (
           <>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">
               IVA
             </span>
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-base font-semibold text-foreground">
               {fmtCOP(ivaGeneral)}
             </span>
           </>
         )}
         {mostrarTotal && (
           <>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+            <span className="text-base font-bold uppercase tracking-wider text-foreground">
               {totalLabel}
             </span>
-            <span className="text-lg font-bold text-foreground">
+            <span className="text-2xl font-bold text-foreground">
               {fmtCOP(total)}
             </span>
           </>
@@ -369,19 +368,16 @@ export function InsumosSolicitadosTable({
         <div
           className={
             "flex-1 min-h-0 " +
-            // `sinScrollX`: la tabla se queda en el ancho del panel (sin
-            // desplazamiento horizontal); los demás usos conservan el
-            // `overflow-auto` de siempre con su `min-width`.
-            (sinScrollX ? "overflow-y-auto overflow-x-hidden max-md:overflow-x-auto" : "overflow-auto")
+            "overflow-auto"
           }
         >
           <table
-            className="table-fixed w-full text-sm max-md:min-w-[500px] [&_td]:py-2"
+            className="pn-tabla-compra w-full [&_td]:py-2"
             style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
           >
             {colgroup}
             <thead
-              className={"text-[10px] uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
+              className={"text-base uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
                 (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground")}
             >
               <tr>
@@ -424,7 +420,7 @@ export function InsumosSolicitadosTable({
             (esAmber ? "border-amber-200 bg-amber-100/50" : "border-border bg-muted/30")}
         >
           <p
-            className={"text-xs font-bold uppercase tracking-wider " +
+            className={"text-base font-bold uppercase tracking-wider " +
               (esAmber ? "text-amber-700" : "text-muted-foreground")}
           >
             {titulo}
@@ -434,17 +430,17 @@ export function InsumosSolicitadosTable({
       <div
         className={
           "flex-1 min-h-0 " +
-          (sinScrollX ? "overflow-y-auto overflow-x-hidden max-md:overflow-x-auto" : "overflow-auto") +
+          "overflow-auto" +
           (enPagina && items.length === 0 ? " flex items-center" : "")
         }
       >
         <table
-          className={"table-fixed w-full text-sm max-md:min-w-[500px] " + (enPagina ? "[&_td]:py-2" : "")}
+          className={"pn-tabla-compra w-full " + (enPagina ? "[&_td]:py-2" : "")}
           style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
         >
           {colgroup}
           <thead
-            className={"text-[10px] uppercase tracking-wider " +
+            className={"text-base uppercase tracking-wider " +
               (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted/50 text-muted-foreground")}
           >
             <tr>

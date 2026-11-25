@@ -53,7 +53,7 @@ import type { CategoriaProducto } from "@/features/categoria-productos/pages/Cat
 import { UnidadSelect, type OpcionUnidad } from "@/features/compras/components/UnidadSelect";
 import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
-import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { ActionIcons } from "@/shared/components/ActionIcons";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
 import {
   ConfirmModal,
@@ -1184,56 +1184,66 @@ export function RecepcionCompraScreen({
                                 {item.nombre}
                               </p>
 
-                              <p className="text-[11px] text-muted-foreground break-words">
+                              <p className="text-base text-muted-foreground break-words">
                                 {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
                                 {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
                               </p>
-                              <p className="text-[11px] text-muted-foreground">
-                                Pedido: {item.cantidadSolicitada}{" "}
+                              <p className="text-base text-muted-foreground">
+                                Se pidieron {item.cantidadSolicitada.toLocaleString("es-CO")}{" "}
                                 {item.unidadSolicitada ?? item.unidad}
                               </p>
   </>);
-  const cantPresRec = (item: ItemRecibido) => (<>
+  const cantPresRec = (item: ItemRecibido, vista: "tarjeta" | "tabla") => {
+    const pendiente = cantidadMaximaRecibida(item) - item.cantidadRecibida;
+    const campo = `recibido-${vista}-${item.rowId}`;
+    return (<>
 
                               <div className="flex flex-col items-start gap-1.5">
                                 {(item.tipoItem ?? "insumo") === "producto" ? (
-                                  <span className="text-xs text-muted-foreground">{item.unidad}</span>
+                                  <span className="text-base text-muted-foreground">{item.unidad}</span>
                                 ) : (
                                   <UnidadSelect
                                     value={item.unidad}
                                     onChange={(unidad) => updPresentacionFila(item.rowId, unidad)}
                                     ariaLabel={`Presentación de ${item.nombre}`}
                                     unidades={opcionesPresentacionDe(item)}
-                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-xs"
+                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-base"
                                   />
                                 )}
+                                <label htmlFor={campo} className="pn-etiqueta mb-0">Cantidad recibida de {item.nombre}</label>
                                 <input
+                                  id={campo}
                                   type="number"
                                   min={0}
                                   max={cantidadMaximaRecibida(item)}
                                   value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
                                   placeholder="0"
-                                  aria-label={`Cantidad recibida de ${item.nombre}`}
                                   onChange={(e) =>
                                     updRec(
                                       item.rowId,
                                       numeroDeInput(limpiarNumeroInput(e.target.value))
                                     )
                                   }
-                                  className="w-20 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  className="w-full min-w-24 min-h-14 px-3 py-2 bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                                 />
+                                {pendiente > 0.000001 ? (
+                                  <p className="text-base text-amber-800 dark:text-amber-300">Faltan {pendiente.toLocaleString("es-CO", { maximumFractionDigits: 6 })} {item.unidad}: quedan pendientes en la orden.</p>
+                                ) : (
+                                  <p className="text-base font-semibold text-emerald-700 dark:text-emerald-300">✓ Llegó completo</p>
+                                )}
                                 {esEmpaque(item.unidad) && (
-                                  <span className="text-[11px] text-muted-foreground">
+                                  <span className="text-base text-muted-foreground">
                                     {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
                                   </span>
                                 )}
                               </div>
                               {factorDeUnidadRecibida(item) == null && esEmpaque(item.unidad) && (
-                                <p className="mt-1 text-[10px] text-red-500">
+                                <p className="mt-1 text-base text-red-500">
                                   Falta configurar el contenido de esta presentación.
                                 </p>
                               )}
-  </>);
+    </>);
+  };
   const montoRec = (item: ItemRecibido) => (<>
 
                               <input
@@ -1247,7 +1257,7 @@ export function RecepcionCompraScreen({
                                     numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
-                                className="w-24 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-24 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                               {/* Punto 3 + ajuste: el costo de referencia CON
                                   IVA POR UNIDAD con el que se valida el
@@ -1256,11 +1266,11 @@ export function RecepcionCompraScreen({
                                   presentación. */}
                               {(item.tipoItem ?? "insumo") === "producto" && (
                                 <>
-                                  <p className="text-[10px] text-muted-foreground mt-1 text-center whitespace-nowrap">
+                                  <p className="text-base text-muted-foreground mt-1 text-center whitespace-nowrap">
                                     C/und: {fmtCOP(costoConIvaDeLinea(item))}
                                   </p>
                                   {unidadesPorLinea(item) > 1 && (
-                                    <p className="text-[10px] text-muted-foreground mt-0.5 text-center whitespace-nowrap">
+                                    <p className="text-base text-muted-foreground mt-0.5 text-center whitespace-nowrap">
                                       C/empaque:{" "}
                                       {fmtCOP(
                                         costoConIva(
@@ -1291,13 +1301,13 @@ export function RecepcionCompraScreen({
                                         : numeroDeInput(limpiarNumeroInput(e.target.value)),
                                     )
                                   }
-                                  className={`w-16 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-sm text-center ${
+                                  className={`w-16 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-base text-center ${
                                     item.iva == null ? "border-red-400" : "border-border"
                                   }`}
                                 />
                               )}
                               {(item.modoIva ?? "incluido") !== "exento" && item.iva == null && (
-                                <p className="mt-1 text-[10px] text-red-500">Ingresa el IVA.</p>
+                                <p className="mt-1 text-base text-red-500">Ingresa el IVA.</p>
                               )}
                               <div
                                 className="mt-1 flex flex-wrap gap-1"
@@ -1310,7 +1320,7 @@ export function RecepcionCompraScreen({
                                     aria-pressed={(item.modoIva ?? "incluido") === modo}
                                     title={ayudaModoIva(modo)}
                                     onClick={() => updModoIvaFila(item.rowId, modo)}
-                                    className={`rounded border px-1.5 py-1 max-md:min-h-11 max-md:px-3 max-md:text-xs text-[10px] font-semibold ${
+                                    className={`rounded border px-1.5 py-1 max-md:min-h-11 max-md:px-3 max-md:text-base text-base font-semibold ${
                                       (item.modoIva ?? "incluido") === modo
                                         ? "border-primary bg-primary/10 text-primary"
                                         : "border-border text-muted-foreground"
@@ -1339,9 +1349,9 @@ export function RecepcionCompraScreen({
                                   quitarItem(item.rowId, item.nombre)
                                 }
                                 title="Quitar de esta factura"
-                                className={`${CLASE_BASE} max-md:p-3.5 ${CLASE_HOVER}`}
+                                className="pn-boton pn-boton--peligro"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                Quitar
                               </button>
   </>);
   const precioRec = (item: ItemRecibido) => (<>
@@ -1361,14 +1371,14 @@ export function RecepcionCompraScreen({
                                         numeroDeInput(limpiarNumeroInput(e.target.value))
                                       )
                                     }
-                                    className={`w-24 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
+                                    className={`w-24 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
                                       errorPvDe(item)
                                         ? "border-red-400 focus:ring-red-300"
                                         : "border-border"
                                     }`}
                                   />
                                   {errorPvDe(item) && (
-                                    <p className="text-[10px] font-medium text-red-500 mt-1">
+                                    <p className="text-base font-medium text-red-500 mt-1">
                                       {errorPvDe(item)}
                                     </p>
                                   )}
@@ -1384,7 +1394,7 @@ export function RecepcionCompraScreen({
           className="p-2.5 max-md:p-3 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
           title="Volver"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-5 h-5" aria-hidden="true" /> Volver
         </button>
 
         <div>
@@ -1392,11 +1402,11 @@ export function RecepcionCompraScreen({
             className="text-2xl font-bold text-foreground"
             style={{ fontFamily: SERIF }}
           >
-            Recepción de compra
+            Recibir la mercancía de la orden #{String(orden.id).replace(/^OC-?/i, "")}
           </h1>
 
-          <p className="text-sm text-muted-foreground mt-0.5">
-            OC {orden.id} · {orden.proveedor} · {today}
+          <p className="text-base text-muted-foreground mt-0.5">
+            {orden.proveedor} · {today}
           </p>
         </div>
       </div>
@@ -1410,10 +1420,10 @@ export function RecepcionCompraScreen({
               COLUMNA IZQUIERDA — ORDEN DE COMPRA (solo lectura)
           ========================================================= */}
           <div className="w-full lg:w-1/2 overflow-y-auto pr-1">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+            <p className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Orden de compra
             </p>
-            <p className="text-xs text-muted-foreground mb-4">
+            <p className="text-base text-muted-foreground mb-4">
               Insumos pedidos · solo lectura
             </p>
 
@@ -1421,38 +1431,38 @@ export function RecepcionCompraScreen({
               {/* Información */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     N· Orden
                   </p>
-                  <p className="text-sm font-bold mt-1">
+                  <p className="text-base font-bold mt-1">
                     {orden.id}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     Proveedor
                   </p>
-                  <p className="text-sm font-bold mt-1">
+                  <p className="text-base font-bold mt-1">
                     {orden.proveedor}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     Fecha
                   </p>
-                  <p className="text-sm font-semibold mt-1">
+                  <p className="text-base font-semibold mt-1">
                     {orden.fecha}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     Estado
                   </p>
                   <span
-                    className={`inline-flex mt-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    className={`inline-flex mt-1 px-2.5 py-1 rounded-full text-base font-semibold ${
                       orden.estado === "Completado"
                         ? "bg-emerald-100 text-emerald-800"
                         : "bg-blue-100 text-blue-800"
@@ -1465,14 +1475,14 @@ export function RecepcionCompraScreen({
 
               {/* Tabla ��� insumos pedidos (solo lectura) */}
               <div>
-                <h3 className="text-sm font-bold text-foreground mb-3">
+                <h3 className="text-base font-bold text-foreground mb-3">
                   Insumos solicitados
                 </h3>
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[480px]">
-                      <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                    <table className="w-full text-base min-w-[480px]">
+                      <thead className="bg-muted/50 text-base text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
                             Insumo
@@ -1498,7 +1508,7 @@ export function RecepcionCompraScreen({
                             <td className="px-3 py-3 font-semibold">
                               {item.nombre}
                               {(Boolean(item.facturado) || registrados.has(item.idInsumo)) && (
-                                <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
+                                <span className="ml-2 text-base font-semibold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
                                   Facturado
                                 </span>
                               )}
@@ -1508,7 +1518,7 @@ export function RecepcionCompraScreen({
                               {item.cantidad}
                             </td>
 
-                            <td className="px-3 py-3 text-xs text-muted-foreground">
+                            <td className="px-3 py-3 text-base text-muted-foreground">
                               {item.unidad}
                             </td>
 
@@ -1523,11 +1533,11 @@ export function RecepcionCompraScreen({
                         <tr>
                           <td
                             colSpan={3}
-                            className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                            className="px-3 py-2 text-base font-bold text-muted-foreground text-right uppercase tracking-wider"
                           >
                             Total pedido
                           </td>
-                          <td className="px-3 py-2 text-sm font-bold text-foreground">
+                          <td className="px-3 py-2 text-base font-bold text-foreground">
                             {fmtCOP(totalPedido)}
                           </td>
                         </tr>
@@ -1543,10 +1553,10 @@ export function RecepcionCompraScreen({
               COLUMNA DERECHA ��� COMPRA (factura del proveedor)
           ========================================================= */}
           <div className="w-full lg:w-1/2 overflow-y-auto pr-1">
-            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+            <p className="text-base font-bold uppercase tracking-wider text-muted-foreground mb-1">
               Compra
             </p>
-            <p className="text-xs text-muted-foreground mb-4">
+            <p className="text-base text-muted-foreground mb-4">
               Compara factura y orden.
             </p>
 
@@ -1554,7 +1564,7 @@ export function RecepcionCompraScreen({
               {/* Datos de la factura */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                     Número de factura <span className="text-red-500">*</span>
                   </label>
 
@@ -1574,14 +1584,14 @@ export function RecepcionCompraScreen({
                     aria-invalid={!!((tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura)}
                   />
                   {(tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">
+                    <p className="text-base text-red-500 mt-1 ml-0.5">
                       {errorNumeroFactura}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  <label className="block text-base font-semibold text-muted-foreground mb-1.5">
                     Fecha de factura <span className="text-red-500">*</span>
                   </label>
 
@@ -1594,11 +1604,11 @@ export function RecepcionCompraScreen({
                     onBlur={() => marcarTocado("fechaFactura")}
                   />
                   {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">
+                    <p className="text-base text-red-500 mt-1 ml-0.5">
                       {errorFechaFactura}
                     </p>
                   )}
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-base text-muted-foreground">
                     Proveedor:{" "}
                     <span
                       className={`font-semibold ${
@@ -1609,7 +1619,7 @@ export function RecepcionCompraScreen({
                     </span>
                   </p>
                   {errorProveedor && (
-                    <p className="text-xs text-red-500 mt-1 ml-0.5">
+                    <p className="text-base text-red-500 mt-1 ml-0.5">
                       {errorProveedor}
                     </p>
                   )}
@@ -1619,12 +1629,12 @@ export function RecepcionCompraScreen({
               {/* Recibido según factura */}
               <div>
                 {errorItems && (algunoTocado || intentoGuardar) && (
-                  <p ref={itemsMsgRef} className="text-xs text-red-500 mb-2 ml-0.5">
+                  <p ref={itemsMsgRef} className="text-base text-red-500 mb-2 ml-0.5">
                     {errorItems}
                   </p>
                 )}
                 {lineaSinFactorPresentacion && (
-                  <p className="text-xs text-red-500 mb-2 ml-0.5">
+                  <p className="text-base text-red-500 mb-2 ml-0.5">
                     Configura el contenido de {lineaSinFactorPresentacion.unidad} para{" "}
                     {lineaSinFactorPresentacion.nombre}.
                   </p>
@@ -1634,22 +1644,22 @@ export function RecepcionCompraScreen({
                     inválidos (mismo criterio que pinta las celdas en rojo y
                     deshabilita el botón Guardar). */}
                 {filasPvMala.length > 0 && (
-                  <p className="text-xs font-medium text-red-500 mb-2 ml-0.5">
+                  <p className="text-base font-medium text-red-500 mb-2 ml-0.5">
                     Corrige el precio de venta de {filasPvMala.length}{" "}
                     {filasPvMala.length === 1 ? "producto" : "productos"}: debe
                     ser mayor que el costo por unidad con IVA.
                   </p>
                 )}
 
-                <h3 className="text-sm font-bold text-foreground mb-3">
-                  Recibido según factura
+                <h3 className="text-base font-bold text-foreground mb-3">
+                  Lo que llegó en esta factura
                 </h3>
 
                 {/* Menos de 768 px: cada fila recibida como tarjeta. Reutiliza los mismos
                     campos y handlers de la tabla (insumoRec, montoRec, ivaRec…). */}
                 <div className="md:hidden space-y-3">
                   {items.length === 0 ? (
-                    <p className="rounded-xl border border-border px-3 py-8 text-center text-xs text-muted-foreground">
+                    <p className="rounded-xl border border-border px-3 py-8 text-center text-base text-muted-foreground">
                       Todos los insumos de la OC {orden.id} ya se registraron en facturas anteriores
                     </p>
                   ) : (
@@ -1660,40 +1670,40 @@ export function RecepcionCompraScreen({
                           <div className="shrink-0">{quitarRec(item)}</div>
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Cantidad + presentación</p>
-                          {cantPresRec(item)}
+                          <p className="text-base uppercase tracking-wider text-muted-foreground mb-1.5">Cantidad + presentación</p>
+                          {cantPresRec(item, "tarjeta")}
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Monto unitario</p>
+                          <p className="text-base uppercase tracking-wider text-muted-foreground mb-1.5">Monto unitario</p>
                           {montoRec(item)}
                         </div>
                         <div>
-                          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">IVA</p>
+                          <p className="text-base uppercase tracking-wider text-muted-foreground mb-1.5">IVA</p>
                           {ivaRec(item)}
                         </div>
                         {mostrarColPrecioVta && (item.tipoItem ?? "insumo") === "producto" && (
                           <div>
-                            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Precio de venta</p>
+                            <p className="text-base uppercase tracking-wider text-muted-foreground mb-1.5">Precio de venta</p>
                             {precioRec(item)}
                           </div>
                         )}
                         <div className="flex items-center justify-between border-t border-border pt-2">
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground">Subtotal</span>
-                          <span className="text-sm font-semibold whitespace-nowrap">{subtotalRec(item)}</span>
+                          <span className="text-base uppercase tracking-wider text-muted-foreground">Subtotal</span>
+                          <span className="text-base font-semibold whitespace-nowrap">{subtotalRec(item)}</span>
                         </div>
                       </div>
                     ))
                   )}
                   <div className="flex items-center justify-between rounded-xl bg-muted/50 px-3 py-2.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total recibido</span>
-                    <span className="text-sm font-bold text-foreground">{fmtCOP(totalRec)}</span>
+                    <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">Total recibido</span>
+                    <span className="text-base font-bold text-foreground">{fmtCOP(totalRec)}</span>
                   </div>
                 </div>
 
                 <div className="border border-border rounded-xl overflow-hidden max-md:hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[820px]">
-                      <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
+                    <table className="w-full text-base min-w-[820px]">
+                      <thead className="bg-muted/50 text-base text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
                             Insumo
@@ -1732,7 +1742,7 @@ export function RecepcionCompraScreen({
                           <tr>
                             <td
                               colSpan={mostrarColPrecioVta ? 7 : 6}
-                              className="px-3 py-8 text-center text-xs text-muted-foreground"
+                              className="px-3 py-8 text-center text-base text-muted-foreground"
                             >
                               Todos los insumos de la OC {orden.id} ya
                               se registraron en facturas anteriores
@@ -1746,25 +1756,7 @@ export function RecepcionCompraScreen({
                             </td>
 
                             <td className="px-3 py-3">
-                              {cantPresRec(item)}
-                            </td>
-
-                            <td className="px-3 py-3">
-                              {/* 0 = vacío (punto B1): al borrar no reaparece el 0. */}
-                              <input
-                                type="number"
-                                min={0}
-                                max={cantidadMaximaRecibida(item)}
-                                value={item.cantidadRecibida === 0 ? "" : item.cantidadRecibida}
-                                placeholder="0"
-                                onChange={(e) =>
-                                  updRec(
-                                    item.rowId,
-                                    numeroDeInput(limpiarNumeroInput(e.target.value))
-                                  )
-                                }
-                                className="w-20 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
-                              />
+                              {cantPresRec(item, "tabla")}
                             </td>
 
                             <td className="px-3 py-3">
@@ -1785,12 +1777,12 @@ export function RecepcionCompraScreen({
                                   {precioRec(item)}
                                 </td>
                               ) : (
-                                <td className="px-3 py-3 text-center text-xs text-muted-foreground">
+                                <td className="px-3 py-3 text-center text-base text-muted-foreground">
                                   —
                                 </td>
                               ))}
 
-                            <td className="px-3 py-3 text-xs font-semibold whitespace-nowrap">
+                            <td className="px-3 py-3 text-base font-semibold whitespace-nowrap">
                               {subtotalRec(item)}
                             </td>
 
@@ -1806,13 +1798,13 @@ export function RecepcionCompraScreen({
                         <tr>
                           <td
                             colSpan={mostrarColPrecioVta ? 6 : 5}
-                            className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase tracking-wider"
+                            className="px-3 py-2 text-base font-bold text-muted-foreground text-right uppercase tracking-wider"
                           >
                             Total recibido
                           </td>
                           <td
                             colSpan={2}
-                            className="px-3 py-2 text-sm font-bold text-foreground"
+                            className="px-3 py-2 text-base font-bold text-foreground"
                           >
                             {fmtCOP(totalRec)}
                           </td>
@@ -1825,14 +1817,14 @@ export function RecepcionCompraScreen({
 
               {/* INSUMOS EXTRA */}
               <div>
-                <h3 className="text-sm font-bold text-foreground mb-3">
-                  Insumos adicionales recibidos
+                <h3 className="text-base font-bold text-foreground mb-3">
+                  ¿Llegó algo que no se pidió?
                 </h3>
 
                 {itemsExtra.length > 0 && (
                   <div className="border border-border rounded-xl overflow-hidden mb-3">
                     <div className="overflow-x-hidden">
-                    <table className="table-fixed w-full text-sm">
+                    <table className="table-fixed w-full text-base">
                       <colgroup>
                         <col />
                         <col style={{ width: 58 }} />
@@ -1844,27 +1836,27 @@ export function RecepcionCompraScreen({
                       </colgroup>
                       <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-1.5 py-2 text-left text-xs">
+                          <th className="px-1.5 py-2 text-left text-base">
                             Nombre
                           </th>
 
-                          <th className="px-1 py-2 text-right text-xs">
+                          <th className="px-1 py-2 text-right text-base">
                             Cantidad
                           </th>
 
-                          <th className="px-1 py-2 text-left text-xs">
+                          <th className="px-1 py-2 text-left text-base">
                             Medida
                           </th>
 
-                          <th className="px-1 py-2 text-right text-xs">
+                          <th className="px-1 py-2 text-right text-base">
                             Monto unitario
                           </th>
 
-                          <th className="px-1 py-2 text-right text-xs">
+                          <th className="px-1 py-2 text-right text-base">
                             IVA
                           </th>
 
-                          <th className="px-1 py-2 text-right text-xs">
+                          <th className="px-1 py-2 text-right text-base">
                             Subtotal
                           </th>
 
@@ -1895,7 +1887,7 @@ export function RecepcionCompraScreen({
                                     productos se deja ver su precio de venta
                                     al público (dato informativo; la factura
                                     calcula con el Monto unitario). */}
-                                <div className="text-[11px] font-normal text-muted-foreground mt-0.5 break-words">
+                                <div className="text-base font-normal text-muted-foreground mt-0.5 break-words">
                                   {(item.tipoItem ?? "insumo") === "producto" && "Producto · "}
                                   {formatearModoIvaEnTabla(item.modoIva ?? "incluido", item.iva)}
                                   {(item.tipoItem ?? "insumo") === "producto" &&
@@ -1908,28 +1900,28 @@ export function RecepcionCompraScreen({
                               <td className="px-1 py-2 text-right">
                                 {item.cantidadRecibida}
                                 {esEmpaque(item.unidad) && (
-                                  <div className="text-[11px] text-muted-foreground break-words">
+                                  <div className="text-base text-muted-foreground break-words">
                                     {etiquetaPresentacion(item.unidad, factorDeUnidadRecibida(item), unidadBaseDe(item))}
                                   </div>
                                 )}
                               </td>
-                              <td className="truncate px-1 py-2 text-xs text-muted-foreground" title={item.unidad}>
+                              <td className="truncate px-1 py-2 text-base text-muted-foreground" title={item.unidad}>
                                 {!esEmpaque(item.unidad) && item.unidad}
                               </td>
-                              <td className="px-1 py-2 text-right text-xs whitespace-nowrap">
+                              <td className="px-1 py-2 text-right text-base whitespace-nowrap">
                                 {fmtCOP(item.costoUnitario)}
                               </td>
-                              <td className="px-1 py-2 text-right text-xs">
-                                <span className="inline-flex rounded-full bg-muted px-1.5 py-1 text-[10px] font-semibold whitespace-nowrap">
+                              <td className="px-1 py-2 text-right text-base">
+                                <span className="inline-flex rounded-full bg-muted px-1.5 py-1 text-base font-semibold whitespace-nowrap">
                                   {item.iva == null && (item.modoIva ?? "incluido") !== "exento"
                                     ? <span className="text-red-500">Ingresa el IVA.</span>
                                     : formatearChipIva(item.modoIva ?? "incluido", item.iva ?? 0)}
                                 </span>
-                                <p className="text-[11px] text-muted-foreground truncate">
+                                <p className="text-base text-muted-foreground truncate">
                                   {fmtCOP(linea.montoIva)}
                                 </p>
                               </td>
-                              <td className="px-1 py-2 text-right text-xs font-semibold whitespace-nowrap">
+                              <td className="px-1 py-2 text-right text-base font-semibold whitespace-nowrap">
                                 {fmtCOP(linea.subtotalConIva)}
                               </td>
                               <td className="px-1 py-2 whitespace-nowrap">
@@ -1955,10 +1947,10 @@ export function RecepcionCompraScreen({
 
                 <CompactInsumoForm
                     containerRef={exRef}
-                    titulo={`Agregar ${exTipo === "producto" ? "producto" : "insumo"} no solicitado`}
+                    titulo="+ Agregar algo que no se pidió"
                     headerExtra={
                       <div className="flex items-center gap-2">
-                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                        <label className="block text-base font-semibold text-muted-foreground">
                           Tipo
                         </label>
                         <SegmentadoButtons
@@ -2080,7 +2072,7 @@ export function RecepcionCompraScreen({
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={onBack}
-                  className="flex-1 py-3 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold hover:bg-muted cursor-pointer"
+                  className="flex-1 py-3 max-md:min-h-11 border border-border rounded-xl text-base font-semibold hover:bg-muted cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -2091,14 +2083,10 @@ export function RecepcionCompraScreen({
                   // puede guardar (el backstop en `guardarRecepcion` cubre la
                   // tecla Enter y cualquier otro camino).
                   disabled={lineasPvMala.length > 0 || !!lineaSinFactorPresentacion}
-                  className={`flex-1 py-3 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 ${
-                    lineasPvMala.length > 0 || lineaSinFactorPresentacion
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-red-700 cursor-pointer"
-                  }`}
+                  className="pn-boton pn-boton--principal flex-1"
                 >
                   <Check className="w-4 h-4" />
-                  Guardar
+                  Guardar lo que llegó
                 </button>
               </div>
 

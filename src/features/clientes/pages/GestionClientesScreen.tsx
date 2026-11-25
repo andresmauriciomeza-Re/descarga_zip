@@ -1,21 +1,27 @@
 import { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { X, UserPlus } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ArrowLeft, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import {
-  EstadoSelect,
-  ESTADO_ACTIVO_COLOR,
-  ESTADO_INACTIVO_COLOR,
-} from "@/shared/components/EstadoSelect";
-import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import { DOC_TIPOS, fmtDoc } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Usuario } from "@/features/usuarios/pages/GestionUsuariosScreen";
 import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, MarcaObligatorio, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/campo";
 import { cambiarEstadoCliente, crearCliente, listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 
 const SERIF = "var(--font-titulo)";
@@ -114,7 +120,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
 
   // 5 clientes por página (unificado con el resto de listados): la tabla
   // nunca lleva scroll interno, la navegación es solo por el paginador.
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   // La página efectiva nunca puede pasar de totalPages: si el conjunto filtrado
@@ -250,366 +256,286 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo crear el cliente."; if (mensaje.toLowerCase().includes("correo ya está registrado")) setCreateErrors(p => ({ ...p, correo: "Este correo ya está registrado" })); else toast.error(mensaje); }
   };
 
-  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
-  // 768 px) para mostrar exactamente los mismos controles y handlers.
-  const estadoCliente = (c: Cliente) => (
-    <span
-      title={tooltipEstado(c) ?? undefined}
-      className="inline-block"
+  const documentoLegible = (tipo: string, numero: string) =>
+    `${tipo ? `${tipo} ` : ""}${/^\d+$/.test(numero) ? Number(numero).toLocaleString("es-CO") : numero}`;
+  const Avatar = ({ c, tam }: { c: Cliente; tam: number }) => (
+    <div
+      className={`${c.avatarColor} text-white font-bold shrink-0 flex items-center justify-center rounded-full`}
+      style={{ width: tam, height: tam, fontSize: tam * 0.36 }}
+      aria-hidden="true"
     >
-      <EstadoSelect
-        value={c.activo ? "activo" : "inactivo"}
-        disabled={!canEdit || !!bloqueoEstado(c)}
-        onChange={nuevoEstado => {
-          if ((nuevoEstado === "activo") === c.activo) return;
-          toggleEstado(c.id);
-        }}
-        options={[
-          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-        ]}
-      />
-    </span>
+      {c.iniciales}
+    </div>
   );
-  const accionesCliente = (c: Cliente) => (
-    <ActionIcons
-      onView={() => setDetailItem(c)}
+  const EstadoCompra = ({ activo }: { activo: boolean }) => (
+    <EstadoPill tono={activo ? "verde" : "gris"}>
+      {activo ? "Activo · puede comprar" : "Inactivo · no puede comprar"}
+    </EstadoPill>
+  );
+
+  const [desactivarItem, setDesactivarItem] = useState<Cliente | null>(null);
+  const cerrarCrear = () => { setShowCreate(false); resetCreate(); };
+  const chipEstado = filterEstado === "inactivo" ? "inactivo" : "todos";
+
+  /** Botón de estado de un cliente: «Desactivar» pide confirmación; «Volver a activar» se hace directo. */
+  const botonEstado = (c: Cliente) => {
+    if (!canEdit) return null;
+    const bloqueo = bloqueoEstado(c);
+    return (
+      <BotonAccion
+        variante={c.activo ? "peligro" : "bien"}
+        disabled={!!bloqueo}
+        title={tooltipEstado(c) ?? undefined}
+        onClick={() => (c.activo ? setDesactivarItem(c) : void toggleEstado(c.id))}
+      >
+        {c.activo ? "Desactivar" : "Volver a activar"}
+      </BotonAccion>
+    );
+  };
+
+  const dialogoDesactivar = (
+    <DialogoConfirmacion
+      abierto={!!desactivarItem}
+      onCambiarAbierto={a => { if (!a) setDesactivarItem(null); }}
+      titulo={`¿Desactivar a ${desactivarItem?.nombre ?? ""}?`}
+      queVaAPasar={[
+        "Ya no podrá entrar ni comprar por la página",
+        "Sus pedidos anteriores no se borran",
+        "Lo puedes volver a activar cuando quieras",
+      ]}
+      textoAccion="Sí, desactivar"
+      onConfirmar={() => { if (desactivarItem) void toggleEstado(desactivarItem.id); }}
     />
   );
 
-  const iCls = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer max-md:w-full max-md:min-h-11";
-
-  return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full max-md:h-auto flex flex-col overflow-hidden max-md:overflow-visible">
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-3 shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Clientes</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Usuarios registrados con tipo cliente en La Sirena</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {canCreate && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer shadow-sm"
-            >
-              <UserPlus className="w-4 h-4" /> Crear cliente
-            </button>
-          )}
-        </div>
-      </div>
-
-
-
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <SearchInput
-          value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por nombre, correo, documento o estado..."
-          wrapperClassName="w-full max-w-sm shrink-0"
-        />
-        <select value={filterEstado} onChange={e => { setFiltro(e.target.value); setPage(1); }} className={iCls}>
-          <option value="todos">Todos los estados</option>
-          <option value="activo">Activo</option>
-          <option value="inactivo">Inactivo</option>
-        </select>
-        <select value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1); }} className={iCls}>
-          <option value="id">Ordenar por ID</option>
-          <option value="nombre">Ordenar por nombre</option>
-          <option value="pedidos">Ordenar por pedidos</option>
-        </select>
-      </div>
-
-      {/* Tabla — la tarjeta recorta las esquinas redondeadas y nunca hace scroll:
-          5 filas por página y navegación solo por el paginador. Sin `flex-1
-          min-h-0`: en pantalla locked la raíz ocupa el viewport y la card se
-          estiraba hasta el fondo dejando un hueco vacío bajo la última fila.
-          Ahora la card mide su contenido y el paginador queda pegado debajo. */}
-
-      {/* Menos de 768 px: cada cliente como tarjeta (la acción principal queda fuera de vista en la tabla).
-          Reutiliza estadoCliente y accionesCliente, los mismos controles de la tabla. */}
-      <div className="md:hidden space-y-3 mb-2">
-        {cargando ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando clientes…</div>
-        ) : errorCarga ? (
-          <div role="alert" className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="underline ml-2 max-md:min-h-11 max-md:px-2" onClick={() => void cargarClientes()}>Reintentar</button></div>
-        ) : paged.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p></div>
-        ) : paged.map(c => (
-          <div key={c.id} className="bg-card border border-border rounded-2xl p-4">
-            <div className="flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-full ${c.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{c.iniciales}</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-base font-semibold text-foreground break-words">{c.nombre}</p>
-                <p className="text-xs text-muted-foreground font-mono">{fmtDoc(c.tipoDocumento, c.numeroDocumento)}</p>
-              </div>
-              <div className="shrink-0">{estadoCliente(c)}</div>
-            </div>
-            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 mt-3 text-sm">
-              <div className="min-w-0">
-                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt>
-                <dd className="mt-0.5 text-muted-foreground break-all">{c.correo || "—"}</dd>
-              </div>
-              <div className="text-right">
-                <dt className="text-xs uppercase tracking-wider text-muted-foreground">Pedidos</dt>
-                <dd className="mt-0.5 font-bold text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</dd>
-              </div>
-            </dl>
-            <div className="mt-3 pt-3 border-t border-border">{accionesCliente(c)}</div>
+  // ── Detalle de un cliente ──
+  if (detailItem) {
+    // La lista se recarga al cambiar el estado: se toma la versión más nueva.
+    const c = clientes.find(x => x.id === detailItem.id) ?? detailItem;
+    return (
+      <div className="pn-contenido" style={{ maxWidth: 900 }}>
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+        <div className="flex flex-wrap items-center gap-5 mb-6">
+          <Avatar c={c} tam={80} />
+          <div className="min-w-0">
+            <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{c.nombre}</h1>
+            <div className="mt-2"><EstadoCompra activo={c.activo} /></div>
           </div>
-        ))}
-      </div>
-
-      {/* Tabla: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px]">
-          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-            <tr>
-              {["Cliente","Correo","Pedidos","Estado","Acciones"].map(h => (
-                <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>
-              ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {cargando ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando clientes…</td></tr>
-              ) : errorCarga ? (
-                <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga} <button className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center underline ml-2" onClick={() => void cargarClientes()}>Reintentar</button></td></tr>
-              ) : paged.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">👥</p><p>No se encontraron clientes</p>
-                </td></tr>
-              ) : paged.map(c => (
-                <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-1.5">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full ${c.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                        {c.iniciales}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{c.nombre}</p>
-                        <p className="text-xs text-muted-foreground font-mono">{fmtDoc(c.tipoDocumento, c.numeroDocumento)}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-1.5 text-sm text-muted-foreground">{c.correo}</td>
-                  <td className="px-4 py-1.5 text-sm font-bold text-center text-foreground" style={{ fontFamily: MONO }}>{c.pedidos}</td>
-                  <td className="px-4 py-1.5">
-                    {/* Pill de estado (diseño de Proveedores): antes era un
-                        badge y el switch vivía en Acciones. La del
-                        administrador y la de la propia cuenta quedan
-                        bloqueadas, con el motivo en el tooltip. */}
-                    {estadoCliente(c)}
-                  </td>
-                  <td className="px-4 py-1.5">
-                    {accionesCliente(c)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
+        <div className="grid gap-5">
+          <SeccionFormulario titulo="Sus datos">
+            <DatosDetalle datos={[
+              { etiqueta: "Documento", valor: documentoLegible(c.tipoDocumento, c.numeroDocumento) },
+              { etiqueta: "Correo", valor: c.correo || "—" },
+              { etiqueta: "Celular", valor: c.telefono || "—" },
+            ]} />
+            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+              Los datos los cambia cada persona desde su perfil.
+            </p>
+          </SeccionFormulario>
+          <SeccionFormulario titulo="Resumen">
+            <DatosDetalle datos={[
+              { etiqueta: "Pedidos hechos", valor: <span style={{ font: "700 26px var(--font-titulo)" }}>{c.pedidos}</span> },
+            ]} />
+          </SeccionFormulario>
+          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>{botonEstado(c)}</div>
+        </div>
+        {dialogoDesactivar}
+      </div>
+    );
+  }
+
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Clientes"
+        descripcion="Las personas que compran en La Sirena. Sus datos los cambia cada cliente desde su perfil"
+        acciones={canCreate && (
+          <BotonAccion variante="principal" icono={UserPlus} onClick={() => setShowCreate(true)}>Agregar un cliente</BotonAccion>
+        )}
+      />
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un cliente"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre, la cédula o el correo"
+        />
+        <FiltrosChips
+          valor={chipEstado}
+          onChange={v => { setFiltro(v); setPage(1); }}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos", contador: total },
+            { valor: "inactivo", etiqueta: "Inactivos", contador: inact },
+          ]}
+        />
+        <FiltrosChips
+          titulo="Ordenar por:"
+          valor={sortBy}
+          onChange={v => { setSortBy(v); setPage(1); }}
+          opciones={[
+            { valor: "id", etiqueta: "Los más nuevos" },
+            { valor: "nombre", etiqueta: "Nombre" },
+            { valor: "pedidos", etiqueta: "Los que más compran" },
+          ]}
+        />
       </div>
 
-      {/* Paginación (unificada, fuera de la card) */}
-      {filtered.length > 0 && (
-        <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
+      {cargando ? (
+        <p role="status" className="pn-nota">Cargando los clientes…</p>
+      ) : errorCarga ? (
+        <AvisoBanner
+          titulo="No pudimos cargar los clientes"
+          boton={<BotonAccion onClick={() => void cargarClientes()}>Intentar de nuevo</BotonAccion>}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={Users} titulo="No encontramos ningún cliente">
+          Revisa cómo lo escribiste o cambia el filtro.
+        </VacioEstado>
+      ) : (
+        <div className="pn-lista">
+          {paged.map(c => (
+            <TarjetaFila
+              key={c.id}
+              avatar={<Avatar c={c} tam={56} />}
+              nombre={c.nombre}
+              detalle={
+                <>
+                  {documentoLegible(c.tipoDocumento, c.numeroDocumento)}{c.telefono ? ` · ${c.telefono}` : ""}
+                  <br />{c.correo || "Sin correo"}
+                </>
+              }
+              datos={[{ etiqueta: "Pedidos", valor: <span style={{ font: "700 26px var(--font-titulo)" }}>{c.pedidos}</span> }]}
+              estado={<EstadoCompra activo={c.activo} />}
+              acciones={
+                <>
+                  <BotonAccion variante="normal" onClick={() => setDetailItem(c)}>Ver datos y pedidos</BotonAccion>
+                  {botonEstado(c)}
+                </>
+              }
+            />
+          ))}
+        </div>
       )}
 
-      {/* Modal: Ver detalle */}
-      <AnimatePresence>
-        {detailItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
-              exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-border">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle Cliente</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
+      <PaginadorGrande pagina={pageActual} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+      {dialogoDesactivar}
+
+      {/* Formulario: Agregar un cliente */}
+      {showCreate && (
+        <Dialog.Root open onOpenChange={a => { if (!a) cerrarCrear(); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+              <div className="pn-modal__cab">
+                <Dialog.Title className="pn-modal__titulo">Agregar un cliente</Dialog.Title>
               </div>
-              <div className="px-5 py-4">
-                <div className="flex items-center gap-4 pb-4 mb-4 border-b border-border">
-                  <div className={`w-14 h-14 rounded-full ${detailItem.avatarColor} flex items-center justify-center text-white text-lg font-bold`}>
-                    {detailItem.iniciales}
-                  </div>
+              <SeccionFormulario titulo="Datos del cliente">
+                <div className="pn-grilla">
+                  <CampoFormulario etiqueta="Tipo de documento" error={createErrors.tipoDocumento}>
+                    {(p) => (
+                      <select
+                        {...p}
+                        value={newTipoDoc}
+                        // P1: al cambiar el tipo se revalida el documento en
+                        // tiempo real, porque el formato y el duplicado
+                        // dependen del tipo (CC 6-10, CE/PP 6-12).
+                        onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(prev => ({ ...prev, tipoDocumento: undefined, numeroDocumento: errorDocumentoAlta(e.target.value, newDocumento) })); }}
+                      >
+                        {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                      </select>
+                    )}
+                  </CampoFormulario>
+                  <CampoFormulario etiqueta="Número de documento" ayuda="Solo números, sin puntos" error={createErrors.numeroDocumento}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        type="text"
+                        inputMode="numeric"
+                        value={newDocumento}
+                        autoComplete="off"
+                        // P1 — tiempo real: solo dígitos y como máximo 10 (CC) o 12.
+                        onChange={e => { const v = soloDigitos(e.target.value).slice(0, newTipoDoc === "CC" ? 10 : 12); setNewDocumento(v); setCreateErrors(prev => ({ ...prev, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
+                        placeholder="12345678"
+                      />
+                    )}
+                  </CampoFormulario>
+                  <CampoFormulario etiqueta="Nombre completo" ayuda="Solo letras y espacios" error={createErrors.nombre}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        type="text"
+                        value={newNombre}
+                        onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(prev => ({ ...prev, nombre: validarNombre(v) ?? undefined })); }}
+                        onBlur={() => setNewNombre(normalizarNombre(newNombre))}
+                        placeholder="Ej: Laura Martínez"
+                        autoFocus
+                      />
+                    )}
+                  </CampoFormulario>
+                  <CampoFormulario etiqueta="Correo" error={createErrors.correo}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        type="email"
+                        value={newCorreo}
+                        autoComplete="off"
+                        onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(prev => ({ ...prev, correo: undefined })); }}
+                        placeholder="correo@gmail.com"
+                      />
+                    )}
+                  </CampoFormulario>
+                  <CampoFormulario etiqueta="Celular" ayuda="10 números" error={createErrors.telefono}>
+                    {(p) => (
+                      <input
+                        {...p}
+                        type="tel"
+                        inputMode="numeric"
+                        value={newTelefono}
+                        autoComplete="off"
+                        onChange={e => {
+                          const v = soloDigitos(e.target.value);
+                          setNewTelefono(v);
+                          setCreateErrors(prev => ({ ...prev, telefono: v ? validarTelefono(v) ?? undefined : undefined }));
+                        }}
+                        placeholder="3001234567"
+                      />
+                    )}
+                  </CampoFormulario>
                   <div>
-                    <p className="font-bold text-foreground text-base">{detailItem.nombre}</p>
-                    <p className="text-xs font-mono text-muted-foreground mt-0.5">{fmtDoc(detailItem.tipoDocumento, detailItem.numeroDocumento)}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {[
-                    { l: "Correo",          v: detailItem.correo },
-                    { l: "Tipo de documento",   v: detailItem.tipoDocumento },
-                    { l: "Número de documento", v: detailItem.numeroDocumento },
-                    { l: "Pedidos totales", v: String(detailItem.pedidos) },
-                    { l: "Estado",          v: detailItem.activo ? "Activo" : "Inactivo" },
-                  ].map(({ l, v }) => (
-                    <div key={l} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4">
-                      <span className="text-sm text-muted-foreground font-medium shrink-0">{l}</span>
-                      <span className="text-sm font-semibold text-foreground text-right">{v}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="px-5 py-4 border-t border-border">
-                <button onClick={() => setDetailItem(null)}
-                  className="w-full py-2.5 max-md:min-h-11 bg-muted rounded-xl text-sm font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal: Crear cliente */}
-      <AnimatePresence>
-        {showCreate && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <motion.div initial={{ scale:.95, opacity:0 }} animate={{ scale:1, opacity:1 }}
-                exit={{ scale:.95, opacity:0 }} transition={{ duration:.15 }}
-                 className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Crear Cliente</h3>
-                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                 <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-6 gap-x-6 gap-y-4">
-                  {/* Documento — cada campo en su columna del grid, igual que
-                      Nombre completo / Correo electrónico. */}
-                   <div className="sm:col-span-3">
-                     <label className="block text-xs font-semibold text-muted-foreground mb-1 whitespace-nowrap">
-                       Tipo de documento <MarcaObligatorio />
-                    </label>
-                    <select
-                      value={newTipoDoc}
-                      // P1: al cambiar el tipo se revalida el documento en
-                      // tiempo real, porque el formato y el duplicado
-                      // dependen del tipo (CC 6-10, CE/PP 6-12).
-                      onChange={e => { setNewTipoDoc(e.target.value); setCreateErrors(p => ({ ...p, tipoDocumento: undefined, numeroDocumento: errorDocumentoAlta(e.target.value, newDocumento) })); }}
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer ${createErrors.tipoDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    >
-                      {DOC_TIPOS.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
-                    </select>
-                    {createErrors.tipoDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.tipoDocumento}</p>}
-                  </div>
-                   <div className="sm:col-span-3">
-                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Número de documento <MarcaObligatorio />
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={newDocumento}
-                      autoComplete="off"
-                      // P1 — tiempo real: solo dígitos (soloDigitos) y como
-                      // máximo 10 números, cortando el valor con slice(0,10).
-                       onChange={e => { const v = soloDigitos(e.target.value).slice(0, newTipoDoc === "CC" ? 10 : 12); setNewDocumento(v); setCreateErrors(p => ({ ...p, numeroDocumento: errorDocumentoAlta(newTipoDoc, v) })); }}
-                      placeholder="12345678"
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.numeroDocumento ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    />
-                    {createErrors.numeroDocumento && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.numeroDocumento}</p>}
-                  </div>
-
-                  {/* Nombre */}
-                   <div className="sm:col-span-6">
-                     <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Nombre completo <MarcaObligatorio />
-                    </label>
-                    <input
-                      type="text"
-                      value={newNombre}
-                       onChange={e => { const v = filtrarNombre(e.target.value); setNewNombre(v); setCreateErrors(p => ({ ...p, nombre: validarNombre(v) ?? undefined })); }}
-                       onBlur={() => setNewNombre(normalizarNombre(newNombre))}
-                      placeholder="Ej: Laura Martínez"
-                      autoFocus
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.nombre ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    />
-                    {createErrors.nombre && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.nombre}</p>}
-                  </div>
-
-                  {/* Correo */}
-                   <div className="sm:col-span-4">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                       Correo electrónico <MarcaObligatorio />
-                    </label>
-                    <input
-                      type="email"
-                      value={newCorreo}
-                      autoComplete="off"
-                       onChange={e => { const v = filtrarCorreo(e.target.value); setNewCorreo(v); setCreateErrors(p => ({ ...p, correo: undefined })); }}
-                      placeholder="correo@ejemplo.com"
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.correo ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    />
-                    {createErrors.correo && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.correo}</p>}
-                  </div>
-
-                  {/* Teléfono */}
-                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
-                        Teléfono <MarcaObligatorio />
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      value={newTelefono}
-                      autoComplete="off"
-                      onChange={e => {
-                        const v = soloDigitos(e.target.value);
-                        setNewTelefono(v);
-                        setCreateErrors(p => ({ ...p, telefono: v ? validarTelefono(v) ?? undefined : undefined }));
-                      }}
-                      placeholder="3001234567"
-                      className={`w-full px-3 py-2.5 max-md:min-h-11 rounded-xl border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 ${createErrors.telefono ? "border-red-400 bg-red-50/30" : "bg-muted border-border"}`}
-                    />
-                    {createErrors.telefono && <p className="text-xs text-red-500 mt-1 leading-tight">{createErrors.telefono}</p>}
-                  </div>
-
-                  {/* Estado: punto 3.2, 2 opciones → control segmentado */}
-                  <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                    <SegmentadoButtons
+                    <p className="pn-etiqueta">¿Puede comprar desde ya?</p>
+                    <OpcionesBotones
+                      etiqueta="Estado del cliente"
                       valor={newActivo ? "activo" : "inactivo"}
                       onChange={valor => setNewActivo(valor === "activo")}
-                      opciones={[
-                        { valor: "activo", etiqueta: "Activo" },
-                        { valor: "inactivo", etiqueta: "Inactivo" },
-                      ]}
+                      opciones={[{ valor: "activo", etiqueta: "Sí, activo" }, { valor: "inactivo", etiqueta: "No, inactivo" }]}
                     />
                   </div>
                 </div>
-
-                <div className="flex gap-3 px-5 py-4 border-t border-border">
-                  <button onClick={() => { setShowCreate(false); resetCreate(); }}
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                    Cancelar
-                  </button>
-                  <button onClick={handleCreate}
-                    // P1: bloqueado mientras haya error de formato o un
-                    // documento/correo duplicado — el usuario ve el mensaje
-                    // debajo del campo en el momento de escribir.
-                    disabled={createBloqueado}
-                    title={createBloqueado ? "Corrige los campos marcados en rojo para crear el cliente" : undefined}
-                    className={`flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${createBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>
-                    Crear cliente
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
-
+              </SeccionFormulario>
+              <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                <BotonAccion variante="normal" onClick={cerrarCrear}>Cancelar</BotonAccion>
+                <BotonAccion
+                  variante="principal"
+                  // P1: bloqueado mientras haya error de formato o un
+                  // documento/correo duplicado.
+                  disabled={createBloqueado}
+                  title={createBloqueado ? "Corrige lo que está en rojo para poder agregarlo" : undefined}
+                  onClick={handleCreate}
+                >
+                  Agregar el cliente
+                </BotonAccion>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
     </div>
   );
 }

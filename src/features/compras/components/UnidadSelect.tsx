@@ -100,7 +100,7 @@ export function UnidadSelect({
         aria-label={ariaLabel}
         title={listaUnidades.find((unidad) => unidad.valor === value)?.ayuda}
         data-producto-insumo-campo={dataField}
-        className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 max-md:min-h-11 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${fieldClassName} ${
+        className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 min-h-14 text-base focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors ${fieldClassName} ${
           disabled ? "cursor-not-allowed" : "cursor-pointer"
         }`}
       >
@@ -143,7 +143,7 @@ export function UnidadSelect({
                   key={u.valor}
                   value={u.valor}
                   title={u.ayuda}
-                  className={`relative flex w-full select-none items-center rounded-sm px-3 py-2 text-sm outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed ${
+                  className={`relative flex w-full select-none items-center rounded-sm px-3 py-2 text-base outline-none cursor-pointer transition-colors data-[highlighted]:bg-primary/10 data-[highlighted]:text-primary data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed ${
                     u.divisorAntes ? "mt-1 border-t border-border pt-3" : ""
                   } ${seleccionada ? "font-semibold" : "font-normal"} whitespace-nowrap`}
                 >

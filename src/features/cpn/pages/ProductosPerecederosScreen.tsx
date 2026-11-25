@@ -5,6 +5,22 @@ import {
   Upload, ShoppingCart, ChevronDown, CheckCircle2, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ClipboardCheck, Download } from "lucide-react";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
@@ -27,7 +43,12 @@ import {
 } from "@/features/cpn/services/noConformesApi";
 
 const SERIF = "var(--font-titulo)";
-const PER_PAGE = 5;
+const PER_PAGE = 10;
+const SOLUCION_TXT: Record<string, string> = {
+  "Reposición del producto": "Se repuso",
+  Reproceso: "Se rehizo",
+  "Reembolso al cliente": "Se devolvió la plata",
+};
 
 type Tipo = "Producto" | "Producto insumo" | "Venta";
 type EstadoNC = "Pendiente" | "Completado";
@@ -200,7 +221,7 @@ function downloadXLSX(data: NoConformidad[]) {
 
 function EstadoBadge({ e }: { e: EstadoNC }) {
   return (
-    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
+    <span className={`text-base font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
       {e}
     </span>
   );
@@ -213,13 +234,13 @@ function TipoBadge({ tipo }: { tipo: Tipo }) {
     Venta:    "bg-red-100 text-red-700",
   };
   return (
-    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${cfg[tipo]}`}>
+    <span className={`text-base font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${cfg[tipo]}`}>
       {tipo}
     </span>
   );
 }
 
-const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted dark:bg-input border border-transparent rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
+const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted dark:bg-input border border-transparent rounded-xl text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
 const sCls = `${iCls} appearance-none cursor-pointer`;
 const tCls = `${iCls} resize-y`;
 
@@ -248,6 +269,8 @@ interface Props {
 export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos, ordenesProduccion, noConformidades, setNoConformidades, cargando = false, errorCarga, onReintentar, onInventarioCambiado, canCreate: _canCreate = true, canEdit = true, canDelete = true, canExportExcel = true }: Props) {
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
+  /** Botón de origen: de la cocina, de un pedido o de un insumo. */
+  const [filtroOrigen, setFiltroOrigen] = useState<Tipo | "">("");
   const [page, setPage] = useState(1);
 
   const [viewItem, setViewItem] = useState<NoConformidad | null>(null);
@@ -307,9 +330,9 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         i.responsable.toLowerCase().includes(q) ||
         i.tipoNoConformidad.toLowerCase().includes(q);
       const matchEst = !filterEst || i.estado === filterEst;
-      return matchQ && matchEst;
+      return matchQ && matchEst && (!filtroOrigen || i.tipo === filtroOrigen);
     }), (item) => item.id),
-  [allItems, search, filterEst]);
+  [allItems, search, filterEst, filtroOrigen]);
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -442,16 +465,14 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
   };
 
   // ── FormBody rendered as plain function call (not JSX component) to preserve focus ──
-  const renderFormBody = (readOnly: boolean, previewId?: string, edicion = false) => {
-    // En modo consulta lee el registro (viewItem); en alta y edición usa el formulario.
-    const f = readOnly && viewItem ? viewItem : form;
+  const renderFormBody = (_readOnly: boolean, _previewId?: string, edicion = false) => {
+    const f = form;
     // En edición, lo que identifica el registro (fecha, tipo, producto,
     // cantidad, motivo y relaciones) queda en solo lectura: cambiarlo movería
     // stock. Solo se editan descripción, solución y foto.
-    const fijo = readOnly || edicion;
+    const fijo = edicion;
     // Selector de producto EXISTENTE (P17b): siempre es un <select> con el
-    // catálogo, nunca texto libre, y envía el id real. En pizza se muestran
-    // las existencias separadas por tamaño; los demás conservan su stock usual.
+    // catálogo, nunca texto libre, y envía el id real.
     const opcionesProducto: {
       id: string;
       nombre: string;
@@ -474,316 +495,217 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
     const idSeleccionado = (f.tipo === "Producto insumo" ? f.idInsumo : f.idProducto) ?? "";
     const productoSeleccionado = opcionesProducto.find(o => o.id === idSeleccionado);
     const esPizzaSeleccionada = f.tipo === "Producto" && productoSeleccionado?.pizza === true;
+
+    const sugerencias = (lista: { id: string; label: string }[], mostrar: boolean, elegir: (id: string) => void, cerrar: () => void) =>
+      mostrar && lista.length > 0 ? (
+        <ul className="absolute z-30 top-full mt-1 w-full bg-card border-2 border-border rounded-xl shadow-lg max-h-56 overflow-y-auto">
+          {lista.map(s => (
+            <li key={s.id}>
+              <button
+                type="button"
+                onMouseDown={() => { elegir(s.id); cerrar(); }}
+                className="w-full text-left px-4 py-3 text-lg hover:bg-muted transition-colors cursor-pointer"
+              >
+                <strong>{s.id}</strong>
+                <span className="text-muted-foreground ml-2 text-base">{s.label.split("·").slice(1).join("·").trim()}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null;
+
     return (
-      <div className="space-y-4 px-6 py-5">
-        {previewId && (
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">N.º</label>
-            <p className="text-sm font-semibold text-foreground py-2">{previewId}</p>
-          </div>
-        )}
-
-        {/* Fila 1: Fecha de registro | Tipo */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de registro</label>
-            {fijo
-              ? <p className="text-sm font-semibold text-foreground py-2">{f.fechaRegistro}</p>
-              : <input type="date" value={f.fechaRegistro}
-                  max={new Date().toLocaleDateString("en-CA")}
-                  onChange={e => set({ fechaRegistro: e.target.value })} className={iCls} />
-            }
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo</label>
-            {fijo
-              ? <p className="text-sm font-semibold text-foreground py-2">{f.tipo}</p>
-              : <div className="relative">
-                  <select value={f.tipo} onChange={e => {
-                    const t = e.target.value as Tipo;
+      <div className="grid gap-5">
+        <SeccionFormulario numero={1} titulo="¿Qué pasó?">
+          <div className="grid gap-5">
+            <div>
+              <p className="pn-etiqueta">¿De dónde viene?</p>
+              {fijo ? (
+                <div className="pn-lectura">{ORIGEN_TXT[f.tipo]}</div>
+              ) : (
+                <OpcionesBotones
+                  etiqueta="De dónde viene"
+                  valor={f.tipo}
+                  onChange={(v) => {
+                    const t = v as Tipo;
                     set({ tipo: t, nombre: "", idProducto: undefined, idInsumo: undefined, unidadMedida: t === "Producto" ? "und" : "", ventaRef: "", ordenRef: "" });
-                  }} className={sCls}>
-                    <option value="Producto">Producto</option>
-                    <option value="Producto insumo">Producto insumo</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
-                </div>
-            }
-          </div>
-        </div>
-
-        {/* Fila 2: Orden de producción relacionada | Venta relacionada (según el tipo) */}
-        {!fijo && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className={`relative ${f.tipo === "Producto insumo" ? "sm:col-span-2" : ""}`}>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción relacionada (opcional)</label>
-              <input
-                value={f.ordenRef || ""}
-                onChange={e => { set({ ordenRef: e.target.value }); setShowOrdenSugg(true); }}
-                onFocus={() => setShowOrdenSugg(true)}
-                onBlur={() => setTimeout(() => setShowOrdenSugg(false), 150)}
-                placeholder="Buscar por número de orden o producto…"
-                autoComplete="off"
-                className={iCls}
-              />
-              {showOrdenSugg && ordenSuggestions.length > 0 && (
-                <ul className="absolute z-30 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
-                  {ordenSuggestions.map(s => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onMouseDown={() => { set({ ordenRef: s.id }); setShowOrdenSugg(false); }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors cursor-pointer"
-                      >
-                        <span className="font-mono font-bold text-primary">{s.id}</span>
-                        <span className="text-muted-foreground ml-2 text-xs truncate">{s.label.split("·").slice(1).join("·").trim()}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                  }}
+                  opciones={[
+                    { valor: "Producto", etiqueta: "De la cocina" },
+                    { valor: "Producto insumo", etiqueta: "De un insumo" },
+                  ]}
+                />
               )}
             </div>
 
-            {f.tipo === "Producto" && (
-              <div className="relative">
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Venta relacionada (opcional)</label>
-                <input
-                  value={f.ventaRef || ""}
-                  onChange={e => { set({ ventaRef: e.target.value }); setShowVentaSugg(true); }}
-                  onFocus={() => setShowVentaSugg(true)}
-                  onBlur={() => setTimeout(() => setShowVentaSugg(false), 150)}
-                  placeholder="Buscar por número de venta o cliente…"
-                  autoComplete="off"
-                  className={iCls}
+            <div className="pn-grilla">
+              <CampoFormulario etiqueta="¿Qué día pasó?">
+                {(p) => fijo
+                  ? <div className="pn-lectura">{fechaCorta(f.fechaRegistro)}</div>
+                  : <input {...p} type="date" value={f.fechaRegistro} max={new Date().toLocaleDateString("en-CA")} onChange={e => set({ fechaRegistro: e.target.value })} />}
+              </CampoFormulario>
+
+              <CampoFormulario
+                etiqueta="Producto"
+                ayuda={fijo ? undefined : f.tipo === "Producto"
+                  ? "En pizzas, escoge el tamaño y cuenta porciones: se descuentan de lo que hay."
+                  : "Lo que se pierde se descuenta del insumo."}
+              >
+                {(p) => fijo
+                  ? <div className="pn-lectura">{f.nombre}</div>
+                  : (
+                    <select
+                      {...p}
+                      value={idSeleccionado}
+                      onChange={e => {
+                        const sel = opcionesProducto.find(o => o.id === e.target.value);
+                        const ids = f.tipo === "Producto insumo"
+                          ? { idInsumo: sel?.id, idProducto: undefined }
+                          : { idProducto: sel?.id, idInsumo: undefined };
+                        if (sel) set({
+                          ...ids,
+                          nombre: sel.nombre,
+                          unidadMedida: sel.pizza ? "porciones" : sel.unidad,
+                          tamano: sel.pizza ? "Mediana" : undefined,
+                        });
+                        else set({ ...ids, nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "", tamano: undefined });
+                      }}
+                    >
+                      <option value="">Escoge el producto…</option>
+                      {opcionesProducto.map(o => (
+                        <option key={o.id} value={o.id}>
+                          {o.pizza
+                            ? `${o.nombre} · medianas ${o.stockMediana ?? 0} · grandes ${o.stockGrande ?? 0}`
+                            : o.stock === null ? o.nombre : `${o.nombre} · hay ${o.stock} ${o.unidad}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+              </CampoFormulario>
+
+              {esPizzaSeleccionada && (
+                <div>
+                  <p className="pn-etiqueta">Tamaño</p>
+                  {fijo ? (
+                    <div className="pn-lectura">{f.tamano ?? "—"}</div>
+                  ) : (
+                    <OpcionesBotones
+                      etiqueta="Tamaño de la pizza"
+                      valor={f.tamano ?? ""}
+                      onChange={(v) => set({ tamano: v === "Mediana" || v === "Grande" ? v : undefined, unidadMedida: "porciones" })}
+                      opciones={[{ valor: "Mediana", etiqueta: "Mediana" }, { valor: "Grande", etiqueta: "Grande" }]}
+                    />
+                  )}
+                </div>
+              )}
+
+              <CampoFormulario
+                etiqueta={esPizzaSeleccionada ? "¿Cuántas porciones?" : `¿Cuánto se perdió?${f.unidadMedida ? ` (${f.unidadMedida})` : ""}`}
+                ayuda={fijo ? undefined : "Se descuentan de lo que hay"}
+              >
+                {(p) => fijo
+                  ? <div className="pn-lectura">{f.cantidadAfectada} {f.unidadMedida}</div>
+                  : (
+                    <input
+                      {...p}
+                      type="number"
+                      min={1}
+                      value={f.cantidadAfectada === 0 ? "" : f.cantidadAfectada}
+                      placeholder="0"
+                      onChange={e => set({ cantidadAfectada: numeroDeInput(limpiarNumeroInput(e.target.value)) })}
+                    />
+                  )}
+              </CampoFormulario>
+            </div>
+
+            <CampoFormulario etiqueta="Motivo">
+              {(p) => fijo
+                ? <div className="pn-lectura">{f.tipoNoConformidad}</div>
+                : <input {...p} value={f.tipoNoConformidad} onChange={e => set({ tipoNoConformidad: e.target.value })} placeholder="Ej: Masa con sabor ácido" />}
+            </CampoFormulario>
+
+            <CampoFormulario etiqueta="Cuéntalo con tus palabras" opcional>
+              {(p) => (
+                <textarea
+                  {...p}
+                  rows={3}
+                  value={f.descripcionProblema}
+                  onChange={e => set({ descripcionProblema: e.target.value })}
+                  placeholder="Qué pasó, qué se vio y a qué afectó…"
                 />
-                {showVentaSugg && ventaSuggestions.length > 0 && (
-                  <ul className="absolute z-30 top-full mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
-                    {ventaSuggestions.map(s => (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          onMouseDown={() => { set({ ventaRef: s.id }); setShowVentaSugg(false); }}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors cursor-pointer"
-                        >
-                          <span className="font-mono font-bold text-primary">{s.id}</span>
-                          <span className="text-muted-foreground ml-2 text-xs truncate">{s.label.split("·").slice(1).join("·").trim()}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </CampoFormulario>
 
-        {/* Fila 3: Producto (selector, ancho completo) */}
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Producto</label>
-          {fijo
-            ? <div>
-                <p className="text-sm font-semibold text-foreground py-2">{f.nombre}</p>
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {f.tipo === "Producto" ? "Producto del menú" : f.tipo === "Producto insumo" ? "Producto insumo" : "Pérdida en venta"}
-                </span>
-              </div>
-            : <div className="relative">
-                {/* SELECT de productos existentes (P17b): el valor es el id
-                    real del catálogo, así que nunca se puede registrar un
-                    producto que no exista. */}
-                <select value={idSeleccionado} onChange={e => {
-                  const sel = opcionesProducto.find(o => o.id === e.target.value);
-                  const ids = f.tipo === "Producto insumo"
-                    ? { idInsumo: sel?.id, idProducto: undefined }
-                    : { idProducto: sel?.id, idInsumo: undefined };
-                  if (sel) set({
-                    ...ids,
-                    nombre: sel.nombre,
-                    unidadMedida: sel.pizza ? "porciones" : sel.unidad,
-                    tamano: sel.pizza ? "Mediana" : undefined,
-                  });
-                  else set({ ...ids, nombre: "", unidadMedida: f.tipo === "Producto" ? "und" : "", tamano: undefined });
-                }} className={sCls}>
-                  <option value="">Selecciona…</option>
-                  {opcionesProducto.map(o => (
-                    <option key={o.id} value={o.id}>
-                      {o.pizza
-                        ? `${o.nombre} · Med. ${o.stockMediana ?? 0} porc. · Gde. ${o.stockGrande ?? 0} porc.`
-                        : o.stock === null ? o.nombre : `${o.nombre} · ${o.stock} ${o.unidad} en stock`}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
-              </div>
-          }
-          {/* Deja visible el movimiento de stock que implica el registro (P17b). */}
-          {!fijo && (
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {f.tipo === "Producto"
-                ? "En pizzas, elige el tamaño y registra porciones; se descuentan del stock de ese tamaño."
-                : "Al registrar, la cantidad afectada se descuenta del stock del insumo."}
-            </p>
-          )}
-        </div>
-
-        {esPizzaSeleccionada && (
-           <div>
-             <label className="block text-xs font-semibold text-muted-foreground mb-1">Tamaño de pizza *</label>
-             {fijo
-               ? <p className="text-sm font-semibold text-foreground py-2">{f.tamano ?? "—"}</p>
-               : <div className="relative">
-                 <select value={f.tamano ?? ""} onChange={e => set({
-                   tamano: e.target.value === "Mediana" || e.target.value === "Grande" ? e.target.value : undefined,
-                   unidadMedida: "porciones",
-                 })} className={sCls}>
-                   <option value="">Selecciona tamaño…</option>
-                   <option value="Mediana">Mediana (8 porciones por pizza)</option>
-                   <option value="Grande">Grande (6 porciones por pizza)</option>
-                 </select>
-                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none w-4 h-4 text-muted-foreground" />
-               </div>
-             }
-           </div>
-        )}
-
-        {/* Fila 4: Cantidad afectada | Unidad de medida (automática, solo lectura) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-           <div>
-             <label className="block text-xs font-semibold text-muted-foreground mb-1">
-               Cantidad afectada{esPizzaSeleccionada ? " (porciones)" : ""}
-             </label>
-            {fijo
-              ? <p className="text-sm font-semibold text-foreground py-2">{f.cantidadAfectada} {f.unidadMedida}</p>
-              : <input type="number" min={1}
-                  // Nace en 1 (regla del alta); borra a vacío sin volver a 0
-                  // y limpia ceros a la izquierda (punto B1).
-                  value={f.cantidadAfectada === 0 ? "" : f.cantidadAfectada}
-                  placeholder="0"
-                  onChange={e => set({ cantidadAfectada: numeroDeInput(limpiarNumeroInput(e.target.value)) })} className={iCls} />
-            }
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Unidad de medida</label>
-            {fijo
-              ? <p className="text-sm font-semibold text-foreground py-2">{f.unidadMedida}</p>
-              : <input value={f.unidadMedida} readOnly placeholder="—"
-                  className={`${iCls} opacity-70 cursor-default`} />
-            }
-          </div>
-        </div>
-
-        <div className="border border-border rounded-xl overflow-hidden">
-          <div className="px-3 py-2 bg-muted/60 border-b border-border">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descripción de la no conformidad</p>
-          </div>
-          <div className="p-3 space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Motivo</label>
-              {fijo
-                ? <span className="inline-block text-xs font-semibold px-3 py-1 bg-primary/10 text-primary rounded-full">{f.tipoNoConformidad}</span>
-                : <input
-                    value={f.tipoNoConformidad}
-                    onChange={e => set({ tipoNoConformidad: e.target.value })}
-                    placeholder="Ej: Masa con sabor ácido"
-                    className={iCls}
+            {!fijo && (
+              <div className="pn-grilla">
+                <div className="relative pn-campo">
+                  <label className="pn-etiqueta">Orden de cocina relacionada <span style={{ fontWeight: 400 }}>(opcional)</span></label>
+                  <input
+                    value={f.ordenRef || ""}
+                    onChange={e => { set({ ordenRef: e.target.value }); setShowOrdenSugg(true); }}
+                    onFocus={() => setShowOrdenSugg(true)}
+                    onBlur={() => setTimeout(() => setShowOrdenSugg(false), 150)}
+                    placeholder="Número de la orden o producto"
+                    autoComplete="off"
                   />
-              }
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción detallada</label>
-              {readOnly
-                ? <p className="text-sm text-foreground leading-relaxed py-1 whitespace-pre-wrap">{f.descripcionProblema || <span className="italic text-muted-foreground/50">Sin descripción</span>}</p>
-                : <textarea
-                    rows={2}
-                    value={f.descripcionProblema}
-                    onChange={e => set({ descripcionProblema: e.target.value })}
-                    placeholder="Describe qué pasó, qué se observó y a qué afectó…"
-                    className={tCls}
-                  />
-              }
-            </div>
-          </div>
-        </div>
-
-        {!readOnly && (
-          <div className="border border-border rounded-xl overflow-hidden">
-            <div className="px-3 py-2 bg-muted/60 border-b border-border">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Solución de la no conformidad</p>
-            </div>
-            <div className="p-3 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-                {/* Punto 3.2: 3 opciones → control segmentado; "Reembolso"
-                    sigue bloqueado sin venta relacionada (motivo en tooltip). */}
-                <SegmentadoButtons
-                  valor={f.tipoSolucion ?? ""}
-                  onChange={valor => set({ tipoSolucion: valor })}
-                  opciones={TIPOS_SOLUCION.map(t => {
-                    const bloqueado = t === "Reembolso al cliente" && !f.ventaRef;
-                    return {
-                      valor: t,
-                      etiqueta: t,
-                      deshabilitada: bloqueado,
-                      titulo: bloqueado ? "Requiere una venta relacionada" : undefined,
-                    };
-                  })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
-                <textarea rows={2} value={f.solucion ?? ""} onChange={e => set({ solucion: e.target.value })}
-                  placeholder="Describe qué se hizo o se hará para resolver la no conformidad..." className={tCls} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {fijo && (f.ventaRef || f.ordenRef) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {f.ventaRef && (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Venta de origen</label>
-                <p className="text-sm font-semibold text-foreground font-mono">{f.ventaRef}</p>
-              </div>
-            )}
-            {f.ordenRef && (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Orden de producción</label>
-                <p className="text-sm font-semibold text-foreground font-mono">{f.ordenRef}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto de evidencia</label>
-          {readOnly
-            ? f.evidencia
-              ? <img src={f.evidencia} alt="evidencia" className="w-full max-h-48 object-cover rounded-xl border border-border mt-1" />
-              : <p className="text-sm text-muted-foreground/50 italic py-2">Sin evidencia adjunta</p>
-            : <>
-                <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
-                {f.evidencia ? (
-                  <div className="relative rounded-xl overflow-hidden border border-border h-32">
-                    <img src={f.evidencia} alt="evidencia" className="w-full h-full object-cover" />
-                    <button onClick={() => set({ evidencia: undefined })}
-                      className="absolute top-1.5 right-1.5 bg-black/60 text-white rounded-full p-0.5 cursor-pointer hover:bg-black/80">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                  {sugerencias(ordenSuggestions, showOrdenSugg, (id) => set({ ordenRef: id }), () => setShowOrdenSugg(false))}
+                </div>
+                {f.tipo === "Producto" && (
+                  <div className="relative pn-campo">
+                    <label className="pn-etiqueta">Pedido relacionado <span style={{ fontWeight: 400 }}>(opcional)</span></label>
+                    <input
+                      value={f.ventaRef || ""}
+                      onChange={e => { set({ ventaRef: e.target.value }); setShowVentaSugg(true); }}
+                      onFocus={() => setShowVentaSugg(true)}
+                      onBlur={() => setTimeout(() => setShowVentaSugg(false), 150)}
+                      placeholder="Número del pedido o cliente"
+                      autoComplete="off"
+                    />
+                    {sugerencias(ventaSuggestions, showVentaSugg, (id) => set({ ventaRef: id }), () => setShowVentaSugg(false))}
                   </div>
-                ) : (
-                  <>
-                    <button onClick={() => fileRef.current?.click()} disabled={subiendo}
-                      className="w-full border-2 border-dashed border-border rounded-xl py-4 flex flex-col items-center gap-2 text-muted-foreground hover:border-primary/50 hover:bg-muted/40 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                      <Upload className="w-5 h-5" />
-                      <span className="text-xs font-medium">{subiendo ? "Subiendo..." : "Subir imagen de evidencia"}</span>
-                    </button>
-                    <p className="text-[11px] text-muted-foreground mt-1.5 text-center">JPG, PNG o WEBP · máx 5 MB</p>
-                  </>
                 )}
-              </>
-          }
-        </div>
+              </div>
+            )}
+          </div>
+        </SeccionFormulario>
+
+        {!fijo && (
+          <SeccionFormulario titulo="Cómo se solucionó" ayuda="Si todavía no lo sabes, déjalo vacío: lo completas después.">
+            <div className="grid gap-4">
+              <OpcionesBotones
+                etiqueta="Cómo se solucionó"
+                valor={f.tipoSolucion ?? ""}
+                onChange={(valor) => set({ tipoSolucion: valor })}
+                opciones={TIPOS_SOLUCION.map(t => ({
+                  valor: t,
+                  etiqueta: SOLUCION_TXT[t] ?? t,
+                  deshabilitada: t === "Reembolso al cliente" && !f.ventaRef,
+                  titulo: t === "Reembolso al cliente" && !f.ventaRef ? "Solo si el reporte viene de un pedido" : undefined,
+                }))}
+              />
+              <CampoFormulario etiqueta="¿Qué se hizo?" opcional>
+                {(p) => <textarea {...p} rows={2} value={f.solucion ?? ""} onChange={e => set({ solucion: e.target.value })} placeholder="Qué se hizo o se hará para resolverlo" />}
+              </CampoFormulario>
+            </div>
+          </SeccionFormulario>
+        )}
+
+        <SeccionFormulario numero={2} titulo="Foto">
+          <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
+          {f.evidencia ? (
+            <div className="grid gap-3 justify-items-start">
+              <img src={f.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 16, border: "2px solid var(--borde-suave)" }} />
+              <BotonAccion variante="peligro" onClick={() => set({ evidencia: undefined })}>Quitar la foto</BotonAccion>
+            </div>
+          ) : (
+            <div className="grid gap-2 justify-items-start">
+              <BotonAccion icono={Upload} disabled={subiendo} onClick={() => fileRef.current?.click()}>
+                {subiendo ? "Subiendo…" : "Subir una foto (opcional)"}
+              </BotonAccion>
+              <p className="pn-campo__ayuda">JPG, PNG o WEBP · máximo 5 MB</p>
+            </div>
+          )}
+        </SeccionFormulario>
       </div>
     );
   };
@@ -794,43 +716,43 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
       <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
         <ShoppingCart className="w-5 h-5 text-red-600 shrink-0" />
         <div>
-          <p className="text-sm font-bold text-red-800">Pérdida originada en Ventas</p>
-          <p className="text-xs text-red-600">Este registro se generó automáticamente al resolver una devolución con «Producto malo».</p>
+          <p className="text-base font-bold text-red-800">Pérdida originada en Ventas</p>
+          <p className="text-base text-red-600">Este registro se generó automáticamente al resolver una devolución con «Producto malo».</p>
         </div>
       </div>
       <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">Información de la venta</p>
+        <p className="text-base font-bold uppercase tracking-wider text-muted-foreground border-b border-border pb-1">Información de la venta</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Número de venta</label>
-            <p className="text-sm font-semibold text-foreground font-mono">{item.ventaRef || "—"}</p>
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Número de venta</label>
+            <p className="text-base font-semibold text-foreground font-mono">{item.ventaRef || "—"}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha</label>
-            <p className="text-sm font-semibold text-foreground">{item.fechaRegistro}</p>
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Fecha</label>
+            <p className="text-base font-semibold text-foreground">{item.fechaRegistro}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Responsable</label>
-            <p className="text-sm font-semibold text-foreground">{item.responsable || "—"}</p>
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Responsable</label>
+            <p className="text-base font-semibold text-foreground">{item.responsable || "—"}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Cantidad</label>
-            <p className="text-sm font-semibold text-foreground">
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Cantidad</label>
+            <p className="text-base font-semibold text-foreground">
               {item.cantidadAfectada} {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
             </p>
           </div>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Productos</label>
-          <p className="text-sm font-semibold text-foreground">{item.nombre}</p>
+          <label className="block text-base font-semibold text-muted-foreground mb-1">Productos</label>
+          <p className="text-base font-semibold text-foreground">{item.nombre}</p>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Motivo registrado</label>
-          <span className="inline-block text-xs font-semibold px-3 py-1 bg-red-100 text-red-700 rounded-full">{item.tipoNoConformidad}</span>
+          <label className="block text-base font-semibold text-muted-foreground mb-1">Motivo registrado</label>
+          <span className="inline-block text-base font-semibold px-3 py-1 bg-red-100 text-red-700 rounded-full">{item.tipoNoConformidad}</span>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>
-          <p className="text-sm text-foreground leading-relaxed">{item.descripcionProblema}</p>
+          <label className="block text-base font-semibold text-muted-foreground mb-1">Descripción</label>
+          <p className="text-base text-foreground leading-relaxed">{item.descripcionProblema}</p>
         </div>
       </div>
     </div>
@@ -842,21 +764,21 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
     return (
       <div className="mx-5 mb-5 border border-emerald-200 rounded-xl overflow-hidden">
         <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-200">
-          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Solución de la no conformidad</p>
+          <p className="text-base font-bold uppercase tracking-wide text-emerald-800">Solución de la no conformidad</p>
         </div>
         <div className="p-3 space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-            <p className="text-sm font-semibold text-foreground py-1">{viewItem.tipoSolucion || "—"}</p>
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Tipo de solución</label>
+            <p className="text-base font-semibold text-foreground py-1">{viewItem.tipoSolucion || "—"}</p>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
-            <p className="text-sm text-foreground leading-relaxed py-1 whitespace-pre-wrap">{viewItem.solucion || "—"}</p>
+            <label className="block text-base font-semibold text-muted-foreground mb-1">Solución aplicada</label>
+            <p className="text-base text-foreground leading-relaxed py-1 whitespace-pre-wrap">{viewItem.solucion || "—"}</p>
           </div>
           {viewItem.fechaCierre && (
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Fecha de cierre</label>
-              <p className="text-sm font-semibold text-foreground py-1">{viewItem.fechaCierre}</p>
+              <label className="block text-base font-semibold text-muted-foreground mb-1">Fecha de cierre</label>
+              <p className="text-base font-semibold text-foreground py-1">{viewItem.fechaCierre}</p>
             </div>
           )}
         </div>
@@ -868,18 +790,18 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
   // tarjetas (menos de 768 px) para mostrar exactamente los mismos botones y datos.
   const origenDe = (item: NoConformidad) =>
     item.ventaRef ? `Venta #${item.ventaRef}` : item.ordenRef ? `OP ${item.ordenRef}` : null;
-  const productoCpn = (item: NoConformidad) => (<><p className="text-sm font-medium text-foreground">{item.nombre}</p>
-                      <p className="text-xs text-muted-foreground">{item.categoria}</p></>);
-  const cantidadCpn = (item: NoConformidad) => (<>{item.cantidadAfectada} <span className="text-xs font-normal text-muted-foreground">
+  const productoCpn = (item: NoConformidad) => (<><p className="text-base font-medium text-foreground">{item.nombre}</p>
+                      <p className="text-base text-muted-foreground">{item.categoria}</p></>);
+  const cantidadCpn = (item: NoConformidad) => (<>{item.cantidadAfectada} <span className="text-base font-normal text-muted-foreground">
                         {item.tamano ? `porc. · ${item.tamano}` : item.unidadMedida}
                       </span></>);
   const motivoCpn = (item: NoConformidad) => (<><p className="font-semibold">{item.tipoNoConformidad}</p>
-                      <p className="text-muted-foreground truncate text-xs mt-0.5">{item.descripcionProblema}</p></>);
+                      <p className="text-muted-foreground truncate text-base mt-0.5">{item.descripcionProblema}</p></>);
   const origenCpn = (item: NoConformidad) => {
     const origen = origenDe(item);
     return (<>{origen
-                        ? <span className="text-xs font-mono font-semibold px-2 py-0.5 bg-muted rounded-lg text-muted-foreground whitespace-nowrap">{origen}</span>
-                        : <span className="text-xs text-muted-foreground/40 italic">—</span>
+                        ? <span className="text-base font-mono font-semibold px-2 py-0.5 bg-muted rounded-lg text-muted-foreground whitespace-nowrap">{origen}</span>
+                        : <span className="text-base text-muted-foreground/40 italic">—</span>
                       }</>);
   };
   const accionesCpn = (item: NoConformidad) => {
@@ -907,374 +829,272 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                       </div>);
   };
 
+  // ── Lista con tarjetas ──
+  const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+  /** "2026-11-21" → "21 nov" */
+  const fechaCorta = (iso?: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+    return m ? `${Number(m[3])} ${MESES_CORTOS[Number(m[2]) - 1]}` : iso || "—";
+  };
+  const ORIGEN_TXT: Record<Tipo, string> = { Producto: "De la cocina", Venta: "De un pedido", "Producto insumo": "De un insumo" };
+  const origenPill = (item: NoConformidad) =>
+    item.ventaRef ? `Pedido #${item.ventaRef}` : item.ordenRef ? `Cocina · ${item.ordenRef}` : item.tipo === "Producto insumo" ? "Insumo" : ORIGEN_TXT[item.tipo];
+  const conteoTipo = (t: Tipo) => allItems.filter((i) => i.tipo === t).length;
+  const pendientes = allItems.filter((i) => i.estado === "Pendiente").length;
+  const chip = filterEst === "Pendiente" ? "pendiente" : filtroOrigen || "todos";
+  const cambiarChip = (v: string) => {
+    setPage(1);
+    setFilterEst(v === "pendiente" ? "Pendiente" : "");
+    setFiltroOrigen(v === "Producto" || v === "Venta" || v === "Producto insumo" ? (v as Tipo) : "");
+  };
+  const textoCantidad = (item: NoConformidad) =>
+    `${item.cantidadAfectada} ${item.tamano ? `${item.cantidadAfectada === 1 ? "porción" : "porciones"} · ${item.tamano}` : item.unidadMedida}`;
+
   return (
-    <div className="px-4 sm:px-6 py-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-foreground whitespace-nowrap" style={{ fontFamily: SERIF }}>
-            Productos No Conformes
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            {allItems.length} registros · {allItems.filter(i => i.estado === "Pendiente").length} pendientes
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {canExportExcel && <BotonDescargarExcel onClick={() => downloadXLSX(allItems)} />}
-          {_canCreate && (
-            <button
-              onClick={() => { setForm(emptyForm()); setShowCreate(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              Nueva no conformidad
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Productos no conformes"
+        descripcion="Lo que salió mal: pizzas que se dañaron en la cocina, insumos vencidos o pedidos que el cliente reclamó"
+        acciones={
+          <>
+            {canExportExcel && <BotonAccion icono={Download} onClick={() => downloadXLSX(allItems)}>Descargar en Excel</BotonAccion>}
+            {_canCreate && (
+              <BotonAccion variante="principal" icono={Plus} onClick={() => { setForm(emptyForm()); setShowCreate(true); }}>
+                Reportar algo que salió mal
+              </BotonAccion>
+            )}
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <SearchInput
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar un reporte"
           value={search}
-          onChange={v => { setSearch(v); setPage(1); }}
-          placeholder="Buscar por número, nombre, responsable, motivo..."
-          wrapperClassName="flex-1 min-w-48 max-w-sm"
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el número, el producto o el motivo"
         />
-        <select value={filterEst} onChange={e => { setFilterEst(e.target.value as EstadoNC | ""); setPage(1); }}
-          className="px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none cursor-pointer appearance-none min-w-36">
-          <option value="">Todo estado</option>
-          <option>Pendiente</option>
-          <option>Completado</option>
-        </select>
+        <FiltrosChips
+          valor={chip}
+          onChange={cambiarChip}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos", contador: allItems.length },
+            { valor: "pendiente", etiqueta: "Falta completar", contador: pendientes },
+            { valor: "Producto", etiqueta: "De la cocina", contador: conteoTipo("Producto") },
+            { valor: "Venta", etiqueta: "De pedidos", contador: conteoTipo("Venta") },
+            { valor: "Producto insumo", etiqueta: "De insumos", contador: conteoTipo("Producto insumo") },
+          ]}
+        />
       </div>
 
-      {/* Carga y error de la API (igual que Insumos y Orden de Producción):
-          nunca se muestran datos de ejemplo. */}
       {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-4">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3" />
-          <p className="text-sm">Cargando productos no conformes…</p>
-        </div>
+        <p role="status" className="pn-nota">Cargando los reportes…</p>
       ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center mb-4">
-          <p className="text-sm font-semibold text-red-600">{errorCarga}</p>
-          {onReintentar && (
-            <button onClick={onReintentar}
-              className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-3 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer">
-              Reintentar
-            </button>
-          )}
-        </div>
+        <AvisoBanner
+          titulo="No pudimos cargar los reportes"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={ClipboardCheck} titulo="No encontramos ningún reporte">
+          Revisa cómo lo escribiste, cambia el filtro o reporta algo nuevo.
+        </VacioEstado>
       ) : (
-      <>
-      {/* Menos de 768 px: cada registro como tarjeta. Reutiliza las mismas piezas
-      y botones de la tabla (productoCpn, motivoCpn, accionesCpn…). */}
-      <div className="md:hidden space-y-3 mb-4">
-        {paged.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p className="text-4xl mb-3">📋</p>
-            <p>No se encontraron registros</p>
-          </div>
-        ) : (
-          paged.map((item) => (
-            <div key={item.id} className={`rounded-2xl border border-border bg-card p-4 ${item.tipo === "Venta" ? "bg-red-50/30" : ""}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-mono font-bold text-foreground">{item.id}</p>
-                  <div className="mt-1 break-words">{productoCpn(item)}</div>
-                </div>
-                <div className="shrink-0"><TipoBadge tipo={item.tipo} /></div>
-              </div>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-3 mt-3 text-sm">
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Fecha</dt>
-                  <dd className="mt-0.5 text-muted-foreground">{item.fechaRegistro}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Cantidad</dt>
-                  <dd className="mt-0.5 font-bold text-foreground">{cantidadCpn(item)}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Motivo</dt>
-                  <dd className="mt-0.5 text-foreground break-words [&_p.truncate]:!whitespace-normal [&_p.truncate]:!overflow-visible [&_p.truncate]:!text-clip">{motivoCpn(item)}</dd>
-                </div>
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">Origen</dt>
-                  <dd className="mt-0.5">{origenCpn(item)}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesCpn(item)}</div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Tabla: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4 max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            {/* Mismo patrón de tabla que el resto del panel (P16): cabecera
-                text-xs en mayúsculas, th px-4 py-2, celdas px-4 py-2.5 con
-                texto text-sm y filas de 61 px (igual que Gestión de Producto
-                y Categoría de Producto). */}
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["N.º", "Tipo", "Producto / Insumo", "Fecha", "Cantidad", "Motivo", "Origen", "Acciones"].map(h => (
-                  <th key={h} className="px-4 py-2 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
-                    <p className="text-4xl mb-3">📋</p>
-                    <p>No se encontraron registros</p>
-                  </td>
-                </tr>
-              ) : paged.map(item => {
-                const isVenta = item.tipo === "Venta";
-                const pendiente = item.estado === "Pendiente";
-                const origen = item.ventaRef
-                  ? `Venta #${item.ventaRef}`
-                  : item.ordenRef
-                  ? `OP ${item.ordenRef}`
-                  : null;
-                return (
-                  <tr key={item.id} className={`hover:bg-muted/20 transition-colors h-[61px] ${isVenta ? "bg-red-50/30" : ""}`}>
-                    <td className="px-4 py-2.5 text-sm font-mono font-bold text-foreground whitespace-nowrap">{item.id}</td>
-                    <td className="px-4 py-2.5"><TipoBadge tipo={item.tipo} /></td>
-                    <td className="px-4 py-2.5">
-                      {productoCpn(item)}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground whitespace-nowrap">{item.fechaRegistro}</td>
-                    <td className="px-4 py-2.5 text-sm font-bold text-center text-foreground">
-                      {cantidadCpn(item)}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-foreground max-w-36">
-                      {motivoCpn(item)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {origenCpn(item)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {accionesCpn(item)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="pn-lista">
+          {paged.map((item) => {
+            const pendiente = item.estado === "Pendiente";
+            return (
+              <TarjetaFila
+                key={item.id}
+                resaltada={pendiente ? "ambar" : undefined}
+                pre={
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    N.° {item.id} · {fechaCorta(item.fechaRegistro)}
+                    <EstadoPill tono="gris">{origenPill(item)}</EstadoPill>
+                  </span>
+                }
+                nombre={item.tamano ? `${item.nombre} · ${item.tamano}` : item.nombre}
+                detalle={
+                  <>
+                    Motivo: <strong>{item.tipoNoConformidad}</strong>
+                    {item.descripcionProblema ? ` · ${item.descripcionProblema}` : ""}
+                  </>
+                }
+                datos={[{ etiqueta: "Cantidad", valor: textoCantidad(item) }]}
+                estado={
+                  <div className="grid gap-1 justify-items-start">
+                    <EstadoPill tono={pendiente ? "ambar" : "verde"}>{pendiente ? "Falta completar" : "Cerrado"}</EstadoPill>
+                    <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>
+                      {pendiente ? "Escribe qué se hizo" : item.fechaCierre ? `Cerrado el ${fechaCorta(item.fechaCierre)}` : "Reporte cerrado"}
+                    </span>
+                  </div>
+                }
+                acciones={
+                  <>
+                    {canEdit && pendiente && <BotonAccion variante="principal" onClick={() => abrirCompletar(item)}>Completar</BotonAccion>}
+                    <BotonAccion variante="normal" onClick={() => setViewItem(item)}>Ver detalle</BotonAccion>
+                    {canEdit && pendiente && <BotonAccion variante="normal" onClick={() => abrirEditar(item)}>Cambiar datos</BotonAccion>}
+                    {canDelete && pendiente && !item.generadoPorSistema && (
+                      <BotonAccion variante="peligro" onClick={() => setDeleteTarget(item)}>Borrar</BotonAccion>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
         </div>
-      </div>
-
-      {/* Pagination (unificada) */}
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
-      )}
-      </>
       )}
 
+      <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+      <p className="pn-nota">
+        Lo que se daña en la cocina queda cerrado de una vez. Lo que viene de una devolución queda en «Falta completar» hasta que escribas qué se hizo.
+      </p>
 
-      {/* ── MODAL: VIEW ── */}
-      <AnimatePresence>
-        {viewItem && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
-          >
-            <div className="flex min-h-full items-center justify-center">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <div>
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                  {viewItem.id} · {viewItem.nombre}
-                </h3>
-                <p className="text-xs text-muted-foreground">{viewItem.categoria} · {viewItem.areaProceso}</p>
+
+      {/* ── Ver el reporte ── */}
+      {viewItem && (
+        <Dialog.Root open onOpenChange={(a) => { if (!a) setViewItem(null); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 900px)" }}>
+              <div className="pn-modal__cab">
+                <Dialog.Title className="pn-modal__titulo">Reporte N.° {viewItem.id} · {viewItem.nombre}</Dialog.Title>
+                <EstadoPill tono={viewItem.estado === "Pendiente" ? "ambar" : "verde"}>{viewItem.estado === "Pendiente" ? "Falta completar" : "Cerrado"}</EstadoPill>
               </div>
-              <div className="flex items-center gap-2">
-                <TipoBadge tipo={viewItem.tipo} />
-                <EstadoBadge e={viewItem.estado} />
-                <button onClick={() => setViewItem(null)}
-                  className="ml-2 p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {viewItem.tipo === "Venta"
-                ? renderVentaDetail(viewItem)
-                : renderFormBody(true, viewItem.id)
-              }
-
-              {renderSolucionPanel()}
-            </div>
-
-            <div className="px-6 py-4 border-t border-border shrink-0">
-              <button onClick={() => setViewItem(null)}
-                className="w-full py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
-                Cerrar
-              </button>
-            </div>
-            </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── MODAL: CREATE ── */}
-      <AnimatePresence>
-        {showCreate && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
-          >
-            <div className="flex min-h-full items-center justify-center">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Registrar producto no conforme</h3>
-              <button onClick={() => setShowCreate(false)}
-                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {renderFormBody(false)}
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-              <button onClick={() => setShowCreate(false)}
-                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => void handleCreate()} disabled={guardando || subiendo}
-                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                {guardando ? "Registrando..." : "Registrar"}
-              </button>
-            </div>
-            </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── MODAL: EDIT (solo Pendiente) ── */}
-      <AnimatePresence>
-        {editItem && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
-          >
-            <div className="flex min-h-full items-center justify-center">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-              className="bg-card rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl border border-border flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Editar — {editItem.id}</h3>
-              <button onClick={() => setEditItem(null)}
-                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {renderFormBody(false, editItem.id, true)}
-            </div>
-
-            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-              <button onClick={() => setEditItem(null)}
-                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => void handleEdit()} disabled={guardando || subiendo}
-                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                {guardando ? "Guardando..." : "Guardar"}
-              </button>
-            </div>
-            </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── MODAL: COMPLETAR (Pendiente → Completado) ── */}
-      <AnimatePresence>
-        {completarItem && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm overflow-y-auto p-4"
-          >
-            <div className="flex min-h-full items-center justify-center">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.15 }}
-              className="bg-card rounded-2xl w-full max-w-lg shadow-2xl border border-border flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-                Completar — {completarItem.id} · {completarItem.nombre}
-              </h3>
-              <button onClick={() => setCompletarItem(null)}
-                className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Tipo de solución</label>
-                <SegmentadoButtons
-                  valor={completarForm.tipoSolucion}
-                  onChange={valor => setCompletarForm(p => ({ ...p, tipoSolucion: valor }))}
-                  opciones={TIPOS_SOLUCION.map(t => {
-                    const bloqueado = t === "Reembolso al cliente" && !completarItem.ventaRef;
-                    return {
-                      valor: t,
-                      etiqueta: t,
-                      deshabilitada: bloqueado,
-                      titulo: bloqueado ? "Requiere una venta relacionada" : undefined,
-                    };
-                  })}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Solución aplicada</label>
-                <textarea rows={3} value={completarForm.solucion}
-                  onChange={e => setCompletarForm(p => ({ ...p, solucion: e.target.value }))}
-                  placeholder="Describe qué se hizo para resolver la no conformidad..." className={tCls} />
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Al completar se guarda la fecha de cierre de hoy y el registro ya no se puede editar ni eliminar.
+              <p className="pn-seccion__ayuda" style={{ marginTop: -8 }}>
+                {ORIGEN_TXT[viewItem.tipo]} · {origenPill(viewItem)} · {fechaCorta(viewItem.fechaRegistro)}
               </p>
-            </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-border shrink-0">
-              <button onClick={() => setCompletarItem(null)}
-                className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => void handleCompletar()} disabled={guardando}
-                className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                {guardando ? "Guardando..." : "Completar"}
-              </button>
-            </div>
-            </motion.div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <div className="grid gap-4">
+                <SeccionFormulario titulo="Qué pasó">
+                  <DatosDetalle datos={[
+                    { etiqueta: "De dónde viene", valor: ORIGEN_TXT[viewItem.tipo] },
+                    { etiqueta: "Producto", valor: viewItem.nombre },
+                    { etiqueta: "Cantidad", valor: textoCantidad(viewItem) },
+                    { etiqueta: "Motivo", valor: viewItem.tipoNoConformidad },
+                    { etiqueta: "Registrado", valor: fechaCorta(viewItem.fechaRegistro) },
+                    { etiqueta: "Pedido u orden", valor: viewItem.ventaRef ? `Pedido #${viewItem.ventaRef}` : viewItem.ordenRef ?? "—" },
+                    { etiqueta: "Responsable", valor: viewItem.responsable || "—" },
+                  ]} />
+                  <div className="pn-dialogo__caja" style={{ marginTop: 16, marginBottom: 0 }}>
+                    <strong>Lo que se contó:</strong>
+                    {viewItem.descripcionProblema || "Sin descripción"}
+                  </div>
+                </SeccionFormulario>
+                <SeccionFormulario titulo="Cómo se solucionó">
+                  {viewItem.estado === "Pendiente" ? (
+                    <p className="pn-seccion__ayuda" style={{ margin: 0 }}>Pendiente: todavía falta escribir qué se hizo.</p>
+                  ) : (
+                    <DatosDetalle datos={[
+                      { etiqueta: "Solución", valor: SOLUCION_TXT[viewItem.tipoSolucion ?? ""] ?? (viewItem.tipoSolucion || "—") },
+                      { etiqueta: "Qué se hizo", valor: viewItem.solucion || "—" },
+                      { etiqueta: "Cerrado", valor: viewItem.fechaCierre ? fechaCorta(viewItem.fechaCierre) : "—" },
+                    ]} />
+                  )}
+                </SeccionFormulario>
+                <SeccionFormulario titulo="Foto">
+                  {viewItem.evidencia
+                    ? <img src={viewItem.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 16, border: "2px solid var(--borde-suave)" }} />
+                    : <p className="pn-seccion__ayuda" style={{ margin: 0 }}>Sin foto</p>}
+                </SeccionFormulario>
+              </div>
+              <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                {canEdit && viewItem.estado === "Pendiente" && (
+                  <BotonAccion variante="principal" onClick={() => { const it = viewItem; setViewItem(null); abrirCompletar(it); }}>Completar</BotonAccion>
+                )}
+                {canEdit && viewItem.estado === "Pendiente" && (
+                  <BotonAccion variante="normal" onClick={() => { const it = viewItem; setViewItem(null); abrirEditar(it); }}>Cambiar datos</BotonAccion>
+                )}
+                {canDelete && viewItem.estado === "Pendiente" && !viewItem.generadoPorSistema && (
+                  <BotonAccion variante="peligro" onClick={() => { const it = viewItem; setViewItem(null); setDeleteTarget(it); }}>Borrar</BotonAccion>
+                )}
+                <BotonAccion variante="oscuro" onClick={() => setViewItem(null)}>Cerrar</BotonAccion>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
+      {/* ── Reportar algo que salió mal / cambiar un reporte ── */}
+      {(showCreate || editItem) && (
+        <Dialog.Root open onOpenChange={(a) => { if (!a) { setShowCreate(false); setEditItem(null); } }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
+              <div className="pn-modal__cab">
+                <Dialog.Title className="pn-modal__titulo">{editItem ? `Cambiar el reporte N.° ${editItem.id}` : "Reportar algo que salió mal"}</Dialog.Title>
+              </div>
+              <div style={{ maxWidth: 900 }}>
+                {renderFormBody(false, editItem?.id, !!editItem)}
+                <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</BotonAccion>
+                  <BotonAccion variante="principal" disabled={guardando || subiendo} onClick={() => void (editItem ? handleEdit() : handleCreate())}>
+                    {guardando ? "Guardando…" : editItem ? "Guardar cambios" : "Guardar el reporte"}
+                  </BotonAccion>
+                </div>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
 
-      {/* ── MODAL: DELETE ── */}
-      <AnimatePresence>
-        {deleteTarget && (
-          <ConfirmDeleteModal
-            title="¿Eliminar registro?"
-            message={<>Se eliminará <strong>{deleteTarget.id}</strong> — <strong>{deleteTarget.nombre}</strong>. Esta acción no se puede deshacer.</>}
-            onConfirm={handleDelete}
-            onCancel={() => setDeleteTarget(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* ── Completar el reporte ── */}
+      {completarItem && (
+        <Dialog.Root open onOpenChange={(a) => { if (!a) setCompletarItem(null); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="pn-dialogo-fondo" />
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 720px)" }}>
+              <div className="pn-modal__cab">
+                <Dialog.Title className="pn-modal__titulo">Completar el reporte N.° {completarItem.id} · {completarItem.nombre}</Dialog.Title>
+              </div>
+              <div className="grid gap-5">
+                <SeccionFormulario titulo="¿Cómo se solucionó?">
+                  <OpcionesBotones
+                    etiqueta="Cómo se solucionó"
+                    valor={completarForm.tipoSolucion}
+                    onChange={(valor) => setCompletarForm((p) => ({ ...p, tipoSolucion: valor }))}
+                    opciones={TIPOS_SOLUCION.map((t) => ({
+                      valor: t,
+                      etiqueta: SOLUCION_TXT[t] ?? t,
+                      deshabilitada: t === "Reembolso al cliente" && !completarItem.ventaRef,
+                      titulo: t === "Reembolso al cliente" && !completarItem.ventaRef ? "Solo si el reporte viene de un pedido" : undefined,
+                    }))}
+                  />
+                  <div style={{ marginTop: 18 }}>
+                    <CampoFormulario etiqueta="¿Qué se hizo?" ayuda="Cuéntalo con tus palabras. Al guardar, el reporte queda cerrado y ya no se puede cambiar.">
+                      {(p) => (
+                        <textarea
+                          {...p}
+                          rows={4}
+                          value={completarForm.solucion}
+                          placeholder="Ej: Se hizo otra pizza y se entregó al cliente"
+                          onChange={(e) => setCompletarForm((prev) => ({ ...prev, solucion: e.target.value }))}
+                        />
+                      )}
+                    </CampoFormulario>
+                  </div>
+                </SeccionFormulario>
+                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                  <BotonAccion variante="normal" onClick={() => setCompletarItem(null)}>Todavía no</BotonAccion>
+                  <BotonAccion variante="principal" disabled={guardando} onClick={() => void handleCompletar()}>
+                    {guardando ? "Guardando…" : "Guardar y cerrar"}
+                  </BotonAccion>
+                </div>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+
+      {/* ── Borrar el reporte ── */}
+      <DialogoConfirmacion
+        abierto={!!deleteTarget}
+        onCambiarAbierto={(a) => { if (!a) setDeleteTarget(null); }}
+        titulo={`¿Borrar el reporte N.° ${deleteTarget?.id ?? ""}?`}
+        queVaAPasar={["Solo se pueden borrar reportes que faltan completar", "Lo que se había descontado de la bodega vuelve a sumarse", "Se borra para siempre"]}
+        textoAccion="Sí, borrar el reporte"
+        onConfirmar={() => void handleDelete()}
+      />
     </div>
   );
 }

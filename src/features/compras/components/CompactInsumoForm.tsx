@@ -26,22 +26,22 @@ export { UNIDADES } from "@/shared/utils/unidades";
 
 /** Labels de las guías: 13px en gris oscuro (los títulos de sección van en
  *  `seccionCls` de cada formulario). */
-const labelCls = "block text-[13px] font-medium text-foreground/70 mb-1.5";
+const labelCls = "block text-base font-medium text-foreground/70 mb-1.5";
 
 /** Mismo estilo que los inputs del formulario pero con 40px EXACTOS de alto:
  *  `px-3 py-2.5` con border da 42px, así que aquí se fija `h-10` (todos los
  *  controles de la fila miden lo mismo, incluido el botón). */
 const compactInputCls =
-  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full min-h-14 px-3 bg-muted border border-border rounded-xl text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const readOnlyInputCls =
-  "w-full h-10 max-md:min-h-11 px-3 bg-muted/40 border border-border rounded-xl text-sm text-muted-foreground cursor-default";
+  "w-full min-h-14 px-3 bg-muted/40 border border-border rounded-xl text-base text-muted-foreground cursor-default";
 /** Igual que `readOnlyInputCls` pero a la altura (36px) de la variante
  *  compacta: así TODOS los controles miden lo mismo en cada variante. */
 const readOnlyInputCompactaCls =
-  "w-full h-9 max-md:min-h-11 px-2.5 bg-muted/40 border border-border rounded-lg text-sm text-muted-foreground cursor-default";
+  "w-full min-h-14 px-2.5 bg-muted/40 border border-border rounded-lg text-base text-muted-foreground cursor-default";
 
 /** Select de Medida a la misma altura (40px) que el resto de la fila. */
-const unidadCampoCls = "bg-muted border border-border text-foreground h-10 max-md:min-h-11";
+const unidadCampoCls = "bg-muted border border-border text-foreground min-h-14";
 
 export interface InsumoSuggestion {
   id: string;
@@ -260,7 +260,7 @@ export function CompactInsumoForm({
   /** Punto 3: UNA sola altura de control por variante — 40px en la normal y
    *  36px en la compacta — aplicada a inputs, selects, caja read-only y
    *  botones, para que todos los campos queden en la misma línea base. */
-  const altoControl = esCompacta ? "h-9 max-md:min-h-11" : "h-10";
+  const altoControl = esCompacta ? "min-h-14" : "min-h-14";
   const [cantidadTexto, setCantidadTexto] = useState(String(cantidad));
   const [precioTexto, setPrecioTexto] = useState(precio ? String(precio) : "");
   const [ivaTexto, setIvaTexto] = useState(iva == null ? "" : String(iva));
@@ -673,10 +673,10 @@ export function CompactInsumoForm({
     ? "p-3 bg-muted/30 border border-border rounded-xl"
     : `${compacto ? "p-1.5" : "p-4"} bg-muted/40 border border-border rounded-xl`;
 
-  const tituloCls = `font-bold text-foreground m-0 ${esCompacta ? "text-xs" : "text-sm"}`;
+  const tituloCls = "text-xl font-bold text-foreground m-0";
 
-  const inputClsCompacta = "w-full h-9 max-md:min-h-11 px-2.5 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
-  const labelClsCompacta = "block text-[11px] font-semibold text-muted-foreground mb-1";
+  const inputClsCompacta = "w-full min-h-14 px-2.5 bg-muted border border-border rounded-lg text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  const labelClsCompacta = "block text-base font-semibold text-muted-foreground mb-1";
 
   return (
     <div ref={containerRef} className={contenedorCls}>
@@ -750,7 +750,7 @@ export function CompactInsumoForm({
                     // Tab desde el buscador pasa al siguiente campo y cierra.
                     tabIndex={-1}
                     onMouseDown={() => onCrearInsumo()}
-                    className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                    className="w-full text-left px-3 py-2.5 text-base font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Crear insumo {nombre.trim() && `“${nombre.trim()}”`}
@@ -758,7 +758,7 @@ export function CompactInsumoForm({
                 )}
                 {/* Bloque 2.2: si el texto no coincide con nada se avisa. */}
                 {suggestions.length === 0 && (
-                  <div className="px-3 py-2.5 text-xs text-muted-foreground text-center">
+                  <div className="px-3 py-2.5 text-base text-muted-foreground text-center">
                     Sin resultados
                   </div>
                 )}
@@ -770,7 +770,7 @@ export function CompactInsumoForm({
                     // Tab desde el buscador pasa al siguiente campo y cierra.
                     tabIndex={-1}
                     onMouseDown={() => onSelectSuggestion(ins)}
-                    className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0"
+                    className="w-full text-left px-3 py-2.5 text-base hover:bg-muted cursor-pointer border-b border-border last:border-0"
                   >
                     <p className="font-semibold text-foreground">{ins.nombre}</p>
                     {/* Contenido ("1.5 L") + medida + monto: para las bebidas
@@ -806,7 +806,7 @@ export function CompactInsumoForm({
                       // Tab desde el buscador pasa al siguiente campo y cierra.
                       tabIndex={-1}
                       onMouseDown={() => onCrearProducto()}
-                      className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
+                      className="w-full text-left px-3 py-2.5 text-base font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-t border-border"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Crear producto {`“${nombre.trim()}”`}
@@ -830,8 +830,8 @@ export function CompactInsumoForm({
                   title="La medida la define el ítem del catálogo"
                   className={
                     (esCompacta
-                      ? "w-full h-9 max-md:min-h-11 px-2.5 rounded-lg text-sm "
-                      : "w-full h-10 max-md:min-h-11 px-3 rounded-xl text-sm ") +
+                      ? "w-full min-h-14 px-2.5 rounded-lg text-base "
+                      : "w-full min-h-14 px-3 rounded-xl text-base ") +
                     "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                   }
                 >
@@ -852,9 +852,9 @@ export function CompactInsumoForm({
                   }
                   fieldClassName={
                     readOnly
-                      ? "bg-muted/40 border border-border text-foreground h-10 max-md:min-h-11"
+                      ? "bg-muted/40 border border-border text-foreground min-h-14"
                       : esCompacta
-                        ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
+                        ? "bg-muted border border-border text-foreground min-h-14 rounded-lg"
                         : unidadCampoCls
                   }
                 />
@@ -933,8 +933,8 @@ export function CompactInsumoForm({
                     title="La medida la define el ítem del catálogo"
                     className={
                       (esCompacta
-                        ? "w-full h-9 max-md:min-h-11 px-2.5 rounded-lg text-sm "
-                        : "w-full h-10 max-md:min-h-11 px-3 rounded-xl text-sm ") +
+                        ? "w-full min-h-14 px-2.5 rounded-lg text-base "
+                        : "w-full min-h-14 px-3 rounded-xl text-base ") +
                       "bg-muted/40 border border-border text-muted-foreground flex items-center cursor-default select-none"
                     }
                   >
@@ -953,7 +953,7 @@ export function CompactInsumoForm({
                     unidades={opcionesMedidaContenido}
                     fieldClassName={
                       esCompacta
-                        ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
+                        ? "bg-muted border border-border text-foreground min-h-14 rounded-lg"
                         : unidadCampoCls
                     }
                   />
@@ -984,7 +984,7 @@ export function CompactInsumoForm({
         {/* Fila 3 — Tipo de IVA · IVA % · Precio de venta (sólo producto) y
             los botones alineados abajo a la derecha. */}
         <div className="flex flex-wrap items-end gap-2 mt-2">
-          <div className={`${esCompacta ? "w-[160px] flex-none" : "w-[180px]"}`}>
+          <div className="w-full sm:w-56">
             <label className={esCompacta ? labelClsCompacta : labelCls}>Tipo de IVA</label>
             <UnidadSelect
               value={modoIvaActual}
@@ -997,10 +997,11 @@ export function CompactInsumoForm({
               unidades={opcionesModoIva}
               fieldClassName={
                 esCompacta
-                  ? "bg-muted border border-border text-foreground h-9 max-md:min-h-11 rounded-lg"
+                  ? "bg-muted border border-border text-foreground min-h-14 rounded-lg"
                   : unidadCampoCls
               }
             />
+            <p className="mt-1 text-base text-muted-foreground">{ayudaModoIva(modoIvaActual)}</p>
           </div>
 
           {modoIvaActual !== "exento" && (
@@ -1021,7 +1022,7 @@ export function CompactInsumoForm({
                   disabled={bloqueado}
                   className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-base text-muted-foreground">%</span>
               </div>
               {/* Punto 4: se eliminaron los atajos rápidos [0, 5, 19]; queda
                   el input con su sufijo "%", su validación (0–100) y el valor
@@ -1060,7 +1061,7 @@ export function CompactInsumoForm({
               type="button"
               onClick={() => void agregarValidado()}
               disabled={bloqueado || guardandoPresentacion}
-              className={`inline-flex ${altoControl} items-center justify-center gap-1.5 px-3 bg-primary text-primary-foreground text-xs font-semibold rounded-lg transition-colors ${
+              className={`inline-flex ${altoControl} items-center justify-center gap-1.5 px-3 bg-primary text-primary-foreground text-base font-semibold rounded-lg transition-colors ${
                 bloqueado || guardandoPresentacion ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-primary/90"
               }`}
             >
@@ -1071,7 +1072,7 @@ export function CompactInsumoForm({
               <button
                 type="button"
                 onClick={onCancelar}
-                className={`inline-flex ${altoControl} items-center justify-center px-3 border border-border rounded-lg text-xs font-semibold text-foreground hover:bg-muted cursor-pointer`}
+                className={`inline-flex ${altoControl} items-center justify-center px-3 border border-border rounded-lg text-base font-semibold text-foreground hover:bg-muted cursor-pointer`}
               >
                 Cancelar
               </button>
@@ -1087,19 +1088,19 @@ export function CompactInsumoForm({
             aparecer. */}
         <div className="min-h-[16px] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           {errorCantidad && (
-            <p className="text-[11px] font-medium text-destructive">{errorCantidad}</p>
+            <p className="text-base font-medium text-destructive">{errorCantidad}</p>
           )}
           {errorPrecio && (
-            <p className="text-[11px] font-medium text-destructive">{errorPrecio}</p>
+            <p className="text-base font-medium text-destructive">{errorPrecio}</p>
           )}
           {errorIva && (
-            <p className="text-[11px] font-medium text-destructive">{errorIva}</p>
+            <p className="text-base font-medium text-destructive">{errorIva}</p>
           )}
           {errorFactor && (
-            <p className="text-[11px] font-medium text-destructive">{errorFactor}</p>
+            <p className="text-base font-medium text-destructive">{errorFactor}</p>
           )}
           {errorPrecioVenta && (
-            <p className="text-[11px] font-medium text-destructive">{errorPrecioVenta}</p>
+            <p className="text-base font-medium text-destructive">{errorPrecioVenta}</p>
           )}
         </div>
 
@@ -1108,7 +1109,7 @@ export function CompactInsumoForm({
             contra el que se valida el precio de venta (sólo en productos,
             donde ese campo existe). */}
         {mostrarPrecioVenta && costoConIva != null && (
-          <p className="text-[11px] text-muted-foreground mt-1.5">
+          <p className="text-base text-muted-foreground mt-1.5">
             Costo por unidad: {fmtCompactCOP(costoConIva)}
           </p>
         )}
@@ -1116,13 +1117,13 @@ export function CompactInsumoForm({
         {/* Ayuda de la línea: qué entra al inventario y a qué costo por
             unidad base ("= 20 kg al inventario · costo $2.500/kg"). */}
         {ayudaLinea && (
-          <p className="text-[11px] text-muted-foreground mt-1.5">{ayudaLinea}</p>
+          <p className="text-base text-muted-foreground mt-1.5">{ayudaLinea}</p>
         )}
 
         {/* Peso de medida del insumo elegido (si lo tiene): dato
             informativo de la línea, en el mismo estilo de la ayuda. */}
         {pesoMedida != null && !(medidaContenidoBloqueada && requiereContenido && tienePesoMedida) && (
-          <p className="text-[11px] text-muted-foreground mt-1.5">
+          <p className="text-base text-muted-foreground mt-1.5">
             Peso de medida: {formatoCantidad.format(pesoMedida)} {unidadBase ?? unidad}
           </p>
         )}

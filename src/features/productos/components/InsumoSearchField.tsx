@@ -31,7 +31,7 @@ export function resolverInsumo(insumos: Insumo[], texto: string): Insumo | null 
 // Estilo de los inputs de Ficha Técnica (rounded-xl / text-sm), que es el
 // lenguaje visual del formulario donde se inserta este buscador.
 const inputCls =
-  "w-full px-3 py-2 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-4 min-h-[56px] bg-white rounded-[14px] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 export interface InsumoSearchFieldProps {
   insumos: Insumo[];
@@ -96,12 +96,12 @@ export function InsumoSearchField({
 
   return (
     <div ref={contenedorRef} className="relative flex-[2] min-w-[180px]">
-      <label className="block text-xs font-semibold text-muted-foreground mb-1">
+      <label className="pn-etiqueta">
         {label}
       </label>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
 
         <input
           role="combobox"
@@ -140,7 +140,7 @@ export function InsumoSearchField({
           }}
           placeholder={placeholder}
           autoComplete="off"
-          className={`${inputCls} pl-8`}
+          className={`${inputCls} pl-10`}
         />
       </div>
 
@@ -168,7 +168,7 @@ export function InsumoSearchField({
                   e.preventDefault();
                   elegir(ins);
                 }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-muted cursor-pointer border-b border-border last:border-0 ${
+                className={`w-full text-left px-4 py-3 min-h-[48px] text-lg hover:bg-muted cursor-pointer border-b border-border last:border-0 ${
                   index === indiceActivo ? "bg-muted" : ""
                 }`}
               >
@@ -177,7 +177,7 @@ export function InsumoSearchField({
               </button>
             ))
           ) : (
-            <div className="px-3 py-2 text-sm italic text-muted-foreground">
+            <div className="px-4 py-3 text-lg italic text-muted-foreground">
               {mensajeSinResultados}
             </div>
           )}

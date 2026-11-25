@@ -381,17 +381,17 @@ function InsumosFichaTable({
                           type="button"
                           title="Editar"
                           onClick={() => onEdit(idx)}
-                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                          className="pn-cambiar cursor-pointer"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-4 h-4" /> Cambiar
                         </button>
                         <button
                           type="button"
                           title="Eliminar"
                           onClick={() => onRemove(idx)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 cursor-pointer transition-colors"
+                          className="pn-quitar cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" /> Quitar
                         </button>
                       </div>
                     </td>
@@ -665,7 +665,7 @@ export function FichaTecnicaEditor({
                 : "block text-xs font-semibold text-muted-foreground mb-0.5"
             }
           >
-            {esInsumo ? "Tiempo (min) *" : "Tiempo de preparación (min)"}
+            {esInsumo ? "¿Cuánto se demora una tanda? (minutos)" : "Tiempo de preparación (min)"}
           </label>
           {/* Como todos los numéricos del sistema (punto B1): el 0 se muestra
               vacío con placeholder "0", en producto y en insumo. */}
@@ -685,7 +685,7 @@ export function FichaTecnicaEditor({
         {esInsumo ? (
           <div className="flex min-w-0 flex-col">
             <label className="flex min-h-[2.5rem] items-end text-xs font-semibold text-muted-foreground mb-2">
-              {`Cantidad a hacer${presentacionCantidad ? ` (× ${presentacionCantidad.etiquetaContenido})` : unidadCantidad ? ` (${unidadCantidad})` : ""} *`}
+              {`¿Cuánto sale de cada tanda?${presentacionCantidad ? ` (× ${presentacionCantidad.etiquetaContenido})` : unidadCantidad ? ` (${unidadCantidad})` : ""}`}
             </label>
             {/* Vacío = cantidad sin escribir (punto B1): al consumirlo los
                 demás módulos usan `rendimientoDe`, que cae en 1 si es 0. */}
@@ -795,7 +795,7 @@ export function FichaTecnicaEditor({
         {esInsumo ? (
           <>
             <label className="shrink-0 block text-xs font-semibold text-muted-foreground">
-              Insumos a usar *
+              ¿Qué insumos lleva la receta?
             </label>
             <div className="relative z-20 shrink-0">
               <InsumoSearchField
@@ -853,9 +853,9 @@ export function FichaTecnicaEditor({
                 onClick={addInsumo}
                 title="Agregar insumo"
                 disabled={!puedeAgregarInsumo}
-                className="h-11 w-11 shrink-0 inline-flex items-center justify-center bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+                className="h-14 shrink-0 inline-flex items-center justify-center gap-2 px-4 bg-primary text-white rounded-xl text-base font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-5 h-5" /> Agregar otro insumo
               </button>
             </div>
             {resumenPresentacion && (
@@ -884,7 +884,7 @@ export function FichaTecnicaEditor({
               </div>
             ) : (
               <div className="mt-4 flex min-h-16 items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-3 text-xs italic text-muted-foreground">
-                Sin insumos agregados
+                Todavía no hay insumos en la receta
               </div>
             )}
           </>

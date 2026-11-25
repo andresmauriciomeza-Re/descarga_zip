@@ -42,7 +42,7 @@ import { TipoPersonaSelector } from "@/features/compras/components/TipoPersonaSe
 import {
   Plus, Search, Eye, Pencil, Trash2, X, ArrowLeft,
   AlertCircle, Send, Ban, Check, ClipboardCheck,
-  AlertTriangle, CheckCircle2, Lock,
+  AlertTriangle, CheckCircle2, Lock, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
@@ -66,8 +66,22 @@ import {
 } from "@/shared/utils/presentacion";
 import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons, CLASE_BASE, CLASE_HOVER } from "@/shared/components/ActionIcons";
+import { ActionIcons } from "@/shared/components/ActionIcons";
 import { Paginador } from "@/shared/components/Paginador";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { Historial } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 
 const SERIF = "var(--font-titulo)";
 
@@ -300,8 +314,6 @@ const iPaginaCls =
   "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 /** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
  *  que el formulario Nuevo Proveedor. */
-const seccionCls =
-  "text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground pb-1.5 border-b border-border";
 
 // ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -1239,22 +1251,22 @@ export function OrdenModal({
                   <button
                     onClick={salir}
                     title="Volver"
-                    className="shrink-0 p-2 max-md:p-3.5 -ml-1 max-md:-ml-2.5 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground transition-colors"
+                    className="pn-boton pn-boton--normal shrink-0"
                   >
-                    <ArrowLeft className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Volver
                   </button>
                 )}
                 <div className="min-w-0">
                   <h3
-                    className={`${isPage ? "text-lg" : "text-base"} font-bold text-foreground`}
+                    className={`${isPage ? "text-3xl" : "text-2xl"} font-bold text-foreground`}
                     style={{ fontFamily: SERIF }}
                   >
                     {mode === "create"
-                      ? (isCompra ? "Nueva Compra" : "Nueva Orden de Compra")
-                      : mode === "edit" ? `Editar OC ${orden?.id}` : `Orden ${orden?.id}`}
+                      ? (isCompra ? "Nueva Compra" : "Hacer un pedido")
+                      : mode === "edit" ? `Cambiar el pedido ${orden?.id}` : `Orden ${orden?.id}`}
                   </h3>
                   {subtitulo && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
+                    <p className="text-base text-muted-foreground mt-0.5 truncate">{subtitulo}</p>
                   )}
                 </div>
               </div>
@@ -1262,7 +1274,7 @@ export function OrdenModal({
                 {isView && orden && <EstadoBadge e={orden.estado} />}
                 {!isPage && (
                   <button onClick={salir} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground">
-                    <X className="w-4 h-4" />
+                    <X className="w-4 h-4" aria-hidden="true" /> Cerrar
                   </button>
                 )}
               </div>
@@ -1286,19 +1298,19 @@ export function OrdenModal({
               >
               {/* Status banners */}
               {isView && orden?.estado === "Completado" && orden.recepcion && (
-                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-emerald-50 border border-emerald-200 rounded-xl text-base text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   Recepción guardada el <strong className="ml-1">{orden.recepcion.fechaRecepcion}</strong>. Esta orden ya no es editable.
                 </div>
               )}
               {isView && orden?.estado === "Enviado" && (
-                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-blue-50 border border-blue-200 rounded-xl text-base text-blue-800">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   Orden enviada al proveedor. Pendiente de Recepción.
                 </div>
               )}
               {isView && orden?.estado === "Anulado" && (
-                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+                <div className="flex items-center gap-2 px-4 py-3 max-md:min-h-11 bg-red-50 border border-red-200 rounded-xl text-base text-red-800">
                   <Ban className="w-4 h-4 shrink-0" />
                   Esta orden ha sido anulada.
                 </div>
@@ -1308,7 +1320,7 @@ export function OrdenModal({
                   pantalla completa; en el modal el `<section>` solo agrupa
                   para mantener el mismo espaciado de antes). */}
               <section className={`flex flex-col ${isPage ? "gap-2 shrink-0" : "gap-5"}`}>
-                {isPage && <p className={seccionCls}>Datos de la orden</p>}
+                {!isView && <h2 className="text-xl font-bold">1 · ¿A quién le pedimos?</h2>}
 
                 {/* Detalle (vista): 3 columnas. Creación en pantalla completa:
                     Fila 1: Proveedor * (ancho completo)
@@ -1326,7 +1338,7 @@ export function OrdenModal({
                   <div className="relative col-span-2">
                     <label className={labelCls}>Proveedor {!isView && <span className="text-red-500">*</span>}</label>
                     {isView
-                      ? <p className="text-sm font-semibold text-foreground py-2">{form.proveedor}</p>
+                      ? <p className="text-base font-semibold text-foreground py-2">{form.proveedor}</p>
                       : (
                         <div className="relative" ref={provRef}>
                           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -1340,7 +1352,7 @@ export function OrdenModal({
                             onFocus={() => setShowProvSug(true)}
                             onBlur={() => marcarTocado("proveedor")}
                             placeholder="Buscar por nombre, NIT, asesor o email..."
-                            className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} pl-10`}
+                            className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} min-h-14 pl-10 text-lg`}
                             aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
                           />
                           {/* Punto 6: el desplegable va por encima de todo el
@@ -1352,10 +1364,10 @@ export function OrdenModal({
                               <button
                                 type="button"
                                 onMouseDown={e => { e.preventDefault(); setShowProvSug(false); setShowNuevoProv(true); }}
-                                className="w-full text-left px-3 py-2.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
+                                className="w-full text-left px-3 py-2.5 text-base font-semibold text-primary hover:bg-primary/10 cursor-pointer inline-flex items-center gap-2 border-b border-border"
                               >
                                 <Plus className="w-3.5 h-3.5" />
-                                Crear proveedor {provQuery.trim() && `"${provQuery.trim()}"`}
+                                Nuevo proveedor {provQuery.trim() && `"${provQuery.trim()}"`}
                               </button>
                               <hr className="my-0.5 border-border" />
                               {/* Resultados - máximo 3 */}
@@ -1364,7 +1376,7 @@ export function OrdenModal({
                                   key={p.nit}
                                   type="button"
                                   onMouseDown={() => selectProv(p)}
-                                  className={`w-full text-left px-3 py-2.5 text-xs hover:bg-muted cursor-pointer border-b border-border last:border-0 ${form.proveedor === p.nombre ? "bg-muted/60" : ""}`}
+                                  className={`w-full text-left px-3 py-2.5 text-base hover:bg-muted cursor-pointer border-b border-border last:border-0 ${form.proveedor === p.nombre ? "bg-muted/60" : ""}`}
                                 >
                                   <p className="font-semibold text-foreground flex items-center gap-1.5">
                                     {p.nombre}
@@ -1377,12 +1389,12 @@ export function OrdenModal({
                                 </button>
                               ))}
                               {provSugs.length === 0 && (
-                                <div className="px-3 py-2.5 text-xs text-muted-foreground text-center border-b border-border">
+                                <div className="px-3 py-2.5 text-base text-muted-foreground text-center border-b border-border">
                                   Sin resultados
                                 </div>
                               )}
                               {provSugs.length > 3 && (
-                                <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                                <div className="px-3 py-2 text-base text-muted-foreground text-center">
                                   +{provSugs.length - 3} más...
                                 </div>
                               )}
@@ -1391,7 +1403,7 @@ export function OrdenModal({
                         </div>
                       )}
                     {!isView && (tocado.proveedor || intentoGuardar) && errorProveedor && (
-                      <p className={isPage ? "absolute left-0 top-full text-xs text-red-500" : "text-xs text-red-500 mt-1 ml-0.5"}>{errorProveedor}</p>
+                      <p className={isPage ? "absolute left-0 top-full text-base text-red-500" : "text-base text-red-500 mt-1 ml-0.5"}>{errorProveedor}</p>
                     )}
                   </div>
 
@@ -1409,10 +1421,10 @@ export function OrdenModal({
                           aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
                         />
                         {(tocado.fecha || intentoGuardar) && errorFecha && (
-                          <p className="absolute left-0 top-full text-xs text-red-500">{errorFecha}</p>
+                          <p className="absolute left-0 top-full text-base text-red-500">{errorFecha}</p>
                         )}
                         {/* Fecha con hora en gris pequeño debajo del input */}
-                        <p className="text-[11px] text-muted-foreground mt-1">
+                        <p className="text-base text-muted-foreground mt-1">
                           {/* Fecha y hora real en zona America/Bogota */}
                           {formatearFechaHora(orden?.historialEstados?.[0]?.fechaHora ?? orden?.fecha ?? new Date().toISOString())}
                         </p>
@@ -1431,7 +1443,7 @@ export function OrdenModal({
                           disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
-                          <p className="text-[11px] text-muted-foreground mt-1">
+                          <p className="text-base text-muted-foreground mt-1">
                             {estadoHistorial[estadoHistorial.length - 1].fecha}
                           </p>
                         )}
@@ -1453,7 +1465,7 @@ export function OrdenModal({
                           aria-invalid={!!((tocado.fecha || intentoGuardar) && errorFecha)}
                         />
                         {(tocado.fecha || intentoGuardar) && errorFecha && (
-                          <p className="text-xs text-red-500 mt-1 ml-0.5">{errorFecha}</p>
+                          <p className="text-base text-red-500 mt-1 ml-0.5">{errorFecha}</p>
                         )}
                       </div>
                       <div onMouseDown={() => setShowProvSug(false)}>
@@ -1472,7 +1484,7 @@ export function OrdenModal({
                           disabled={mode === "create"}
                         />
                         {estadoHistorial.length > 0 && (
-                          <p className="text-[11px] text-muted-foreground mt-1">
+                          <p className="text-base text-muted-foreground mt-1">
                             {estadoHistorial[estadoHistorial.length - 1].fecha}
                           </p>
                         )}
@@ -1483,7 +1495,7 @@ export function OrdenModal({
                               // Mostrar historial completo
                               alert(estadoHistorial.map(h => `${h.estado} - ${h.fecha}`).join('\n'));
                             }}
-                            className="text-[11px] text-primary hover:underline mt-0.5"
+                            className="text-base text-primary hover:underline mt-0.5"
                           >
                             Ver historial
                           </button>
@@ -1501,11 +1513,11 @@ export function OrdenModal({
                 <section className={`flex flex-col ${isPage ? "gap-3 shrink-0" : "gap-5"}`}>
                   <CompactInsumoForm
                     containerRef={sugRef}
-                    titulo="Agregar ítem"
+                    titulo="2 · ¿Qué le pedimos?"
                     headerExtra={
                       isPage ? (
                       <div className="flex items-center gap-2">
-                        <label className="block text-[11px] font-semibold text-muted-foreground">
+                        <label className="block text-base font-semibold text-muted-foreground">
                           Tipo
                         </label>
                         <SegmentadoButtons
@@ -1634,7 +1646,7 @@ export function OrdenModal({
                       setShowNuevoProducto(true);
                     }}
                     compacto={isPage}
-                    buttonLabel={editando ? "Guardar cambios" : "Agregar"}
+                    buttonLabel={editando ? "Guardar cambios" : "+ Agregar otro insumo o producto"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Punto 3.3: el atajo "+ Crear insumo/producto" según tipo.
@@ -1649,7 +1661,7 @@ export function OrdenModal({
                     campoExtra={
                       isPage ? undefined : (
                       <div className="min-w-[118px]">
-                        <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                        <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>
                         <SegmentadoButtons
@@ -1677,7 +1689,7 @@ export function OrdenModal({
                       la fila (solo empuja la tabla al aparecer); en el modal,
                       con el mismo margen de 20px de antes. */}
                   {!isView && errorItems && (algunoTocado || intentoGuardar) && (
-                    <p className={`text-xs text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
+                    <p className={`text-base text-red-500 ${isPage ? "mt-1 ml-0.5" : "mt-5 ml-0.5"}`}>
                       {errorItems}
                     </p>
                   )}
@@ -1699,10 +1711,10 @@ export function OrdenModal({
                 {isPage && !isView && (
                   <div className="shrink-0">
                     <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
-                      <p className="text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground">
+                      <p className="text-base leading-none font-bold uppercase tracking-widest text-muted-foreground">
                         Ítems de la orden
                       </p>
-                      <span className="text-xs font-medium text-muted-foreground">
+                      <span className="text-base font-medium text-muted-foreground">
                         {form.items.length} {form.items.length === 1 ? "ítem" : "ítems"}
                       </span>
                     </div>
@@ -1715,10 +1727,10 @@ export function OrdenModal({
                   {orden?.recepcion && (
                     <div className="bg-emerald-50/40 rounded-xl border border-emerald-200 overflow-hidden">
                       <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
-                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
+                        <p className="text-base font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
                       </div>
-                      <table className="w-full text-sm">
-                        <thead className="text-xs text-muted-foreground uppercase tracking-wider">
+                      <table className="w-full text-base">
+                        <thead className="text-base text-muted-foreground uppercase tracking-wider">
                           <tr>
                             {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
                               <th key={h} className="px-3 py-2 text-left font-semibold">{h}</th>
@@ -1731,14 +1743,14 @@ export function OrdenModal({
                               <td className="px-3 py-2 font-medium text-foreground">
                                 {item.nombre}
                                 {item.cantidadSolicitada === 0 && (
-                                  <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
+                                  <span className="ml-2 text-base font-semibold px-1.5 py-0.5 bg-violet-100 text-violet-700 rounded-full">
                                     No solicitado
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-muted-foreground text-xs">{item.cantidadSolicitada || "—"}</td>
+                              <td className="px-3 py-2 text-muted-foreground text-base">{item.cantidadSolicitada || "—"}</td>
                               <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
-                              <td className="px-3 py-2 text-xs text-muted-foreground">{item.unidad}</td>
+                              <td className="px-3 py-2 text-base text-muted-foreground">{item.unidad}</td>
                               <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
                               <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
                             </tr>
@@ -1746,10 +1758,10 @@ export function OrdenModal({
                         </tbody>
                         <tfoot className="bg-emerald-100/60 border-t border-emerald-200">
                           <tr>
-                            <td colSpan={5} className="px-3 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
+                            <td colSpan={5} className="px-3 py-2 text-base font-bold text-muted-foreground text-right uppercase">
                               Total recibido
                             </td>
-                            <td className="px-3 py-2 text-sm font-bold text-foreground">
+                            <td className="px-3 py-2 text-base font-bold text-foreground">
                               {fmtCOP([...orden.recepcion.items, ...orden.recepcion.itemsExtra].reduce(
                                 (s, i) => s + i.cantidadRecibida * i.costoUnitario, 0
                               ))}
@@ -1793,27 +1805,27 @@ export function OrdenModal({
                     className={isPage ? "flex-1 min-h-0" : ""}
                     // Usa las mismas columnas que Nueva Compra; la orden admite
                     // insumos y productos.
-                    titulo="Ítems de la orden"
+                    titulo="Lo que vamos a pedir"
                     textoVacioPagina="Aún no has agregado ítems"
                   />
 
                   {/* Acciones: en pantalla completa van al final de ESTA columna
                       (siempre visibles); en el modal siguen en el pie general. */}
                   {isPage && (
-                    <div className="flex gap-3 shrink-0 pt-1">
+                    <div className="flex flex-wrap gap-3 shrink-0 pt-1">
                       <button
                         onClick={salir}
-                        className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                        className="pn-boton pn-boton--normal flex-1"
                       >
                         Cancelar
                       </button>
                       <button
                         onClick={handleGuardar}
                         disabled={!formValido || guardando}
-                        className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                        className="pn-boton pn-boton--principal flex-1"
                       >
                         <Check className="w-4 h-4" />
-                        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
+                        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
                       </button>
                     </div>
                   )}
@@ -1828,17 +1840,17 @@ export function OrdenModal({
               <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
                 <button
                   onClick={salir}
-                  className="flex-1 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  className="pn-boton pn-boton--normal flex-1"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleGuardar}
                   disabled={!formValido || guardando}
-                  className="flex-1 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 transition-all inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                  className="pn-boton pn-boton--principal flex-1"
                 >
                   <Check className="w-4 h-4" />
-                  {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : "Guardar"}
+                  {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
                 </button>
               </div>
             )}
@@ -2099,11 +2111,14 @@ export function OrdenCompraScreen({
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
+  /** Botones de filtro de la lista: todas, por llegar (Enviado), sin enviar (Borrador)… */
+  const [chipEstado, setChipEstado] = useState("todas");
 
   const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
 
   const filtered = useMemo(() =>
     ordenarPorIdDescendente(ordenes.filter(o => {
+      if (chipEstado !== "todas" && claveEstado(o.estado) !== chipEstado) return false;
       const q = search.toLowerCase().trim();
       if (!q) return true;
       const facturas = getFacturas(o.id);
@@ -2118,11 +2133,11 @@ export function OrdenCompraScreen({
         || (o.estado ?? "").toLowerCase().includes(q)
         || (o.fecha ?? "").toLowerCase().includes(q);
     }), (orden) => orden.id),
-    [ordenes, search, gestiones, proveedores]);
+    [ordenes, search, gestiones, proveedores, chipEstado]);
 
   // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
   // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
 
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
   const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
@@ -2213,9 +2228,9 @@ export function OrdenCompraScreen({
     }
   };
 
-  const handleAnularOrden = async (o: OrdenCompra) => {
+  const handleAnularOrden = async (o: OrdenCompra, motivoDelDialogo?: string) => {
     if (anulandoOrden) return;
-    const motivo = (motivoAnulacion ?? "").trim();
+    const motivo = (motivoDelDialogo ?? motivoAnulacion ?? "").trim();
     if (!motivo) {
       toast.error("Debes escribir el motivo de la anulación");
       return;
@@ -2394,355 +2409,147 @@ export function OrdenCompraScreen({
     });
   };
 
-  return (
-    <div className="px-4 md:px-6 pt-3 pb-2 h-full min-h-0 flex flex-col overflow-x-hidden overflow-y-auto">
-      <div className="flex items-center justify-between gap-4 mb-3 shrink-0 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Órdenes de Compra
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Crea y gestiona las Órdenes de compra a proveedores
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canExportExcel && <BotonDescargarExcel onClick={handleDownload} />}
-          {canCreate && (
-            <button
-              onClick={(e) => {
-                onNuevaOrden();
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Crear Orden
-            </button>
-          )}
-        </div>
-      </div>
+  const numeroOrden = (id: string) => id.replace(/^\D+-?0*/, "") || id;
+  const tonoEstado: Record<EstadoOrden, TonoPill> = { Borrador: "gris", Enviado: "azul", Completado: "verde", Anulado: "rojo" };
+  const resumenPedido = (o: OrdenCompra) => {
+    const nombres = o.items.map((i) => i.nombre);
+    return nombres.length <= 3 ? nombres.join(", ") : `${nombres.slice(0, 3).join(", ")} y ${nombres.length - 3} más`;
+  };
+  const dialogoEstado = estadoConfirm;
+  const ordenAnular = anularConfirm;
 
-      <div className="relative mb-3 max-w-sm shrink-0">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <input
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Orden de Compra"
+        descripcion="Los pedidos que La Sirena le hace a sus proveedores y si ya llegó la mercancía"
+        acciones={
+          <>
+            {canExportExcel && <BotonAccion icono={Download} onClick={handleDownload}>Descargar en Excel</BotonAccion>}
+            {canCreate && (
+              <BotonAccion variante="principal" icono={Plus} onClick={() => { onNuevaOrden(); }}>
+                Hacer un pedido a un proveedor
+              </BotonAccion>
+            )}
+          </>
+        }
+      />
+
+      {/* Cómo se lee el estado de una orden */}
+      <ol className="pn-pasos" aria-label="Estados de una orden">
+        <li><strong>1 · Borrador:</strong> lo estás armando</li>
+        <li aria-hidden="true">›</li>
+        <li><strong>2 · Enviado:</strong> el proveedor ya lo tiene</li>
+        <li aria-hidden="true">›</li>
+        <li><strong>3 · Completado:</strong> llegó todo con su factura</li>
+      </ol>
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar una orden"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por Nº orden, proveedor, NIT, factura o estado…"
-          className="w-full pl-10 pr-4 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder="Escribe el número, el proveedor, el NIT o la factura"
+        />
+        <FiltrosChips
+          valor={chipEstado}
+          onChange={v => { setChipEstado(v); setPage(1); }}
+          opciones={[
+            { valor: "todas", etiqueta: "Todas" },
+            { valor: "enviado", etiqueta: "Por llegar", contador: ordenes.filter(o => o.estado === "Enviado").length },
+            { valor: "borrador", etiqueta: "Sin enviar", contador: ordenes.filter(o => o.estado === "Borrador").length },
+            { valor: "completado", etiqueta: "Completadas" },
+            { valor: "anulado", etiqueta: "Anuladas" },
+          ]}
         />
       </div>
 
-      {/* Punto 2.5: la card medía todo el alto restante y se estiraba hasta el
-          fondo (hueco vacío bajo la última fila). Ahora mide su contenido y el
-          paginador queda pegado debajo. La tabla NO hace scroll vertical: se
-          pagina en filas fijas de 5; sólo queda scroll horizontal en tablet y
-          scroll vertical en móvil (tarjetas). */}
-      {/* Carga desde la API y su error con "Reintentar": nunca datos de
-          ejemplo cuando falla. */}
       {cargando ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
-          Cargando órdenes de compra…
-        </div>
+        <p role="status" className="pn-nota">Cargando las órdenes…</p>
       ) : errorCarga ? (
-        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground shrink-0">
-          <p className="font-semibold text-foreground">{errorCarga}</p>
-          {onReintentar && (
-            <button
-              type="button"
-              onClick={onReintentar}
-              className="mt-3 px-4 py-2 max-md:min-h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-red-700 transition-colors cursor-pointer"
-            >
-              Reintentar
-            </button>
-          )}
-        </div>
+        <AvisoBanner
+          titulo="No pudimos cargar las órdenes"
+          boton={onReintentar ? <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion> : undefined}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paged.length === 0 ? (
+        <VacioEstado icono={ClipboardCheck} titulo="No encontramos ninguna orden">
+          Revisa cómo lo escribiste, cambia el filtro o haz un pedido nuevo.
+        </VacioEstado>
       ) : (
-      <div className="flex flex-col bg-card border border-border rounded-2xl shrink-0">
-        <div>
-          <table className="hidden md:table w-full table-fixed">
-            <colgroup>
-              <col style={{ width: "calc(8.7% - 23.4px)" }} />
-              <col style={{ width: "calc(23.2% - 62.4px)" }} />
-              <col style={{ width: "calc(13% - 35px)" }} />
-              <col style={{ width: "calc(15.9% - 42.8px)" }} />
-              <col style={{ width: "calc(13% - 35px)" }} />
-              <col style={{ width: "calc(13% - 35px)" }} />
-              <col style={{ width: "calc(13.2% - 35.4px)" }} />
-              <col style={{ width: "125px" }} />
-              <col style={{ width: "144px" }} />
-            </colgroup>
-            <thead className="bg-muted text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">N° Orden</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Proveedor</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Fecha</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">N° Factura</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Total</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Facturado</th>
-                <th className="px-1 py-3 text-left font-semibold leading-tight [overflow-wrap:anywhere]">Por facturar</th>
-                <th className="px-2 py-3 text-left font-semibold leading-tight">Estado</th>
-                <th className="px-2 py-3 text-left font-semibold leading-tight">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0
-                ? (
-                  <tr>
-                    <td colSpan={9} className="px-3 py-14 text-center text-muted-foreground">
-                      <p className="text-4xl mb-3">📋</p>
-                      <p className="font-semibold">No se encontraron órdenes</p>
-                    </td>
-                  </tr>
-                )
-                : paged.map(o => {
-                  const facturas = getFacturas(o.id);
-                  const totalOrden = o.total ?? calcTotal(o.items);
-                  const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
-                  const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
-                    // Find provider NIT
-                    const prov = proveedores.find(p => p.nombre === o.proveedor);
-                    const nit = o.proveedorNit || prov?.nit || "";
-                    return (
-                      <tr key={o.id} className="group hover:bg-muted/20 transition-colors">
-                        <td className="px-1 py-2.5">
-                          <p className="text-sm font-mono font-semibold text-foreground break-all">{o.id}</p>
-                        </td>
-                         <td className="px-1 py-2.5 overflow-hidden">
-                           <p className="text-sm text-foreground [overflow-wrap:anywhere]" title={o.proveedor}>{o.proveedor}</p>
-                           {nit && <p className="text-[11px] text-muted-foreground font-mono truncate" title={`NIT ${nit}`}>NIT {nit}</p>}
-                         </td>
-                         <td className="px-1 py-2.5 text-xs text-muted-foreground [overflow-wrap:anywhere]">{o.fecha}</td>
-                       <td className="px-1 py-2.5 text-xs overflow-hidden">
-                         {facturas.length > 0 ? (
-                           <>
-                             {facturas.map((f) => (
-                               <span key={f.id} className="block font-mono font-semibold text-emerald-700 truncate" title={f.numeroFactura}>
-                                 {f.numeroFactura}
-                               </span>
-                             ))}
-                           </>
-                         ) : (
-                           (o.facturas ?? []).length > 0 ? (
-                             <>
-                               {(o.facturas ?? []).map((nf) => (
-                                 <span key={nf} className="block font-mono font-semibold text-emerald-700 truncate" title={nf}>
-                                   {nf}
-                                 </span>
-                               ))}
-                             </>
-                           ) : (
-                             <span className="text-muted-foreground">—</span>
-                           )
-                         )}
-                       </td>
-                       <td className="px-1 py-2.5">
-                         <p className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{fmtCOP(totalOrden)}</p>
-                       </td>
-                       <td className="px-1 py-2.5 text-sm text-emerald-700 font-semibold [overflow-wrap:anywhere]">
-                         {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
-                       </td>
-                       <td className="px-1 py-2.5 text-sm text-amber-700 font-semibold [overflow-wrap:anywhere]">
-                         {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
-                       </td>
-                        <td className="px-2 py-2.5">
-                          <div className="flex flex-col items-start gap-1">
-                            {["Anulado", "Completado"].includes(o.estado) ? (
-                              <EstadoBadge e={o.estado} />
-                            ) : (
-                              <EstadoSelect
-                                value={o.estado}
-                                onChange={(nuevoEstado) => {
-                                  if (nuevoEstado === o.estado) return;
-                                  setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                                }}
-                                options={opcionesEstado(o.estado)}
-                                triggerTitle="Cambiar estado"
-                                triggerAriaLabel="Cambiar estado"
-                              />
-                            )}
-                            <span className="text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{fechaUltimoCambio(o)}</span>
-                            <EstadoHistorialTooltip
-                              historial={o.historialEstados ?? []}
-                              estadoColors={ESTADO_CONFIG}
-                            >
-                              <button type="button" className="text-[11px] text-primary hover:underline max-md:min-h-11 max-md:px-1">
-                                Ver historial
-                              </button>
-                            </EstadoHistorialTooltip>
-                          </div>
-                        </td>
-                       <td className="px-2 py-2.5">
-                         <div className="flex items-center gap-1 flex-nowrap">
-                          <button
-                            onClick={() => onVerDetalle(o)}
-                            title="Ver detalle"
-                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          {/* Editar sólo en Borrador: `onEditarOrden` conecta con
-                              setOrdenAEditar + navigate("nueva-orden-compra").
-                              En el resto de estados se reserva el mismo ancho
-                              (SLOT_EDITAR) para que [Ver] [Editar] [OC] no se
-                              muevan entre filas. */}
-                          {esBorrador(o.estado) ? (
-                            <button
-                              onClick={() => onEditarOrden(o)}
-                              title="Editar orden"
-                              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          ) : (
-                            <span aria-hidden className={SLOT_EDITAR} />
-                          )}
-                          {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
-                            <button
-                              onClick={() => onAbrirRecepcion?.(o)}
-                              title="Registrar recepción"
-                              className="flex items-center gap-1.5 ml-0.5 px-2.5 py-1.5 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
-                            >
-                              <ClipboardCheck className="w-3.5 h-3.5" />
-                              <span>OC</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-
-          <div className="md:hidden divide-y divide-border">
-            {paged.length === 0
-              ? (
-                <div className="px-4 py-12 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">📋</p>
-                  <p className="font-semibold">No se encontraron órdenes</p>
-                </div>
-              )
-              : paged.map(o => {
-                const facturas = getFacturas(o.id);
-                const totalOrden = o.total ?? calcTotal(o.items);
-                const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
-                const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
-                const prov = proveedores.find(p => p.nombre === o.proveedor);
-                const nit = o.proveedorNit || prov?.nit || "";
-                return (
-                  <div key={o.id} className="p-4">
-                    {/* N° de orden */}
-                    <p className="text-sm font-mono font-semibold text-foreground">{o.id}</p>
-
-                    {/* Proveedor con NIT */}
-                    <div className="mt-2.5 min-w-0">
-                      <p className="text-sm text-foreground break-words">{o.proveedor}</p>
-                      {nit && <p className="text-[11px] text-muted-foreground font-mono">NIT {nit}</p>}
-                    </div>
-
-                    {/* Fecha de la orden */}
-                    <p className="text-xs text-muted-foreground mt-1.5">{o.fecha}</p>
-
-                    {facturas.length > 0 && (
-                      <p className="text-xs mt-1.5">
-                        <span className="text-muted-foreground">Factura </span>
-                        {facturas.map((f, i) => (
-                          <span key={f.id} className="font-mono font-semibold text-emerald-700">
-                            {i > 0 ? " · " : ""}{f.numeroFactura}
-                          </span>
-                        ))}
-                      </p>
-                    )}
-
-                    {/* Total, facturado y por facturar */}
-                    <div className="mt-2.5 rounded-xl bg-muted/50 border border-border px-3 py-2 max-md:min-h-11 space-y-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs text-muted-foreground">Total</span>
-                        <span className="text-sm font-semibold text-foreground">{fmtCOP(totalOrden)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs text-muted-foreground">Facturado</span>
-                        <span className="text-xs font-semibold text-emerald-700">
-                          {totalFacturado > 0 ? fmtCOP(totalFacturado) : "—"}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs text-muted-foreground">Por facturar</span>
-                        <span className="text-xs font-semibold text-amber-700">
-                          {porFacturar > 0 ? fmtCOP(porFacturar) : "—"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Estado, fecha del último cambio e historial */}
-                    <div className="mt-2.5 flex flex-col items-start gap-1">
-                      {["Anulado", "Completado"].includes(o.estado) ? (
-                        <EstadoBadge e={o.estado} />
-                      ) : (
-                        <EstadoSelect
-                          value={o.estado}
-                          onChange={(nuevoEstado) => {
-                            if (nuevoEstado === o.estado) return;
-                            setEstadoConfirm({ id: o.id, from: o.estado, next: nuevoEstado });
-                          }}
-                          options={opcionesEstado(o.estado)}
-                          triggerTitle="Cambiar estado"
-                          triggerAriaLabel="Cambiar estado"
-                        />
-                      )}
-                      <span className="text-[11px] text-muted-foreground whitespace-nowrap">{fechaUltimoCambio(o)}</span>
-                      <EstadoHistorialTooltip
-                        historial={o.historialEstados ?? []}
-                        estadoColors={ESTADO_CONFIG}
-                      >
-                        <button type="button" className="text-[11px] text-primary hover:underline max-md:min-h-11 max-md:px-1">
-                          Ver historial
-                        </button>
-                      </EstadoHistorialTooltip>
-                    </div>
-
-                    {/* Acciones abajo — mismas reglas que la tabla: editar sólo
-                        en Borrador y botón OC sólo cuando la orden está Enviado
-                        y le faltan insumos por recibir. */}
-                    <div className="mt-2.5 flex items-center gap-1 flex-nowrap">
-                      <button
-                        onClick={() => onVerDetalle(o)}
-                        title="Ver detalle"
-                        className="p-2 max-md:p-3.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {esBorrador(o.estado) && (
-                        <button
-                          onClick={() => onEditarOrden(o)}
-                          title="Editar orden"
-                          className={`${CLASE_BASE} max-md:p-3.5 ${CLASE_HOVER}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo)) && (
-                        <button
-                          onClick={() => onAbrirRecepcion?.(o)}
-                          title="Registrar recepción"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 max-md:min-h-11 rounded-lg border border-border text-muted-foreground text-xs font-semibold hover:bg-muted hover:text-foreground cursor-pointer transition-colors"
-                        >
-                          <ClipboardCheck className="w-3.5 h-3.5" /> OC
-                        </button>
-                      )}
-                    </div>
+        <div className="pn-lista">
+          {paged.map(o => {
+            const facturas = getFacturas(o.id);
+            const totalOrden = o.total ?? calcTotal(o.items);
+            const totalFacturado = o.facturado ?? facturas.reduce((s, f) => s + f.valorTotal, 0);
+            const porFacturar = o.porFacturar ?? Math.max(0, totalOrden - totalFacturado);
+            const prov = proveedores.find(p => p.nombre === o.proveedor);
+            const nit = o.proveedorNit || prov?.nit || "";
+            const numerosFactura = facturas.length > 0 ? facturas.map(f => f.numeroFactura) : (o.facturas ?? []);
+            const puedeRecibir = o.estado === "Enviado" && o.items.some(item => !item.facturado && !registradosEnOrden(o.id).has(item.idInsumo));
+            const finalizada = o.estado === "Completado" || o.estado === "Anulado";
+            return (
+              <TarjetaFila
+                key={o.id}
+                pre={`Orden #${numeroOrden(o.id)} · ${o.fecha}`}
+                nombre={o.proveedor}
+                detalle={
+                  <>
+                    {nit ? `NIT ${nit}` : "Sin NIT"}
+                    <br />Pidió: {resumenPedido(o) || "—"}
+                  </>
+                }
+                datos={[
+                  { etiqueta: "Total", valor: <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(totalOrden)}</span> },
+                  {
+                    etiqueta: "Factura",
+                    valor: numerosFactura.length > 0
+                      ? <>Factura {numerosFactura.join(", ")}{porFacturar > 0 && <><br /><span style={{ color: "var(--ambar-texto)" }}>Por facturar {fmtCOP(porFacturar)}</span></>}</>
+                      : o.estado === "Borrador" || o.estado === "Anulado" ? "—" : "Falta la factura",
+                  },
+                ]}
+                estado={
+                  <div className="grid gap-1 justify-items-start">
+                    <EstadoPill tono={tonoEstado[o.estado]}>{o.estado}</EstadoPill>
+                    <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>{fechaUltimoCambio(o)}</span>
+                    <EstadoHistorialTooltip historial={o.historialEstados ?? []} estadoColors={ESTADO_CONFIG}>
+                      <button type="button" className="pn-boton pn-boton--normal" style={{ minHeight: 44, fontSize: 16 }}>Ver historial</button>
+                    </EstadoHistorialTooltip>
                   </div>
-                );
-              })}
-          </div>
+                }
+                acciones={
+                  <>
+                    {o.estado === "Borrador" && (
+                      <BotonAccion variante="principal" onClick={() => setEstadoConfirm({ id: o.id, from: o.estado, next: "Enviado" })}>
+                        Enviar al proveedor
+                      </BotonAccion>
+                    )}
+                    {puedeRecibir && (
+                      <BotonAccion variante="principal" onClick={() => onAbrirRecepcion?.(o)}>Ya llegó: recibir</BotonAccion>
+                    )}
+                    {o.estado === "Completado" && (
+                      <BotonAccion variante="principal" onClick={() => onVerDetalle(o)}>Ver la factura</BotonAccion>
+                    )}
+                    {o.estado === "Anulado" && (
+                      <BotonAccion variante="principal" onClick={() => onVerDetalle(o)}>Ver por qué</BotonAccion>
+                    )}
+                    <BotonAccion variante="normal" onClick={() => onVerDetalle(o)}>Ver la orden</BotonAccion>
+                    {esBorrador(o.estado) && (
+                      <BotonAccion variante="normal" onClick={() => onEditarOrden(o)}>Cambiar</BotonAccion>
+                    )}
+                    {!finalizada && (
+                      <BotonAccion variante="peligro" onClick={() => { setMotivoAnulacion(""); setAnularConfirm(o); }}>Anular</BotonAccion>
+                    )}
+                  </>
+                }
+              />
+            );
+          })}
         </div>
-      </div>
       )}
 
-      {/* Paginador fuera y debajo de la card (unificado). */}
-      {totalPages > 1 && (
-        <div className="shrink-0">
-          <Paginador pagina={pageActual} totalPaginas={totalPages} onCambio={setPage} />
-        </div>
-      )}
+      <PaginadorGrande pagina={pageActual} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
 
       <AnimatePresence>
         {modal && (
@@ -2770,81 +2577,60 @@ export function OrdenCompraScreen({
           />
         )}
       </AnimatePresence>
-      <AnimatePresence>
-        {sendConfirm && (
-          <ConfirmModal
-            title="-+Enviar Orden de Compra?"
-            body={`Enviar OC ${sendConfirm.id} a ${sendConfirm.proveedor}.`}
-            detail="No podrás editarla después del envío."
-            confirmLabel="Enviar"
-            icon={
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Send className="w-5 h-5 text-blue-600" />
-              </div>
-            }
-            onConfirm={() => handleEnviarOrden(sendConfirm)}
-            onCancel={() => setSendConfirm(null)}
-          />
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {anularConfirm && (
-          <ConfirmModal
-            title="Anular Orden"
-            body={`-+Deseas anular la OC ${anularConfirm.id}?`}
-            detail={
-              facturasDeOrden(anularConfirm.id).length > 0
-                ? "Las facturas ya recibidas en Gestión de Compras conservarán su estado y stock. Esta acción no puede revertirse."
-                : "Esta acción no puede revertirse."
-            }
-            confirmLabel="Anular"
-            loading={anulandoOrden}
-            danger={true}
-            showMotivo
-            motivo={motivoAnulacion}
-            onMotivoChange={setMotivoAnulacion}
-            icon={
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Ban className="w-5 h-5 text-red-600" />
-              </div>
-            }
-            onConfirm={() => void handleAnularOrden(anularConfirm)}
-            onCancel={() => !anulandoOrden && setAnularConfirm(null)}
-          />
-        )}
-        {estadoConfirm && (
-          <ConfirmModal
-            title={
-              estadoConfirm.next === "Completado"
-                ? "¿Marcar la orden como Completada?"
-                : `-+Cambiar el estado a ${estadoConfirm.next}?`
-            }
-            body={`La orden ${estadoConfirm.id} pasará de ${estadoConfirm.from} a ${estadoConfirm.next}.`}
-            detail={
-              estadoConfirm.next === "Anulado"
-                ? "Una orden anulada no puede volver a un estado anterior."
-                : estadoConfirm.next === "Completado"
-                  ? "Ya no se podrán registrar más facturas en esta orden."
-                  : "La orden avanzará en el flujo de estados."
-            }
-            confirmLabel={estadoConfirm.next === "Anulado" ? "Anular" : `Cambiar a ${estadoConfirm.next}`}
-            danger={estadoConfirm.next === "Anulado"}
-            icon={
-              estadoConfirm.next === "Anulado" ? (
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <Ban className="w-5 h-5 text-red-600" />
-                </div>
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Send className="w-5 h-5 text-blue-600" />
-                </div>
-              )
-            }
-            onConfirm={() => handleCambiarEstado(estadoConfirm.id, estadoConfirm.next)}
-            onCancel={() => setEstadoConfirm(null)}
-          />
-        )}
-      </AnimatePresence>
+
+      {/* Enviar / cambiar de estado (Borrador → Enviado, Enviado → Completado) */}
+      {dialogoEstado && dialogoEstado.next !== "Anulado" && (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a) setEstadoConfirm(null); }}
+          titulo={
+            dialogoEstado.next === "Enviado"
+              ? `¿Enviar la orden #${numeroOrden(dialogoEstado.id)} a ${ordenes.find(o => o.id === dialogoEstado.id)?.proveedor ?? "el proveedor"}?`
+              : dialogoEstado.next === "Completado"
+                ? `¿Marcar la orden #${numeroOrden(dialogoEstado.id)} como completada?`
+                : `¿Pasar la orden #${numeroOrden(dialogoEstado.id)} a ${dialogoEstado.next}?`
+          }
+          queVaAPasar={
+            dialogoEstado.next === "Enviado"
+              ? ["Ya no se podrá cambiar", "Queda esperando a que llegue"]
+              : dialogoEstado.next === "Completado"
+                ? ["Ya no se podrán anotar más facturas en esta orden", "Queda guardada como completada"]
+                : ["La orden avanza al siguiente paso"]
+          }
+          textoAccion={dialogoEstado.next === "Enviado" ? "Sí, enviar la orden" : dialogoEstado.next === "Completado" ? "Sí, marcar como completada" : `Sí, pasar a ${dialogoEstado.next}`}
+          onConfirmar={() => { void handleCambiarEstado(dialogoEstado.id, dialogoEstado.next); }}
+        />
+      )}
+      {sendConfirm && (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a) setSendConfirm(null); }}
+          titulo={`¿Enviar la orden #${numeroOrden(sendConfirm.id)} a ${sendConfirm.proveedor}?`}
+          queVaAPasar={["Ya no se podrá cambiar", "Queda esperando a que llegue"]}
+          textoAccion="Sí, enviar la orden"
+          onConfirmar={() => { void handleEnviarOrden(sendConfirm); }}
+        />
+      )}
+
+      {/* Anular (con el motivo que exige el servidor) */}
+      {ordenAnular && (
+        <DialogoConfirmacion
+          abierto
+          onCambiarAbierto={a => { if (!a && !anulandoOrden) setAnularConfirm(null); }}
+          titulo={`¿Anular la orden #${numeroOrden(ordenAnular.id)}?`}
+          queVaAPasar={[
+            "El proveedor no debe mandar nada",
+            "Queda guardada como anulada",
+            ...(facturasDeOrden(ordenAnular.id).length > 0 ? ["Las facturas que ya llegaron conservan su estado y lo que sumaron a la bodega"] : []),
+            "No se puede deshacer",
+          ]}
+          pedirMotivo
+          etiquetaMotivo="¿Por qué se anula?"
+          motivoObligatorio
+          textoAccion={anulandoOrden ? "Anulando…" : "Sí, anular la orden"}
+          onConfirmar={(motivo) => { setMotivoAnulacion(motivo); void handleAnularOrden(ordenAnular, motivo); }}
+        />
+      )}
     </div>
   );
 }
@@ -3138,294 +2924,134 @@ function OrdenDetallePageContenido({
   const claseTabla = (filas: number) =>
     `rounded-xl border border-border ${filas > FILAS_SCROLL ? "max-h-[55vh] overflow-auto" : "overflow-x-auto"}`;
 
+  const tonoEstado: Record<EstadoOrden, TonoPill> = { Borrador: "gris", Enviado: "azul", Completado: "verde", Anulado: "rojo" };
+  const numero = orden.id.replace(/^\D+-?0*/, "") || orden.id;
+
+  /** Filas de una factura (solicitados / no solicitados): mismos valores de siempre. */
+  const filasFactura = (items: OrdenItem[], noPedido: boolean) => (
+    <div className="pn-permisos">
+      {items.map(item => (
+        <div key={item.rowId} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) auto auto" }}>
+          <strong>{item.nombre}</strong>
+          <span>{item.cantidad} {item.unidad} · {fmtCOP(item.costoUnitario)}</span>
+          {noPedido ? <EstadoPill tono="ambar">No se pidió</EstadoPill> : <span />}
+          <strong>{fmtCOP(totalLineaOrden(item))}</strong>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
-        <button
-          onClick={onBack}
-          className="p-2.5 max-md:p-3 rounded-xl border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-          title="Volver"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            Orden {orden.id}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {orden.proveedor} · {orden.fecha}
-          </p>
-        </div>
-        <div className="ml-auto">
-          <EstadoBadge e={orden.estado} />
-        </div>
+    <div className="pn-contenido" style={{ maxWidth: 1100 }}>
+      <BotonRuta>
+        <BotonAccion icono={ArrowLeft} onClick={onBack}>Volver a la lista</BotonAccion>
+      </BotonRuta>
+
+      <div className="flex flex-wrap items-center gap-3 mb-1">
+        <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Orden de compra #{numero}</h1>
+        <EstadoPill tono={tonoEstado[orden.estado]}>{orden.estado}</EstadoPill>
       </div>
-
-      {/* Dos columnas — apiladas en móvil, fila desde lg */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 overflow-y-auto lg:overflow-hidden">
-        {/* Columna izquierda — Orden de Compra */}
-        <div className="flex-1 min-w-0 flex flex-col lg:overflow-y-auto lg:pr-6">
-          <div className="flex items-center gap-3 mb-4 shrink-0">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Orden de Compra
-            </h2>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          {/* Info de la orden */}
-          <div className="grid grid-cols-2 gap-3 mb-4 shrink-0">
-            <div>
-              <p className="text-[11px] font-semibold text-muted-foreground">N° Orden</p>
-              <p className="text-sm font-semibold text-foreground">{orden.id}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-muted-foreground">Proveedor</p>
-              <p className="text-sm font-semibold text-foreground">{orden.proveedor}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-muted-foreground">Fecha</p>
-              <p className="text-sm font-semibold text-foreground">{orden.fecha}</p>
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold text-muted-foreground">Estado</p>
-              <div className="flex items-center gap-2">
-                <EstadoBadge e={orden.estado} />
-                <span className="text-[11px] text-muted-foreground">{fechaEstado}</span>
-              </div>
-              {orden.estado === "Anulado" && orden.motivoAnulacion && (
-                <p className="text-xs text-red-600 dark:text-red-400 mt-1 break-words">
-                  Motivo de anulación: {orden.motivoAnulacion}
-                </p>
-              )}
-              <div className="hidden">
-              </div>
-            </div>
-          </div>
-
-          {/* Tabla de insumos pedidos */}
-          <div className="flex flex-col shrink-0">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Insumos pedidos
-              </h3>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-            <div className={claseTabla(orden.items.length)}>
-              <table className="w-full text-sm min-w-[560px]">
-                <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider sticky top-0">
-                  <tr>
-                    {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {orden.items.map(item => {
-                    const facturado = item.facturado ?? insumosFacturados.has(item.idInsumo);
-                    return (
-                      <tr key={item.rowId} className="hover:bg-muted/20">
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          <div className="flex items-center gap-2">
-                            {item.nombre}
-                            {facturado && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">
-                                Facturado
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-[11px] font-normal text-muted-foreground">
-                            {etiquetaModoIvaSimple(item.modoIva ?? "incluido")}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {item.cantidad}
-                          {esEmpaque(item.unidad) && (
-                            <div className="text-[11px] text-muted-foreground">
-                              {etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{!esEmpaque(item.unidad) && item.unidad}</td>
-                        <td className="px-4 py-3">{fmtCOP(item.precioUnitario)}</td>
-                        <td className="px-4 py-3 font-semibold">{fmtCOP(item.subtotal ?? item.cantidad * item.precioUnitario)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Total de la orden */}
-          <div className="mt-4 pt-4 border-t border-border shrink-0">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Total</span>
-              <span className="text-lg font-bold text-foreground">{fmtCOP(orden.total ?? calcTotal(orden.items))}</span>
-            </div>
-          </div>
+      <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>
+        {orden.proveedor} · {orden.fecha} · {orden.estado} el {fechaEstado}
+      </p>
+      {orden.estado === "Anulado" && orden.motivoAnulacion && (
+        <div className="pn-dialogo__caja pn-dialogo__caja--ambar">
+          <strong>Por qué se anuló:</strong>
+          {orden.motivoAnulacion}
         </div>
+      )}
 
-        {/* Divisor — horizontal apilado, vertical en fila */}
-        <div className="h-px w-full lg:h-auto lg:w-px bg-border shrink-0" />
-
-        {/* Columna derecha — Facturas */}
-        <div className="flex-1 min-w-0 flex flex-col lg:overflow-y-auto lg:pl-6">
-          <div className="flex items-center gap-3 mb-4 shrink-0">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Facturas
-            </h2>
-            <div className="h-px flex-1 bg-border" />
+      <div className="grid gap-5">
+        <SeccionFormulario titulo="Qué se pidió">
+          <div className="pn-permisos">
+            {orden.items.map(item => {
+              const facturado = item.facturado ?? insumosFacturados.has(item.idInsumo);
+              return (
+                <div key={item.rowId} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) auto auto" }}>
+                  <div>
+                    <strong>{item.nombre}</strong>
+                    <div style={{ fontSize: 16, color: "var(--gris-texto)" }}>{etiquetaModoIvaSimple(item.modoIva ?? "incluido")}</div>
+                  </div>
+                  <span>
+                    {item.cantidad}
+                    {esEmpaque(item.unidad)
+                      ? ` · ${etiquetaPresentacion(item.unidad, item.factorPresentacion, item.unidadBase)}`
+                      : ` ${item.unidad}`}
+                    {" · "}{fmtCOP(item.precioUnitario)}
+                  </span>
+                  <EstadoPill tono={facturado ? "verde" : "ambar"}>{facturado ? "Completo" : "Falta"}</EstadoPill>
+                  <strong>{fmtCOP(item.subtotal ?? item.cantidad * item.precioUnitario)}</strong>
+                </div>
+              );
+            })}
           </div>
+          <p style={{ font: "700 26px var(--font-titulo)", margin: "16px 0 0", textAlign: "right" }}>
+            Total con IVA: {fmtCOP(orden.total ?? calcTotal(orden.items))}
+          </p>
+        </SeccionFormulario>
 
+        <SeccionFormulario titulo="Facturas">
           {facturas.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-sm text-muted-foreground">Sin facturas registradas</p>
-            </div>
+            <p className="pn-seccion__ayuda">Todavía no hay facturas de esta orden.</p>
           ) : (
             <>
-              {/* Chips de facturas */}
-              <div className="flex flex-wrap gap-2 mb-4 shrink-0">
+              <div className="pn-opciones" role="group" aria-label="Facturas de la orden" style={{ marginBottom: 16 }}>
                 {facturas.map(f => (
                   <button
                     key={f.id}
+                    type="button"
+                    className="pn-opcion"
+                    aria-pressed={f.id === facturaSeleccionada}
                     onClick={() => setFacturaSeleccionada(f.id)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                      f.id === facturaSeleccionada
-                        ? "bg-primary text-white shadow-md"
-                        : "bg-muted text-foreground hover:bg-border"
-                    }`}
                   >
-                    <span className="font-mono">{f.numeroFactura}</span>
+                    Factura {f.numeroFactura}
                   </button>
                 ))}
               </div>
-
-              {/* Detalle de la factura seleccionada */}
               {facturaActual && (
-                <div className="flex flex-col">
-                  <div className="grid grid-cols-2 gap-3 mb-4 shrink-0">
-                    <div>
-                      <p className="text-[11px] font-semibold text-muted-foreground">N° Factura</p>
-                      <p className="text-sm font-semibold text-foreground font-mono">{facturaActual.numeroFactura}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-muted-foreground">Fecha de recepción</p>
-                      <p className="text-sm font-semibold text-foreground">{facturaActual.fechaFactura}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-muted-foreground">Estado</p>
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${facturaActual.estado === "Recibido" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
-                        {facturaActual.estado}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-muted-foreground">Total</p>
-                      <p className="text-sm font-bold text-foreground">{fmtCOP(facturaActual.valorTotal)}</p>
-                    </div>
+                <div className="grid gap-4">
+                  <DatosDetalle datos={[
+                    { etiqueta: "Número de factura", valor: facturaActual.numeroFactura },
+                    { etiqueta: "Fecha en que llegó", valor: facturaActual.fechaFactura },
+                    { etiqueta: "Estado", valor: <EstadoPill tono={facturaActual.estado === "Recibido" ? "verde" : "rojo"}>{facturaActual.estado}</EstadoPill> },
+                    { etiqueta: "Total", valor: fmtCOP(facturaActual.valorTotal) },
+                  ]} />
+                  <div>
+                    <h3 className="pn-resumen__area">Lo que se pidió y llegó</h3>
+                    {filasFactura(solicitados, false)}
+                    <p style={{ textAlign: "right", fontWeight: 700, fontSize: 19, margin: "8px 0 0" }}>
+                      Subtotal de lo pedido: {fmtCOP(calcTotal(solicitados))}
+                    </p>
                   </div>
-
-                  {/* Tabla de insumos de la factura — separar solicitados y no solicitados */}
-                  <div className="flex flex-col shrink-0">
-                    {/* Insumos solicitados (los que estaban en la OC) */}
-                    <div className="mb-4">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Insumos solicitados
-                        </h3>
-                        <div className="h-px flex-1 bg-border" />
-                      </div>
-                      <div className={claseTabla(solicitados.length)}>
-                        <table className="w-full text-sm min-w-[560px]">
-                          <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider sticky top-0">
-                            <tr>
-                              {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (
-                                <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {solicitados.map(item => (
-                              <tr key={item.rowId} className="hover:bg-muted/20">
-                                <td className="px-4 py-3 font-medium text-foreground">{item.nombre}</td>
-                                <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
-                                <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
-                                <td className="px-4 py-3">{fmtCOP(item.costoUnitario)}</td>
-                                <td className="px-4 py-3 font-semibold">{fmtCOP(totalLineaOrden(item))}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="bg-muted/50 border-t border-border">
-                            <tr>
-                              <td colSpan={4} className="px-4 py-2 text-xs font-bold text-muted-foreground text-right uppercase">
-                                Subtotal solicitados
-                              </td>
-                              <td className="px-4 py-2 text-sm font-bold text-foreground">
-                                {fmtCOP(calcTotal(solicitados))}
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
-                      </div>
+                  {noSolicitados.length > 0 && (
+                    <div>
+                      <h3 className="pn-resumen__area">Llegó algo que no se pidió</h3>
+                      {filasFactura(noSolicitados, true)}
+                      <p style={{ textAlign: "right", fontWeight: 700, fontSize: 19, margin: "8px 0 0" }}>
+                        Subtotal de lo que no se pidió: {fmtCOP(calcTotal(noSolicitados))}
+                      </p>
                     </div>
-
-                    {/* Insumos no solicitados (agregados en la recepción) */}
-                    {noSolicitados.length > 0 && (
-                      <div className="mb-4">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                            Insumos no solicitados
-                          </h3>
-                          <div className="h-px flex-1 bg-amber-200" />
-                        </div>
-                        <div className={claseTabla(noSolicitados.length).replace("border-border", "border-amber-200")}>
-                          <table className="w-full text-sm min-w-[560px]">
-                            <thead className="bg-amber-50/50 text-xs text-amber-700 uppercase tracking-wider sticky top-0">
-                              <tr>
-                                {["Nombre", "Cantidad", "Unidad", "Monto unitario", "Subtotal"].map(h => (
-                                  <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-amber-100">
-                              {noSolicitados.map(item => (
-                                <tr key={item.rowId} className="hover:bg-amber-50/50">
-                                  <td className="px-4 py-3 font-medium text-foreground">{item.nombre}</td>
-                                  <td className="px-4 py-3 text-muted-foreground">{item.cantidad}</td>
-                                  <td className="px-4 py-3 text-xs text-muted-foreground">{item.unidad}</td>
-                                  <td className="px-4 py-3">{fmtCOP(item.costoUnitario)}</td>
-                                  <td className="px-4 py-3 font-semibold">{fmtCOP(totalLineaOrden(item))}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot className="bg-amber-50/50 border-t border-amber-200">
-                              <tr>
-                                <td colSpan={4} className="px-4 py-2 text-xs font-bold text-amber-700 text-right uppercase">
-                                  Subtotal no solicitados
-                                </td>
-                                <td className="px-4 py-2 text-sm font-bold text-amber-700">
-                                  {fmtCOP(calcTotal(noSolicitados))}
-                                </td>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Total pagado (solicitados + no solicitados) */}
-                    <div className="mt-4 pt-4 border-t border-border shrink-0">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total pagado</span>
-                        <span className="text-lg font-bold text-foreground">{fmtCOP(totalPagado)}</span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
+                  <p style={{ font: "700 26px var(--font-titulo)", margin: 0, textAlign: "right" }}>
+                    Total pagado: {fmtCOP(totalPagado)}
+                  </p>
                 </div>
               )}
             </>
           )}
-        </div>
+        </SeccionFormulario>
+
+        {historial.length > 0 && (
+          <SeccionFormulario titulo="Historial">
+            <Historial
+              pasos={historial.map(h => ({
+                titulo: h.estado + (h.motivo ? ` · ${h.motivo}` : ""),
+                hora: formatearFechaHora(h.fechaHora),
+                hecho: true,
+              }))}
+            />
+          </SeccionFormulario>
+        )}
       </div>
     </div>
   );

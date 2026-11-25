@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { RefreshCw, X } from "lucide-react";
+import { ArrowLeft, Lock, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
-import { EstadoSelect, ESTADO_ACTIVO_COLOR, ESTADO_INACTIVO_COLOR } from "@/shared/components/EstadoSelect";
-import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BotonRuta } from "@/shared/components/panel/BotonRuta";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import type { Rol } from "@/features/roles/pages/GestionConfigScreen";
 import type { UsuarioListadoApi } from "@/shared/services/authService";
 import { cambiarEstadoUsuario, eliminarUsuario, listarUsuarios } from "@/shared/services/authService";
@@ -99,51 +106,58 @@ const rolesDeUsuario = (u: UsuarioGestion): string[] => {
   return nombres;
 };
 
-const CHIP_CLASE = "px-2.5 py-0.5 rounded-full text-xs font-semibold";
-/** Empleado verde, Administrador rojo; Cliente y roles extra grises (como siempre). */
-const colorChipRol = (rol: string) => {
+/** Roles: Administrador rojo suave, Empleado verde, Cliente y roles extra grises. */
+const tonoRol = (rol: string): TonoPill => {
   const n = normalizar(rol);
-  if (n.includes("administrador")) return "bg-red-100 text-red-800";
-  if (n === "empleado") return "bg-emerald-100 text-emerald-800";
-  return "bg-gray-100 text-gray-700";
+  if (n.includes("administrador")) return "rojo";
+  if (n === "empleado") return "verde";
+  return "gris";
 };
 
-function RolesBadges({ usuario }: { usuario: UsuarioGestion }) {
-  // Listado: UN solo chip con el rol principal del usuario (Administrador >
-  // Empleado > Cliente > roles extra) y, si tiene otros roles, el contador rojo
-  // "+N" en la esquina superior derecha, sin tapar el texto del chip.
-  const roles = rolesDeUsuario(usuario);
-  const principal = roles[0] ?? "Sin rol";
-  const adicionales = Math.max(0, roles.length - 1);
+/** "1036554120" → "1.036.554.120" (si no es solo números, se deja igual). */
+const documentoLegible = (tipo: string, numero: string) =>
+  `${tipo ? `${tipo} ` : ""}${/^\d+$/.test(numero) ? Number(numero).toLocaleString("es-CO") : numero}`;
+
+function Avatar({ u, tam }: { u: UsuarioGestion; tam: number }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span title={roles.join(", ")} className={`relative inline-flex ${CHIP_CLASE} ${colorChipRol(principal)}`}>
-        {principal}
-        {adicionales > 0 && <span className="absolute -top-2 -right-3 inline-flex items-center justify-center h-[17px] min-w-[17px] px-1 rounded-full bg-primary text-white text-[10px] font-bold leading-none whitespace-nowrap">+{adicionales}</span>}
-      </span>
+    <div
+      className={`${u.avatarColor} text-white font-bold shrink-0 flex items-center justify-center rounded-full`}
+      style={{ width: tam, height: tam, fontSize: tam * 0.36 }}
+      aria-hidden="true"
+    >
+      {u.iniciales}
     </div>
   );
 }
 
-function RolesChipsDetalle({ usuario }: { usuario: UsuarioGestion }) {
-  // Modal "Detalle": TODOS los roles como chips separados y sin contador.
+function RolesPills({ usuario }: { usuario: UsuarioGestion }) {
+  const roles = rolesDeUsuario(usuario);
+  if (roles.length === 0) return <EstadoPill tono="gris">Sin cargo</EstadoPill>;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {rolesDeUsuario(usuario).map(r => (
-        <span key={r} className={`${CHIP_CLASE} ${colorChipRol(r)}`}>{r}</span>
-      ))}
+    <div className="flex flex-wrap items-center gap-2">
+      {roles.map(r => <EstadoPill key={r} tono={tonoRol(r)}>{r}</EstadoPill>)}
     </div>
   );
 }
+
+const EstadoEntrada = ({ activo }: { activo: boolean }) => (
+  <EstadoPill tono={activo ? "verde" : "gris"}>
+    {activo ? "Activo · puede entrar" : "Inactivo · no puede entrar"}
+  </EstadoPill>
+);
 
 export function GestionUsuariosScreen({
   canVer = true,
   canEdit = true,
   canDelete = true,
+  onIrAClientes,
+  onIrAEmpleados,
 }: {
   canVer?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  onIrAClientes?: () => void;
+  onIrAEmpleados?: () => void;
 }) {
   const [usuarios, setUsuarios] = useState<UsuarioGestion[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -154,6 +168,9 @@ export function GestionUsuariosScreen({
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<UsuarioGestion | null>(null);
   const [deleteItem, setDeleteItem] = useState<UsuarioGestion | null>(null);
+  const [quitarItem, setQuitarItem] = useState<UsuarioGestion | null>(null);
+  /** Cuenta que el backend no pudo borrar (la desactivó): se muestra su mensaje. */
+  const [noBorrada, setNoBorrada] = useState<{ nombre: string; mensaje: string } | null>(null);
   const [actualizando, setActualizando] = useState<string | null>(null);
 
   const cargarUsuarios = async () => {
@@ -168,7 +185,6 @@ export function GestionUsuariosScreen({
   };
   useEffect(() => { if (canVer) void cargarUsuarios(); }, [canVer]);
 
-  const rolesDisponibles = useMemo(() => [...new Set(usuarios.flatMap(u => [u.rol, ...(u.rolesExtra ?? []), ...(u.esCliente ? ["Cliente"] : []), ...(u.esEmpleado ? ["Empleado"] : [])]).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [usuarios]);
   const filtrados = useMemo(() => {
     const q = normalizar(search);
     return ordenarPorIdDescendente(usuarios.filter(u => {
@@ -180,7 +196,7 @@ export function GestionUsuariosScreen({
     }), (usuario) => usuario.id_usuario);
   }, [usuarios, search, filterRol, filterEstado]);
 
-  const porPagina = 5;
+  const porPagina = 10;
   const paginas = Math.max(1, Math.ceil(filtrados.length / porPagina));
   const paginaActual = Math.min(page, paginas);
   const paginados = filtrados.slice((paginaActual - 1) * porPagina, paginaActual * porPagina);
@@ -200,80 +216,215 @@ export function GestionUsuariosScreen({
 
   const eliminar = async () => {
     if (!deleteItem) return;
+    const nombreBorrado = deleteItem.nombre;
     try {
       const respuesta = await eliminarUsuario(String(deleteItem.id_usuario));
       await cargarUsuarios();
       setDeleteItem(null);
       setDetail(null);
-      toast.success(respuesta.mensaje);
+      // Si tenía registros, el backend no la borra: la desactiva y lo explica.
+      if (respuesta.accion === "desactivado") setNoBorrada({ nombre: nombreBorrado, mensaje: respuesta.mensaje });
+      else toast.success(respuesta.mensaje);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo eliminar el usuario.");
     }
   };
 
-  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
-  // 768 px) para mostrar exactamente los mismos controles y handlers.
-  const estadoUsuario = (u: UsuarioGestion) => (canEdit ? <EstadoSelect value={u.estado ? "activo" : "inactivo"} disabled={Boolean(u.esSuperAdmin) || actualizando === u.id} onChange={v => void cambiarEstado(u, v === "activo")} options={[{ value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR }, { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR }]} /> : <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${u.estado ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{u.estado ? "Activo" : "Inactivo"}</span>);
-  const accionesUsuario = (u: UsuarioGestion) => (<ActionIcons onView={() => setDetail(u)} onDelete={canDelete ? () => setDeleteItem(u) : undefined} deleteDisabled={Boolean(u.esSuperAdmin)} deleteTitle={u.esSuperAdmin ? "Cuenta de super administrador" : "Eliminar usuario"} />);
-
-  const inputClass = "px-3 py-2.5 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer max-md:w-full max-md:min-h-11";
-  if (!canVer) return <div className="flex flex-col items-center justify-center py-32 px-6 text-center"><div className="text-6xl mb-4">🔒</div><h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2><p className="text-muted-foreground">No tienes permiso para ver Gestión Usuarios. Pide acceso al administrador.</p></div>;
-
-  return (
-    <div className="px-4 sm:px-6 pt-5 pb-4 h-full max-md:h-auto flex flex-col overflow-hidden max-md:overflow-visible">
-      <div className="mb-3 shrink-0"><h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Usuarios</h1><p className="text-muted-foreground text-sm mt-0.5">Todas las personas registradas en el sistema</p></div>
-      <div className="flex flex-wrap gap-3 mb-5 shrink-0">
-        <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Buscar por nombre, correo, rol o documento..." wrapperClassName="w-full max-w-sm shrink-0" />
-        <select value={filterRol} onChange={e => { setFilterRol(e.target.value); setPage(1); }} className={inputClass}><option value="todos">Todos los roles</option>{rolesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}</select>
-        <select value={filterEstado} onChange={e => { setFilterEstado(e.target.value); setPage(1); }} className={inputClass}><option value="todos">Todos los estados</option><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select>
+  if (!canVer) {
+    return (
+      <div className="pn-contenido">
+        <VacioEstado icono={Lock} titulo="No tienes permiso para ver los usuarios">
+          Pide acceso a la persona que administra el sistema.
+        </VacioEstado>
       </div>
-      {/* Menos de 768 px: cada usuario como tarjeta (la acción principal queda fuera de vista en la tabla).
-          Reutiliza estadoUsuario y accionesUsuario, los mismos controles de la tabla. */}
-      <div className="md:hidden space-y-3 mb-2">
-        {cargando ? <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</div>
-          : errorCarga ? <div role="alert" className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">{errorCarga}<button className="underline ml-2 max-md:min-h-11 max-md:px-2" onClick={() => void cargarUsuarios()}>Reintentar</button></div>
-          : paginados.length === 0 ? <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p></div>
-          : paginados.map(u => (
-            <div key={u.id_usuario} className="bg-card border border-border rounded-2xl p-4">
-              <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{u.iniciales}</div>
-                <div className="min-w-0 flex-1"><p className="text-base font-semibold text-foreground break-words">{u.nombre}</p><p className="text-xs font-mono text-muted-foreground">{fmtDoc(u.tipo_documento, String(u.id_usuario))}</p></div>
-                <div className="shrink-0">{estadoUsuario(u)}</div>
-              </div>
-              <dl className="grid grid-cols-1 gap-y-3 mt-3 text-sm">
-                <div className="min-w-0"><dt className="text-xs uppercase tracking-wider text-muted-foreground">Correo</dt><dd className="mt-0.5 text-muted-foreground break-all">{u.correo || "—"}</dd></div>
-                <div><dt className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Rol actual</dt><dd><RolesBadges usuario={u} /></dd></div>
-              </dl>
-              <div className="mt-3 pt-3 border-t border-border">{accionesUsuario(u)}</div>
-            </div>
-          ))}
-      </div>
-      {/* Tabla: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-2 shrink-0 max-md:hidden">
-        <div className="overflow-x-auto"><table className="w-full min-w-[720px]"><thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider"><tr>{["Nombre", "Correo", "Rol actual", "Estado", "Acciones"].map(h => <th key={h} className="px-4 py-1.5 text-left font-semibold whitespace-nowrap">{h}</th>)}</tr></thead>
-          <tbody className="divide-y divide-border">
-            {cargando ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando usuarios…</td></tr> : errorCarga ? <tr><td colSpan={5} role="alert" className="px-4 py-14 text-center text-muted-foreground">{errorCarga}<button className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center underline ml-2" onClick={() => void cargarUsuarios()}>Reintentar</button></td></tr> : paginados.length === 0 ? <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">👤</p><p>No se encontraron usuarios</p></td></tr> : paginados.map(u => (
-              <tr key={u.id_usuario} className="hover:bg-muted/20 transition-colors">
-                <td className="px-4 py-1.5"><div className="flex items-center gap-3"><div className={`w-9 h-9 rounded-full ${u.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>{u.iniciales}</div><div><p className="text-sm font-semibold text-foreground">{u.nombre}</p><p className="text-xs font-mono text-muted-foreground">{fmtDoc(u.tipo_documento, String(u.id_usuario))}</p></div></div></td>
-                <td className="px-4 py-1.5 text-sm text-muted-foreground">{u.correo || "—"}</td>
-                <td className="px-4 py-1.5"><RolesBadges usuario={u} /></td>
-                <td className="px-4 py-1.5">{estadoUsuario(u)}</td>
-                <td className="px-4 py-1.5">{accionesUsuario(u)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </div>
-      {filtrados.length > 0 && <Paginador pagina={paginaActual} totalPaginas={paginas} onCambio={setPage} />}
+    );
+  }
 
-      <AnimatePresence>{detail && <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto"><div className="flex min-h-full items-center justify-center p-4"><motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: .95, opacity: 0 }} className="bg-card rounded-2xl w-full max-w-xl shadow-2xl border border-border my-4">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border"><div><h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detail.nombre}</h3><p className="text-xs font-mono text-muted-foreground">{fmtDoc(detail.tipo_documento, String(detail.id_usuario))}</p></div><button onClick={() => setDetail(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button></div>
-        <div className="p-5 space-y-4"><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[{ label: "Correo", value: detail.correo }, { label: "Teléfono", value: detail.telefono }, { label: "Estado de cuenta", value: detail.estado ? "Activo" : "Inactivo" }, { label: "Roles", value: "" }].map(item => <div key={item.label}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{item.label}</p>{item.label === "Roles" ? <RolesChipsDetalle usuario={detail} /> : <p className="text-sm font-semibold text-foreground break-words">{item.value || "—"}</p>}</div>)}</div>
-          {canEdit && <button disabled={Boolean(detail.esSuperAdmin) || actualizando === detail.id} onClick={() => void cambiarEstado(detail, !detail.estado)} className="w-full flex items-center justify-center gap-2 py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border text-foreground hover:bg-muted disabled:opacity-50"><RefreshCw className="w-4 h-4" />{detail.estado ? "Desactivar usuario" : "Activar usuario"}</button>}
-          <button onClick={() => setDetail(null)} className="w-full py-2.5 max-md:min-h-11 rounded-xl text-sm font-semibold border border-border hover:bg-muted">Cerrar</button>
+  const chip = filterEstado === "inactivo" ? "inactivos" : filterRol === "Cliente" ? "clientes" : filterRol === "Empleado" ? "empleados" : "todos";
+  const cambiarChip = (v: string) => {
+    setPage(1);
+    setFilterRol(v === "clientes" ? "Cliente" : v === "empleados" ? "Empleado" : "todos");
+    setFilterEstado(v === "inactivos" ? "inactivo" : "todos");
+  };
+
+  // ── Detalle de una persona ──
+  if (detail) {
+    const u = detail;
+    const nombreCorto = u.nombre;
+    return (
+      <div className="pn-contenido">
+        <BotonRuta>
+          <BotonAccion icono={ArrowLeft} onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
+        </BotonRuta>
+
+        <div className="flex flex-wrap items-center gap-5 mb-6">
+          <Avatar u={u} tam={80} />
+          <div className="min-w-0">
+            <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{u.nombre}</h1>
+            <div className="mt-2"><EstadoEntrada activo={u.estado} /></div>
+          </div>
         </div>
-      </motion.div></div></div>}</AnimatePresence>
-      <AnimatePresence>{deleteItem && <ConfirmDeleteModal title="Eliminar usuario" message={<>¿Seguro que deseas eliminar a <strong className="text-foreground">{deleteItem.nombre}</strong>? Esta acción no se puede deshacer.</>} onConfirm={() => void eliminar()} onCancel={() => setDeleteItem(null)} />}</AnimatePresence>
+
+        <div className="grid gap-5" style={{ maxWidth: 900 }}>
+          <SeccionFormulario titulo="Sus datos">
+            <DatosDetalle datos={[
+              { etiqueta: "Documento", valor: documentoLegible(u.tipo_documento, String(u.id_usuario)) },
+              { etiqueta: "Correo", valor: u.correo || "—" },
+              { etiqueta: "Teléfono", valor: u.telefono || "—" },
+            ]} />
+            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+              Los datos personales los cambia cada persona desde su perfil.
+            </p>
+          </SeccionFormulario>
+
+          <SeccionFormulario titulo="Qué es en la pizzería">
+            <RolesPills usuario={u} />
+            <p className="pn-seccion__ayuda" style={{ margin: "14px 0 12px" }}>
+              Los cargos de un empleado se cambian en Empleados
+            </p>
+            {onIrAEmpleados && <BotonAccion onClick={onIrAEmpleados}>Ir a Empleados</BotonAccion>}
+          </SeccionFormulario>
+
+          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+            {canEdit && (
+              u.estado ? (
+                <BotonAccion
+                  variante="normal"
+                  disabled={Boolean(u.esSuperAdmin) || actualizando === u.id}
+                  onClick={() => setQuitarItem(u)}
+                >
+                  Quitarle la entrada
+                </BotonAccion>
+              ) : (
+                <BotonAccion
+                  variante="bien"
+                  disabled={Boolean(u.esSuperAdmin) || actualizando === u.id}
+                  onClick={() => void cambiarEstado(u, true)}
+                >
+                  Devolverle la entrada
+                </BotonAccion>
+              )
+            )}
+            {canDelete && (
+              <BotonAccion
+                variante="peligro"
+                disabled={Boolean(u.esSuperAdmin)}
+                title={u.esSuperAdmin ? "Cuenta de super administrador" : undefined}
+                onClick={() => setDeleteItem(u)}
+              >
+                Borrar
+              </BotonAccion>
+            )}
+          </div>
+        </div>
+
+        <DialogoConfirmacion
+          abierto={!!quitarItem}
+          onCambiarAbierto={a => { if (!a) setQuitarItem(null); }}
+          titulo={`¿Quitarle la entrada a ${quitarItem?.nombre ?? nombreCorto}?`}
+          queVaAPasar={[
+            "Ya no podrá entrar al panel ni usar su cargo",
+            "Sí podrá seguir comprando por la página, como cliente",
+            "Puedes devolverle la entrada cuando quieras",
+          ]}
+          textoAccion="Sí, quitarle la entrada"
+          onConfirmar={() => { if (quitarItem) void cambiarEstado(quitarItem, false); }}
+        />
+        <DialogoConfirmacion
+          abierto={!!deleteItem}
+          onCambiarAbierto={a => { if (!a) setDeleteItem(null); }}
+          titulo={`¿Borrar la cuenta de ${deleteItem?.nombre ?? ""}?`}
+          queVaAPasar={[
+            "Se borra para siempre y no se puede deshacer",
+            "Si la cuenta ya tiene registros, no se borra: se le quita la entrada y te lo avisamos",
+          ]}
+          textoAccion="Sí, borrar la cuenta"
+          onConfirmar={() => void eliminar()}
+        />
+      </div>
+    );
+  }
+
+  // ── Lista ──
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Usuarios"
+        descripcion="Todas las personas que tienen una cuenta en el sistema: clientes, empleados y administrador"
+      />
+
+      <div className="grid gap-4 mb-6">
+        <BuscadorGrande
+          etiqueta="Buscar a una persona"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Escribe el nombre, la cédula o el correo"
+        />
+        <FiltrosChips
+          valor={chip}
+          onChange={cambiarChip}
+          opciones={[
+            { valor: "todos", etiqueta: "Todos" },
+            { valor: "clientes", etiqueta: "Clientes" },
+            { valor: "empleados", etiqueta: "Empleados" },
+            { valor: "inactivos", etiqueta: "Inactivos" },
+          ]}
+        />
+      </div>
+
+      {cargando ? (
+        <p role="status" className="pn-nota">Cargando las personas…</p>
+      ) : errorCarga ? (
+        <AvisoBanner
+          titulo="No pudimos cargar a las personas"
+          boton={<BotonAccion onClick={() => void cargarUsuarios()}>Intentar de nuevo</BotonAccion>}
+        >
+          {errorCarga}
+        </AvisoBanner>
+      ) : paginados.length === 0 ? (
+        <VacioEstado icono={Users} titulo="No encontramos a nadie con eso">
+          Revisa cómo lo escribiste o prueba con otro nombre, cédula o correo.
+        </VacioEstado>
+      ) : (
+        <div className="pn-lista">
+          {paginados.map(u => (
+            <TarjetaFila
+              key={u.id_usuario}
+              avatar={<Avatar u={u} tam={56} />}
+              nombre={u.nombre}
+              detalle={`${documentoLegible(u.tipo_documento, String(u.id_usuario))}${u.correo ? ` · ${u.correo}` : ""}`}
+              estado={
+                <div className="grid gap-2 justify-items-start">
+                  <RolesPills usuario={u} />
+                  <EstadoEntrada activo={u.estado} />
+                </div>
+              }
+              acciones={<BotonAccion variante="normal" onClick={() => setDetail(u)}>Ver datos</BotonAccion>}
+            />
+          ))}
+        </div>
+      )}
+
+      <PaginadorGrande pagina={paginaActual} total={filtrados.length} porPagina={porPagina} onCambiar={setPage} />
+
+      <section className="pn-aviso" style={{ marginTop: 28, background: "#fff", borderColor: "var(--borde-suave)", color: "var(--texto)" }}>
+        <div className="pn-aviso__texto">
+          <h2>¿Quieres agregar a alguien?</h2>
+          <p>Los clientes se agregan en Clientes y los trabajadores en Empleados. Ahí mismo se les crea la cuenta.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {onIrAClientes && <BotonAccion onClick={onIrAClientes} style={{ background: "#fff", color: "var(--texto)", borderColor: "#1a1a1a" }}>Ir a Clientes</BotonAccion>}
+          {onIrAEmpleados && <BotonAccion onClick={onIrAEmpleados} style={{ background: "#fff", color: "var(--texto)", borderColor: "#1a1a1a" }}>Ir a Empleados</BotonAccion>}
+        </div>
+      </section>
+
+      <DialogoConfirmacion
+        variante="bloqueo"
+        abierto={!!noBorrada}
+        onCambiarAbierto={a => { if (!a) setNoBorrada(null); }}
+        titulo={`La cuenta de ${noBorrada?.nombre ?? ""} no se puede borrar`}
+        porQueNo={[noBorrada?.mensaje ?? ""]}
+      />
     </div>
   );
 }

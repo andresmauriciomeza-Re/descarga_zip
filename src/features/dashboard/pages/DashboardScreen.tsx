@@ -14,9 +14,7 @@ import {
 import {
   AlertTriangle,
   Archive,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
+  BarChart3,
   ClipboardList,
   DollarSign,
   FileText,
@@ -47,6 +45,7 @@ import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenPro
 import { listarClientes } from "@/shared/services/authService";
 import { formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import {
+  hoyBogota,
   agregarDias,
   enPeriodo,
   esFechaISO,
@@ -61,10 +60,37 @@ import type { Screen } from "@/shared/utils/screen";
 import { ChartCard } from "@/shared/components/ChartCard";
 import { FiltroPeriodo } from "@/shared/components/FiltroPeriodo";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
+// Colores de las series: rojo, verde y azul (nunca solo rojo contra verde).
+const C_ROJO = "var(--rojo)";
+const C_VERDE = "var(--verde)";
+const C_AZUL = "#1E5BB8";
+/** Texto de «cuándo» para las frases de las gráficas. */
+const cuando = (p: Periodo) => (p === "dia" ? "hoy" : p === "semana" ? "esta semana" : "este mes");
+const ESTADO_VENTA_TXT: Record<Venta["estado"], string> = {
+  "Por verificar": "Por verificar",
+  "En espera": "En espera",
+  "Por entregar": "Por entregar",
+  Completado: "Completado",
+  Devolucion: "Devuelta",
+  Anulado: "Rechazado",
+};
+const ESTADO_VENTA_TONO: Record<Venta["estado"], TonoPill> = {
+  "Por verificar": "ambar",
+  "En espera": "azul",
+  "Por entregar": "morado",
+  Completado: "verde",
+  Devolucion: "gris",
+  Anulado: "rojo",
+};
 const MESES_ES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -123,19 +149,18 @@ function SelectorMes({
   if (!seleccionado) return null;
 
   return (
-    <div className="flex items-center gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Seleccionar mes">
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Seleccionar mes">
       <button
         type="button"
         onClick={() => {
           if (mesAnterior) onChange(mesAnterior.clave);
         }}
         disabled={indice === 0}
-        className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
-        aria-label="Mes anterior"
+        className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        <ChevronLeft className="h-4 w-4" />
+        ‹ Mes anterior
       </button>
-      <span className="min-w-[7.5rem] text-center text-xs font-semibold text-foreground" aria-live="polite">
+      <span className="min-w-[8rem] text-center text-[17px] font-semibold text-foreground" aria-live="polite">
         {seleccionado.etiqueta}
       </span>
       <button
@@ -144,10 +169,9 @@ function SelectorMes({
           if (mesSiguiente) onChange(mesSiguiente.clave);
         }}
         disabled={indice === meses.length - 1}
-        className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
-        aria-label="Mes siguiente"
+        className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        <ChevronRight className="h-4 w-4" />
+        Mes siguiente ›
       </button>
     </div>
   );
@@ -167,15 +191,17 @@ function GrafTooltip({
   formatear,
 }: {
   active?: boolean;
-  payload?: Array<{ dataKey?: string; name?: string; value?: number }>;
+  payload?: Array<{ dataKey?: string; name?: string; value?: number | null }>;
   label?: string;
   formatear?: (serie: string, valor: number) => string;
 }) {
-  if (!active || !payload?.length) return null;
+  // Los días que todavía no llegan vienen vacíos (null): no se muestran.
+  const visibles = (payload ?? []).filter((p) => p.value !== null && p.value !== undefined);
+  if (!active || !visibles.length) return null;
   return (
-    <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
+    <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-lg text-base">
       <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      {payload.map((p, i) => (
+      {visibles.map((p, i) => (
         <p key={i} className="font-bold text-foreground">
           {p.name ?? p.dataKey}:{" "}
           {formatear
@@ -188,11 +214,11 @@ function GrafTooltip({
 }
 
 /** Estado vacío de cada gráfica cuando no hay datos en el periodo. */
-function SinDatos({ texto = "No hay datos en este periodo" }: { texto?: string }) {
+function SinDatos({ texto = "Todavía no hay datos en este periodo" }: { texto?: string }) {
   return (
-    <div className="h-[240px] flex items-center justify-center text-sm text-muted-foreground text-center px-4 rounded-xl bg-muted/30">
-      {texto}
-    </div>
+    <VacioEstado icono={BarChart3} titulo={texto}>
+      Cuando haya movimiento, la gráfica aparecerá aquí.
+    </VacioEstado>
   );
 }
 
@@ -218,13 +244,13 @@ function EstadoVentas({
   return (
     <div
       role={estado === "error" ? "alert" : "status"}
-      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm text-center ${
+      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
         estado === "error"
           ? "bg-destructive/10 text-destructive"
           : "bg-muted/30 text-muted-foreground"
       }`}
     >
-      <Icon className={`h-4 w-4 shrink-0 ${estado === "cargando" ? "animate-spin" : ""}`} />
+      <Icon className={`h-5 w-5 shrink-0 ${estado === "cargando" ? "animate-spin" : ""}`} />
       <span>{texto}</span>
     </div>
   );
@@ -237,40 +263,52 @@ function EstadoVentas({
  * comerciales") y el Inicio del empleado: un solo componente para que los
  * estilos nunca se desalineen.
  */
+const ENLACE_POR_PANTALLA: Partial<Record<Screen, string>> = {
+  "ventas-pedidos": "Ver las ventas",
+  devoluciones: "Ver devoluciones",
+  perecederos: "Ver productos no conformes",
+  "production-orders": "Ver las órdenes",
+  "gestion-compra": "Ver las compras",
+  supplies: "Ver los insumos",
+  clientes: "Ver los clientes",
+};
+
 function TarjetaIndicador({
   label,
   value,
   sub,
   Icon,
-  bg,
-  ic,
   onClick,
+  enlace,
+  alerta,
 }: {
   label: string;
   value: string;
   sub: string;
   Icon: typeof Package;
-  bg: string;
-  ic: string;
+  /** Ya no se usan (la tarjeta nueva usa los colores del panel); se aceptan por compatibilidad. */
+  bg?: string;
+  ic?: string;
   onClick?: () => void;
+  /** Texto del botón-enlace («Ver las ventas»). */
+  enlace?: string;
+  /** Tarjeta en ámbar (hay algo que atender). */
+  alerta?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-left bg-card border border-border rounded-2xl p-5 hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg}`}>
-          <Icon className={`w-5 h-5 ${ic}`} />
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-foreground mb-0.5" style={{ fontFamily: MONO }}>
-        {value}
+    <article className={`pn-kpi${alerta ? " pn-kpi--alerta" : ""}`}>
+      <p className="pn-kpi__valor">{value}</p>
+      <p className="pn-kpi__etiqueta">
+        <Icon size={22} aria-hidden="true" className="shrink-0" />
+        <span>{label}</span>
       </p>
-      <p className="text-xs text-muted-foreground font-medium">{label}</p>
-      <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>
-    </button>
+      <p className="pn-kpi__sub">{sub}</p>
+      {onClick && enlace && (
+        <BotonAccion variante="normal" onClick={onClick}>
+          {enlace} ›
+        </BotonAccion>
+      )}
+    </article>
   );
 }
 
@@ -610,10 +648,22 @@ export function DashboardScreen({
   // "semana" por día (Lun–Dom) y "mes" por Semana 1–5. ──
   interface PuntoVenta {
     etiqueta: string;
-    ingresos: number;
-    unidades: number;
-    porciones: number;
+    // null = todavía no llega ese día/hora: se dibuja vacío (no como $0).
+    ingresos: number | null;
+    unidades: number | null;
+    porciones: number | null;
   }
+  const hoyIso = hoyISO();
+  const horaActual = hoyBogota().getHours();
+  /** Grupo del eje X (día o semana del mes) que aún no ha llegado. */
+  const grupoFuturo = (p: Periodo, mes: string, clave: string) =>
+    p === "semana"
+      ? clave > hoyIso
+      : p === "mes"
+        ? mes === mesActual && Number(clave) > semanaDelMes(hoyIso)
+        : false;
+  const vaciarSiFuturo = (futuro: boolean, punto: { etiqueta: string; ingresos: number; unidades: number; porciones: number }): PuntoVenta =>
+    futuro ? { etiqueta: punto.etiqueta, ingresos: null, unidades: null, porciones: null } : punto;
   const cantidadesVenta = (venta: Venta) => {
     if (!venta.detalle?.length) return { unidades: venta.cantidad || 0, porciones: 0 };
     return venta.detalle.reduce(
@@ -636,22 +686,22 @@ export function DashboardScreen({
           const horas = [...new Set([...HORAS_HOY, ...ventasGrafica.map(horaIngreso)])].sort((a, b) => a - b);
           return horas.map((h) => {
             const fila = ventasGrafica.filter((v) => horaIngreso(v) === h);
-            return {
+            return vaciarSiFuturo(h > horaActual, {
               etiqueta: h < 0 ? "Sin hora" : formatearHora(`${h}:00`, { sinMinutos: true }),
               ingresos: fila.reduce((s, v) => s + v.total, 0),
               unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
               porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
-            };
+            });
           });
         })()
       : gruposEje(fVentas).map((g) => {
           const fila = ventasGrafica.filter((v) => g.extraer(fechaIngreso(v)) === g.clave);
-          return {
+          return vaciarSiFuturo(grupoFuturo(fVentas, mesVentas, g.clave), {
             etiqueta: g.etiqueta,
             ingresos: fila.reduce((s, v) => s + v.total, 0),
             unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
             porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
-          };
+          });
         });
 
   // ── 4. Órdenes de compra vs compras (eje X según el filtro de la gráfica) ──
@@ -676,7 +726,7 @@ export function DashboardScreen({
   }, new Map())].sort((a, b) => b[1] - a[1]);
   const TOP_PROVEEDORES = 8;
   const proveedoresTop = new Set(proveedoresPorTotal.slice(0, TOP_PROVEEDORES).map(([p]) => p));
-  const PALETA = ["#C62828", "#1565C0", "#2e7d32", "#F59E0B", "#6a1b9a", "#00838f", "#e65100", "#37474f", "#ad1457"];
+  const PALETA = [C_ROJO, C_AZUL, C_VERDE, "#F59E0B", "#6a1b9a", "#00838f", "#e65100", "#37474f", "#ad1457"];
   const nombresProveedores = [
     ...[...proveedoresTop],
     ...(proveedoresPorTotal.length > TOP_PROVEEDORES ? ["Otros"] : []),
@@ -698,9 +748,9 @@ export function DashboardScreen({
   // Se cuentan registros (no cantidades: mezclan und, kg, g…).
   const TIPOS_NC = ["Producto", "Producto insumo", "Venta"] as const;
   const COLOR_TIPO_NC: Record<(typeof TIPOS_NC)[number], string> = {
-    Producto: "#C62828",
+    Producto: C_ROJO,
     "Producto insumo": "#F59E0B",
-    Venta: "#1565C0",
+    Venta: C_AZUL,
   };
   const noConformesGrafica = noConformidades.filter(
     (n) => esFechaISO(n.fechaRegistro) && enPeriodoGrafica(n.fechaRegistro, fNC, mesNC),
@@ -713,7 +763,7 @@ export function DashboardScreen({
     return fila;
   });
 
-  const vacio = (valores: number[]) => valores.every((v) => !v);
+  const vacio = (valores: Array<number | null>) => valores.every((v) => !v);
   const cop = (v: number) => fmt(v);
   const und = (v: number) => `${v} ${v === 1 ? "unidad" : "unidades"}`;
   /** Etiqueta del eje X según el filtro de CADA gráfica (títulos/etiquetas). */
@@ -891,14 +941,7 @@ export function DashboardScreen({
       .slice(0, 5);
     const insumosTabla = insumosBajo.slice(0, 5);
 
-    const ESTADO_VENTA: Record<Venta["estado"], string> = {
-      "Por verificar": "Por verificar",
-      "En espera": "En espera",
-      "Por entregar": "Por entregar",
-      Completado: "Completado",
-      Devolucion: "Devuelta",
-      Anulado: "Rechazado",
-    };
+    const ESTADO_VENTA = ESTADO_VENTA_TXT;
     const ESTADO_OP: Record<string, string> = {
       pendiente: "Pendiente",
       "en-proceso": "En proceso",
@@ -916,13 +959,10 @@ export function DashboardScreen({
     }) => (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-6">
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{titulo}</h2>
-          <button
-            onClick={() => navigate(destino)}
-            className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1 max-md:min-h-11 max-md:px-2 max-md:-mr-2"
-          >
-            Ver todos <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <h2 className="pn-h2">{titulo}</h2>
+          <BotonAccion variante="normal" onClick={() => navigate(destino)}>
+            Ver todos ›
+          </BotonAccion>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -948,19 +988,17 @@ export function DashboardScreen({
     );
 
     return (
-      <div className="px-4 sm:px-6 py-6 max-w-6xl mx-auto">
+      <div className="pn-contenido max-w-6xl mx-auto">
         {/* Header: saludo dinámico + fecha + chip del rol activo */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            ¡{greeting}, {firstName}! 👋
-          </h1>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <p className="text-muted-foreground capitalize">{dateStr}</p>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
-              {tieneRolActivo ? loggedInRoleName : "sin rol"}
-            </span>
-          </div>
-        </div>
+        <EncabezadoPagina
+          titulo={`¡${greeting}, ${firstName}!`}
+          descripcion={
+            <>
+              {dateStr}
+              <span className="ml-3 align-middle"><EstadoPill tono="rojo">{tieneRolActivo ? loggedInRoleName : "sin rol"}</EstadoPill></span>
+            </>
+          }
+        />
 
         {noAccess ? (
           /* Sin permisos "Ver" en ningún módulo / sin rol activo */
@@ -987,25 +1025,22 @@ export function DashboardScreen({
             {tarjetasEmp.length > 0 && (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    Resumen de tus módulos
-                  </h2>
+                  <h2 className="pn-h2">Resumen de tus módulos</h2>
                   <FiltroPeriodo
                     value={periodoInicio}
                     onChange={onPeriodoInicio}
                     ariaLabel="Filtro de las tarjetas del inicio"
                   />
                 </div>
-                <div className={`grid grid-cols-1 gap-4 ${colsTarjetas}`}>
-                  {tarjetasEmp.map(({ label, value, sub, Icon, bg, ic, screen }) => (
+                <div className={`pn-kpis ${colsTarjetas}`}>
+                  {tarjetasEmp.map(({ label, value, sub, Icon, screen }) => (
                     <TarjetaIndicador
                       key={label}
                       label={label}
                       value={value}
                       sub={sub}
                       Icon={Icon}
-                      bg={bg}
-                      ic={ic}
+                      enlace={ENLACE_POR_PANTALLA[screen]}
                       onClick={() => navigate(screen)}
                     />
                   ))}
@@ -1016,17 +1051,12 @@ export function DashboardScreen({
             {/* Accesos rápidos (solo módulos con permiso Crear) */}
             {accesosRapidos.length > 0 && (
               <div className="mb-8">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Accesos rápidos</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <h2 className="pn-h2 mb-3">Accesos rápidos</h2>
+                <div className="pn-accesos">
                   {accesosRapidos.map(({ label, Icon, screen }) => (
-                    <button
-                      key={label}
-                      onClick={() => navigate(screen)}
-                      className="flex flex-col items-center gap-2 p-4 rounded-xl font-semibold text-sm bg-card border border-border text-foreground hover:bg-muted hover:border-primary/30 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm"
-                    >
-                      <Icon className="w-5 h-5 text-primary" />
+                    <BotonAccion key={label} icono={Icon} className="pn-boton--grande" onClick={() => navigate(screen)}>
                       {label}
-                    </button>
+                    </BotonAccion>
                   ))}
                 </div>
               </div>
@@ -1108,23 +1138,14 @@ export function DashboardScreen({
   }
 
   return (
-    <div className="px-4 sm:px-6 py-6">
+    <div className="pn-contenido">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>
-          ¡{greeting}, {firstName}! 👋
-        </h1>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          <p className="text-muted-foreground capitalize">{dateStr}</p>
-        </div>
-      </div>
+      <EncabezadoPagina titulo={`¡${greeting}, ${firstName}!`} descripcion={dateStr} />
 
       {/* Tarjetas (exactamente 4) + filtro global */}
       <div className="mb-7">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
-              Indicadores comerciales
-            </h2>
+            <h2 className="pn-h2">Cómo va el negocio</h2>
             <FiltroPeriodo
               value={periodo}
               onChange={setPeriodo}
@@ -1136,16 +1157,16 @@ export function DashboardScreen({
               <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {tarjetas.map(({ label, value, sub, Icon, bg, ic, screen }) => (
+          <div className="pn-kpis">
+            {tarjetas.map(({ label, value, sub, Icon, screen }) => (
               <TarjetaIndicador
                 key={label}
                 label={label}
                 value={value}
                 sub={sub ?? etiquetaPeriodoTxt}
                 Icon={Icon}
-                bg={bg}
-                ic={ic}
+                enlace={ENLACE_POR_PANTALLA[screen]}
+                alerta={label === "Productos no conformes" && noConformesPeriodo.length > 0}
                 onClick={() => navigate(screen)}
               />
             ))}
@@ -1156,20 +1177,18 @@ export function DashboardScreen({
           propio filtro Diario/Semanal/Mensual. */}
       <div className="mb-8">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>
+            <h2 className="pn-h2">
               Estadísticas
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Cada gráfica tiene su propio filtro de periodo
+            <p className="text-base text-muted-foreground">
+              Cada gráfica tiene sus propios botones de periodo
             </p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {/* 1. Ventas del periodo: barras (unidades) + línea (ingresos) */}
             <ChartCard
               titulo="Ventas del periodo"
-              etiqueta={`Ingresos, unidades y porciones vendidas ${
-                fVentas === "dia" ? "por hora (4–10 p. m.)" : ejeDe(fVentas)
-              } (COP)`}
+              etiqueta="Lo que se vendió: cantidades en barras y el dinero que entró en la línea verde"
               periodo={fVentas}
               onPeriodo={setFVentas}
               controlAdicional={
@@ -1179,43 +1198,38 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades, d.porciones])) ? (
-                <SinDatos texto="Sin ventas en este periodo" />
+                <SinDatos texto={`Todavía no hay ventas ${cuando(fVentas)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={320}>
                   <ComposedChart data={dataVentasGrafica} margin={{ left: -8, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} {...ejeXMovil} />
-                    <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} {...ejeXMovil} />
+                    <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 14 }} />
                     <YAxis
                       yAxisId="cop"
                       orientation="right"
-                      tick={{ fontSize: 10 }}
+                      tick={{ fontSize: 14 }}
                       tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
                     />
                     <Tooltip
                       content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />}
                     />
-                    <Legend />
-                    <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill="#C62828" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill="#F97316" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke="#16A34A" strokeWidth={2} dot={false} />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
+                    <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke={C_VERDE} strokeWidth={3} dot={{ r: 4 }} connectNulls={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
-              <div className="flex justify-end mt-2">
-                <button
-                  onClick={() => navigate("sales-chart")}
-                  className="text-primary text-xs font-semibold hover:underline flex items-center gap-1 cursor-pointer max-md:min-h-11"
-                >
-                  Ver detalle por semana <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+              <div className="flex justify-end mt-3">
+                <BotonAccion onClick={() => navigate("sales-chart")}>Ver el detalle por semana ›</BotonAccion>
               </div>
             </ChartCard>
 
             {/* 2. Top 10 clientes: pedidos vs valor */}
             <ChartCard
-              titulo="Top 10 clientes frecuentes vs mayores consumidores"
-              etiqueta="Unión del top 10 por pedidos y del top 10 por valor, ordenada por pedidos"
+              titulo="Top 10 clientes"
+              etiqueta="Quiénes más compran y quiénes más dinero han gastado"
               periodo={fClientes}
               onPeriodo={setFClientes}
               controlAdicional={
@@ -1230,18 +1244,18 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : dataClientes.length === 0 ? (
-                <SinDatos texto="Sin ventas de clientes en este periodo" />
+                <SinDatos texto={`Todavía no hay compras de clientes ${cuando(fClientes)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={dataClientes} margin={{ left: -8, right: 4, bottom: 40 }}>
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={dataClientes} margin={{ left: -8, right: 4, bottom: 60 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="nombre" tick={{ fontSize: 9 }} interval={0} angle={-30} textAnchor="end" height={60} />
-                    <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <YAxis yAxisId="valor" orientation="right" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                    <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "valor" ? cop(v) : `${v} pedidos`)} />} />
-                    <Legend />
-                    <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill="#C62828" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="valor" dataKey="total" name="Valor comprado" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                    <XAxis dataKey="nombre" tick={{ fontSize: 14 }} interval={0} angle={-35} textAnchor="end" height={100} />
+                    <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 14 }} />
+                    <YAxis yAxisId="valor" orientation="right" tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                    <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "total" ? cop(v) : `${v} ${v === 1 ? "pedido" : "pedidos"}`)} />} />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
+                    <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="valor" dataKey="total" name="Valor comprado" fill={C_AZUL} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1250,7 +1264,7 @@ export function DashboardScreen({
             {/* 3. Top 10 productos más vendidos */}
             <ChartCard
               titulo="Top 10 productos más vendidos"
-              etiqueta="Cantidades por producto: pizzas en porciones y otros productos en unidades"
+              etiqueta="Lo que más se vende: pizzas por porciones y lo demás por unidades"
               periodo={fProductos}
               onPeriodo={setFProductos}
               controlAdicional={
@@ -1265,17 +1279,17 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : dataProductos.length === 0 ? (
-                <SinDatos texto="Sin productos vendidos en este periodo" />
+                <SinDatos texto={`Todavía no se ha vendido ningún producto ${cuando(fProductos)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={dataProductos} layout="vertical" margin={{ left: 8, right: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="nombre" width={120} tick={{ fontSize: 10 }} />
+                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 14 }} />
+                    <YAxis type="category" dataKey="nombre" width={150} tick={{ fontSize: 14 }} />
                     <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />} />
-                    <Legend />
-                    <Bar dataKey="unidades" name="Unidades" fill="#2563EB" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="porciones" name="Porciones" fill="#F97316" radius={[0, 4, 4, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
+                    <Bar dataKey="unidades" name="Unidades" fill={C_AZUL} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="porciones" name="Porciones" fill={C_ROJO} radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1284,7 +1298,7 @@ export function DashboardScreen({
             {/* 4. Órdenes de compra vs compras (eje X según su filtro) */}
             <ChartCard
               titulo="Órdenes de compra vs compras"
-              etiqueta={`Valor de órdenes creadas vs facturas registradas ${ejeDe(fOC)}, sin anuladas (COP)`}
+              etiqueta="Lo que se pidió a los proveedores y lo que realmente se compró, en pesos"
               periodo={fOC}
               onPeriodo={setFOC}
               controlAdicional={
@@ -1299,17 +1313,17 @@ export function DashboardScreen({
                   textoError="No fue posible cargar órdenes de compra y compras."
                 />
               ) : vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
-                <SinDatos texto="Sin compras ni órdenes en este periodo" />
+                <SinDatos texto={`Todavía no hay compras ni órdenes ${cuando(fOC)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
+                    <YAxis tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
-                    <Legend />
-                    <Bar dataKey="ordenes" name="Órdenes de compra" fill="#1565C0" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="compras" name="Compras (facturas)" fill="#C62828" radius={[4, 4, 0, 0]} />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
+                    <Bar dataKey="ordenes" name="Órdenes de compra" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="compras" name="Compras (facturas)" fill={C_ROJO} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1318,7 +1332,7 @@ export function DashboardScreen({
             {/* 5. Compras por proveedor: eje X del filtro, serie = proveedor */}
             <ChartCard
               titulo="Compras por proveedor"
-              etiqueta={`Facturas no anuladas ${ejeDe(fProv)}, una serie por proveedor (top 8 + Otros, COP)`}
+              etiqueta="A qué proveedores se les compra más, en pesos"
               periodo={fProv}
               onPeriodo={setFProv}
               controlAdicional={
@@ -1333,15 +1347,15 @@ export function DashboardScreen({
                   textoError="No fue posible cargar las compras."
                 />
               ) : !hayComprasProveedores ? (
-                <SinDatos texto="Sin compras registradas en este periodo" />
+                <SinDatos texto={`Todavía no hay compras a proveedores ${cuando(fProv)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
+                    <YAxis tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
                     {nombresProveedores.map((p, i) => (
                       <Bar
                         key={p}
@@ -1360,7 +1374,7 @@ export function DashboardScreen({
             {/* 6. Productos no conformes: registros por tipo (eje X según su filtro) */}
             <ChartCard
               titulo="Productos no conformes"
-              etiqueta={`Registros por tipo ${ejeDe(fNC)}, según la fecha de registro`}
+              etiqueta="Cuántos productos salieron mal, según el tipo"
               periodo={fNC}
               onPeriodo={setFNC}
               controlAdicional={
@@ -1375,15 +1389,15 @@ export function DashboardScreen({
                   textoError="No fue posible cargar los productos no conformes."
                 />
               ) : noConformesGrafica.length === 0 ? (
-                <SinDatos texto="Sin productos no conformes en este periodo" />
+                <SinDatos texto={`No hay productos no conformes ${cuando(fNC)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
+                <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={dataNoConformes} margin={{ left: -4, right: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 10 }} interval={0} height={40} {...ejeXMovil} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 14 }} />
                     <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
-                    <Legend />
+                    <Legend wrapperStyle={{ fontSize: 16 }} />
                     {TIPOS_NC.map((t, i) => (
                       <Bar
                         key={t}
@@ -1404,72 +1418,49 @@ export function DashboardScreen({
       {/* Quick actions */}
       {quickActions.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Accesos rápidos</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <h2 className="pn-h2 mb-3">Accesos rápidos</h2>
+          <div className="pn-accesos">
             {quickActions.map(({ label, Icon, screen }) => (
-              <button
-                key={label}
-                onClick={() => navigate(screen)}
-                className="flex flex-col items-center gap-2 p-4 rounded-xl font-semibold text-sm bg-card border border-border text-foreground hover:bg-muted hover:border-primary/30 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm"
-              >
-                <Icon className="w-5 h-5 text-primary" />
+              <BotonAccion key={label} icono={Icon} className="pn-boton--grande" onClick={() => navigate(screen)}>
                 {label}
-              </button>
+              </BotonAccion>
             ))}
           </div>
         </div>
       )}
 
       {/* Últimas ventas */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-border">
-            <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Últimas ventas</h2>
-            <button
-              onClick={() => navigate("ventas-pedidos")}
-              className="text-primary text-sm font-semibold hover:underline cursor-pointer flex items-center gap-1 max-md:min-h-11 max-md:px-2 max-md:-mr-2"
-            >
-              Ver todos <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+      <section>
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="pn-h2">Últimas ventas</h2>
+          <BotonAccion onClick={() => navigate("ventas-pedidos")}>Ver todas las ventas ›</BotonAccion>
+        </div>
+        {estadoCargaVentas ? (
+          <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
+        ) : ventasRecientes.length === 0 ? (
+          <VacioEstado icono={ShoppingBag} titulo="Todavía no hay ventas registradas">
+            Cuando se registre la primera venta, aparecerá aquí.
+          </VacioEstado>
+        ) : (
+          <div className="pn-lista">
+            {ventasRecientes.map((venta) => (
+              <TarjetaFila
+                key={venta.id}
+                nombre={venta.usuario?.trim() || "Venta general"}
+                datos={[
+                  { etiqueta: "Monto", valor: fmt(venta.total) },
+                  { etiqueta: "Hora", valor: formatearHora(horaVenta(venta)) },
+                ]}
+                estado={
+                  <EstadoPill tono={ESTADO_VENTA_TONO[venta.estado] ?? "gris"}>
+                    {ESTADO_VENTA_TXT[venta.estado] ?? venta.estado}
+                  </EstadoPill>
+                }
+              />
+            ))}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-                <tr>
-                  {["Cliente", "Monto", "Hora"].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {estadoCargaVentas ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-8">
-                      <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
-                    </td>
-                  </tr>
-                ) : ventasRecientes.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      No hay ventas registradas todavía
-                    </td>
-                  </tr>
-                ) : (
-                  ventasRecientes.map((venta) => (
-                    <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3.5 text-sm text-foreground">
-                        {venta.usuario?.trim() || "Venta general"}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>
-                        {fmt(venta.total)}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearHora(horaVenta(venta))}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-      </div>
+        )}
+      </section>
 
       {/* Empty state */}
       {noAccess && (

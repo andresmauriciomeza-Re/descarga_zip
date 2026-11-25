@@ -4,9 +4,9 @@ import type { Periodo } from "@/shared/utils/fechas";
 
 const SERIF = "var(--font-titulo)";
 
-/** Tarjeta común de las gráficas del Dashboard: título, descripción y, si se
-    pasa `periodo`/`onPeriodo`, su propio filtro Diario/Semanal/Mensual. Todas
-    las gráficas usan este componente para que el encabezado sea idéntico. */
+/** Tarjeta común de las gráficas del Dashboard: título, una frase corta y, si se
+    pasa `periodo`/`onPeriodo`, sus propios botones Hoy / Esta semana / Este mes.
+    Todas las gráficas usan este componente para que el encabezado sea idéntico. */
 export function ChartCard({
   titulo,
   etiqueta,
@@ -24,29 +24,23 @@ export function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-2xl p-5">
-      <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
-        <div className="min-w-0">
-          <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF }}>
-            {titulo}
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{etiqueta}</p>
+    <section className="pn-seccion" style={{ minWidth: 0 }}>
+      <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF, fontSize: 23, lineHeight: 1.3 }}>
+        {titulo}
+      </h3>
+      <p className="pn-seccion__ayuda" style={{ marginBottom: 14 }}>{etiqueta}</p>
+      {periodo !== undefined && onPeriodo && (
+        <div className="flex flex-col gap-3 mb-4">
+          <FiltroPeriodo
+            value={periodo}
+            onChange={onPeriodo}
+            size="sm"
+            ariaLabel={`Periodo de ${titulo}`}
+          />
+          {controlAdicional}
         </div>
-        {periodo !== undefined && onPeriodo && (
-          <div className="flex max-w-full items-center justify-end gap-2 flex-wrap">
-            <FiltroPeriodo
-              value={periodo}
-              onChange={onPeriodo}
-              size="sm"
-              ariaLabel={`Filtro de ${titulo}`}
-            />
-            <div className="flex w-auto max-w-full shrink-0 justify-end sm:w-48">
-              {controlAdicional}
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="mt-4">{children}</div>
-    </div>
+      )}
+      <div>{children}</div>
+    </section>
   );
 }

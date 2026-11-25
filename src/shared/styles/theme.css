@@ -10,7 +10,7 @@
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
-  --primary: #c62828;
+  --primary: #dc0000;
   --primary-foreground: #ffffff;
   --secondary: #fff8f0;
   --secondary-foreground: #e65100;
@@ -18,7 +18,7 @@
   --muted-foreground: #757575;
   --accent: #e65100;
   --accent-foreground: #ffffff;
-  --destructive: #c62828;
+  --destructive: #dc0000;
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.08);
   --input: transparent;
@@ -26,8 +26,8 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #c62828;
-  --chart-1: #c62828;
+  --ring: #dc0000;
+  --chart-1: #dc0000;
   --chart-2: #2e7d32;
   --chart-3: #e65100;
   --chart-4: #1565c0;
@@ -35,12 +35,32 @@
   --radius: 0.875rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #1a1a1a;
-  --sidebar-primary: #c62828;
+  --sidebar-primary: #dc0000;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f5f5f5;
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: rgba(0,0,0,0.08);
-  --sidebar-ring: #c62828;
+  --sidebar-ring: #dc0000;
+  /* Variables del panel de administración */
+  --rojo: #DC0000;
+  --rojo-texto: #8E1414;
+  --rojo-suave: #FDE7E7;
+  --verde: #2E7D32;
+  --verde-texto: #1B5E20;
+  --verde-suave: #E3F1E4;
+  --ambar-texto: #5C3300;
+  --ambar-suave: #FFF1D6;
+  --ambar-borde: #E0B25C;
+  --azul-texto: #0D3C8C;
+  --azul-suave: #E3EEFB;
+  --morado-texto: #4E2475;
+  --morado-suave: #F1E8F7;
+  --gris-texto: #4A423B;
+  --gris-suave: #EFE9E1;
+  --crema: #F6F3EE;
+  --borde-suave: #E6DED3;
+  --borde-campo: #A89C8F;
+  --texto: #1A1A1A;
 }
 
 .dark {

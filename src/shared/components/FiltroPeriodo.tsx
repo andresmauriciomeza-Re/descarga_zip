@@ -1,15 +1,15 @@
 import type { Periodo } from "@/shared/utils/fechas";
 
-/** Opciones del filtro de periodo: Diario · Semanal · Mensual (el antiguo
-    "Total" se eliminó para que siempre haya un rango acotado). */
+/** Opciones del filtro de periodo: Hoy · Esta semana · Este mes. Los valores
+    internos (dia, semana, mes) no cambian; solo el texto que ve la persona. */
 const OPCIONES: { id: Periodo; label: string }[] = [
-  { id: "dia", label: "Diario" },
-  { id: "semana", label: "Semanal" },
-  { id: "mes", label: "Mensual" },
+  { id: "dia", label: "Hoy" },
+  { id: "semana", label: "Esta semana" },
+  { id: "mes", label: "Este mes" },
 ];
 
-/** Control segmentado de periodo (Dashboard: filtro global y filtro propio
-    de cada gráfica). Un solo componente para no duplicar el JSX del pill. */
+/** Botones grandes de periodo (Dashboard: filtro global y filtro propio
+    de cada gráfica). Un solo componente para todos con el mismo estilo. */
 export function FiltroPeriodo({
   value,
   onChange,
@@ -22,20 +22,15 @@ export function FiltroPeriodo({
   ariaLabel?: string;
 }) {
   return (
-    <div className="flex gap-1 bg-muted rounded-xl p-1" role="group" aria-label={ariaLabel}>
+    <div className="pn-opciones" role="group" aria-label={ariaLabel}>
       {OPCIONES.map((p) => (
         <button
           key={p.id}
           type="button"
           aria-pressed={value === p.id}
           onClick={() => onChange(p.id)}
-          className={`rounded-lg max-md:min-h-11 font-semibold cursor-pointer transition-all ${
-            size === "sm" ? "px-3 py-1.5 text-xs" : "px-3.5 py-1.5 text-sm"
-          } ${
-            value === p.id
-              ? "bg-primary text-white shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+          className="pn-opcion"
+          style={size === "sm" ? { minHeight: 50, padding: "0 18px" } : undefined}
         >
           {p.label}
         </button>

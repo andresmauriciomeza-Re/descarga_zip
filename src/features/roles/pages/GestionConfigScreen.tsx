@@ -1,19 +1,23 @@
 import { useState, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { X, Check, ChevronRight, Plus, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { X, Check, Plus, Lock, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
-import {
-  EstadoSelect,
-  ESTADO_ACTIVO_COLOR,
-  ESTADO_INACTIVO_COLOR,
-} from "@/shared/components/EstadoSelect";
-import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
 import { validarNombre } from "@/shared/components/campo";
 import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/nombreRol";
+import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
+import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
+import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
+import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
+import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
+import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
+import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
+import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
+import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
+import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
+import { VacioEstado } from "@/shared/components/panel/VacioEstado";
 import {
   cambiarEstadoRol as cambiarEstadoRolApi,
   crearRol as crearRolApi,
@@ -383,7 +387,54 @@ export function PermisosTablaDetalle({ accesos }: { accesos: AccesosMap }) {
 }
 
 
-// ── RolModal — árbol izquierdo + CRUD derecho ─────────────────────────
+// ── Palabras que ve la persona (los valores internos NO cambian) ─────────
+// En el AccesosMap y en el backend las acciones siguen siendo "Ver", "Crear",
+// "Editar", "Eliminar" y "Descargar Excel". Aquí solo se traducen a lo que se lee.
+const COLUMNAS_MATRIZ: readonly Accion[] = [...ACCIONES, ACCION_EXCEL];
+const ETIQUETA_COLUMNA: Record<Accion, string> = {
+  Ver: "Ver",
+  Crear: "Agregar",
+  Editar: "Cambiar",
+  Eliminar: "Borrar",
+  [ACCION_EXCEL]: "Descargar Excel",
+};
+const VERBO_ACCION: Record<Accion, string> = {
+  Ver: "ver",
+  Crear: "agregar",
+  Editar: "cambiar",
+  Eliminar: "borrar",
+  [ACCION_EXCEL]: "descargar Excel",
+};
+// Áreas en el orden en que le sirven a quien configura el cargo.
+const ORDEN_AREAS = ["Ventas", "Producción", "Compras", "Configuración", "Dashboard"];
+const AREAS_MATRIZ = ORDEN_AREAS
+  .map(a => MENU_TREE.find(m => m.modulo === a))
+  .filter((m): m is (typeof MENU_TREE)[number] => !!m);
+
+/** "A, B y C" */
+const listaY = (xs: string[]) =>
+  xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} y ${xs[xs.length - 1]}`;
+
+/** "Ver, agregar y cambiar" */
+const frasePermisos = (perms: readonly Accion[]) => {
+  const verbos = TODAS_ACCIONES.filter(a => perms.includes(a)).map(a => VERBO_ACCION[a]);
+  const f = listaY(verbos);
+  return f.charAt(0).toUpperCase() + f.slice(1);
+};
+
+/** Opciones del menú en las que el cargo tiene al menos un permiso. */
+const opcionesConAcceso = (accesos: AccesosMap) =>
+  MENU_TREE.flatMap(({ modulo, subs }) => subs.filter(sub => (accesos[KEY(modulo, sub)] ?? []).length > 0));
+
+const textoPuedeUsar = (accesos: AccesosMap) => {
+  const o = opcionesConAcceso(accesos);
+  return o.length === 0 ? "nada todavía" : listaY(o);
+};
+
+const textoPersonas = (n: number) =>
+  n === 0 ? "Nadie lo tiene todavía" : n === 1 ? "1 persona lo tiene" : `${n} personas lo tienen`;
+
+// ── Formulario crear / cambiar cargo ─────────────────────────────────
 function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAccesos, onClose, onSave, roles, rolId, accesosPropios }: {
   title: string;
   initialNombre: string; initialDesc: string; initialActivo: boolean; initialAccesos: AccesosMap;
@@ -397,9 +448,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const [desc,       setDesc]       = useState(initialDesc);
   const [activo,     setActivo]     = useState(initialActivo);
   const [accesos,    setAccesos]    = useState<AccesosMap>({ ...initialAccesos });
-  const [moduloActivo, setModuloActivo] = useState<string | null>(null);
-  const [mostrarResumen, setMostrarResumen] = useState(false);
-  const [moduloResumen, setModuloResumen] = useState<string | null>(null);
   const [errors,     setErrors]     = useState<{ nombre?: string; modulos?: string }>({});
 
   // ── P3 — Validación en tiempo real del nombre del rol ──────────────────
@@ -445,8 +493,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
     setErrors(p => ({ ...p, nombre: undefined }));
   };
 
-  const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
-
   const isSubOn = (m: string, s: string) => {
     const k = KEY(m, s);
     return k in accesos && accesos[k].length > 0;
@@ -456,9 +502,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   // los 6 sub-módulos de `SUBS_CON_EXCEL`.
   const isAllMod = (m: string, subs: string[]) =>
     subs.every(s => accionesDeSub(m, s).every(a => (accesos[KEY(m, s)] ?? []).includes(a)));
-  const isSomeMod = (m: string, subs: string[]) => subs.some(s => isSubOn(m, s));
-  const countAssignedPermissions = (celda: Celda) =>
-    subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub)).length;
 
   // ¿El usuario con sesión tiene este privilegio concreto? Si no, el rol no
   // puede asignárselo (evita que un rol suplente parcial conceda más de lo
@@ -476,19 +519,6 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
       return { ...prev, [k]: cur.includes(accion) ? cur.filter(a => a !== accion) : [...cur, accion] };
     });
   };
-
-  const permisoBadge = (m: string, s: string, accion: Accion, compacto = false) => (
-    <button
-      key={accion}
-      type="button"
-      onClick={() => toggleAccion(m, s, accion)}
-      aria-pressed={(accesos[KEY(m, s)] ?? []).includes(accion)}
-      title={`${(accesos[KEY(m, s)] ?? []).includes(accion) ? "Desactivar" : "Activar"} privilegio ${accion}`}
-      className={`${compacto ? "text-[10px] px-1.5 py-0" : "text-xs px-2.5 py-1"} inline-flex items-center max-md:min-h-11 max-md:px-3.5 font-semibold rounded-lg border cursor-pointer transition-all active:scale-95 ${(accesos[KEY(m, s)] ?? []).includes(accion) ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"}`}
-    >
-      {accion}
-    </button>
-  );
 
   const toggleCelda = (celda: Celda) => {
     const subs = subsDeCelda(celda);
@@ -512,361 +542,286 @@ function RolModal({ title, initialNombre, initialDesc, initialActivo, initialAcc
   const handleSave = () => {
     const errs: { nombre?: string; modulos?: string } = {};
     const aGuardar = nombre.trim();
-    if (!aGuardar) errs.nombre = "El nombre del rol es obligatorio";
+    if (!aGuardar) errs.nombre = "Escribe el nombre del cargo para poder guardarlo";
     else if (validarNombre(aGuardar)) errs.nombre = "Usa solo letras y espacios, sin espacios dobles";
     else if (rolExistente) errs.nombre = `Ya existe el rol «${rolExistente.nombre}». Un solo rol agrupa a hombres y mujeres.`;
     else if (doble) errs.nombre = `Un solo nombre agrupa a todos: usa «${doble}»`;
     else if (errFemenina) errs.nombre = errFemenina;
-    if (selectedSubs.length === 0) errs.modulos = "Selecciona al menos un módulo o sub-opción";
+    if (selectedSubs.length === 0) errs.modulos = "Marca al menos una casilla para que el cargo pueda hacer algo.";
     if (Object.keys(errs).length) { setErrors(errs); return; }
     // Al crear y al editar el nombre se guarda con forma genérica y
     // normalizado ("repartidor" → "Repartidor", "CAJERO " → "Cajero").
     onSave(formatearNombreRol(aGuardar), desc.trim(), activo, accesos);
   };
 
-  const renderPermissionDetails = (celda: Celda) => {
-    const subs = subsDeCelda(celda);
-    return (
-      <div className="space-y-2">
-        {subs.map(sub => {
-          const k = KEY(celda.modulo, sub);
-          const selAcc = accesos[k] ?? [];
-          // Por sub-opción, no por módulo: aquí es donde aparece "Descargar Excel".
-          const disponibles = accionesDeSub(celda.modulo, sub);
-          const allSel = disponibles.every(a => selAcc.includes(a));
-          return (
-            <div key={sub} className="border border-border rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 bg-muted/40 border-b border-border">
-                <span className="text-sm font-semibold text-foreground">{sub}</span>
-                {disponibles.length > 1 && (
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={allSel}
-                    onClick={() => setAccesos(prev => ({ ...prev, [k]: allSel ? [] : disponibles.filter(a => puedeAsignar(celda.modulo, sub, a)) }))}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-11 rounded-lg text-sm font-bold border transition-all cursor-pointer active:scale-95 ${
-                      allSel
-                        ? "bg-red-100 text-red-700 border-red-200"
-                        : "bg-muted text-muted-foreground border-border hover:bg-primary/30"
-                    }`}
-                  >
-                    <Check className={`w-4 h-4 ${allSel ? "" : "opacity-0"}`} />
-                    Todos
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-1.5 flex-wrap px-3 py-2.5">
-                {disponibles.map(accion => {
-                  const on = selAcc.includes(accion);
-                  const permitido = puedeAsignar(celda.modulo, sub, accion);
-                  return (
-                    <button key={accion} type="button" disabled={!permitido}
-                      title={permitido ? undefined : "No tienes este privilegio para asignarlo"}
-                      onClick={() => toggleAccion(celda.modulo, sub, accion)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 max-md:min-h-11 max-md:px-3.5 rounded-lg text-xs font-semibold border transition-all ${!permitido ? "opacity-40 cursor-not-allowed" : "cursor-pointer active:scale-95"} ${on ? accionColors[accion] : "bg-muted text-muted-foreground border-border hover:border-primary/30"
-                        }`}
-                    >
-                      {on && <Check className="w-3 h-3" />}{accion}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderAssignedSummary = (celda: Celda) => {
-    const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
-    return (
-      <div className="divide-y divide-border px-2">
-        {assignedSubs.map(sub => {
-          return (
-            <div key={sub} className="flex items-center justify-between gap-3 py-2 max-md:flex-col max-md:items-start">
-              <span className="text-xs font-medium text-foreground">{sub}</span>
-              <div className="flex gap-1 flex-wrap justify-end max-md:justify-start">
-                {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion, true))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderAssignedDetails = (celda: Celda) => {
-    const assignedSubs = subsDeCelda(celda).filter(sub => isSubOn(celda.modulo, sub));
-    return (
-      <div className="divide-y divide-border px-2">
-        {assignedSubs.map(sub => {
-          return (
-            <div key={sub} className="py-2.5">
-              <div className="flex items-center justify-between gap-3 max-md:flex-col max-md:items-start">
-                <span className="text-sm font-semibold text-foreground">{sub}</span>
-                <div className="flex gap-1.5 flex-wrap justify-end max-md:justify-start">
-                  {accionesDeSub(celda.modulo, sub).map(accion => permisoBadge(celda.modulo, sub, accion))}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-        className="bg-card rounded-2xl w-full max-w-5xl shadow-2xl border border-border flex flex-col"
-        style={{ maxHeight: "calc(100dvh - 2rem)" }}>
+    <Dialog.Root open onOpenChange={abierto => { if (!abierto) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="pn-dialogo-fondo" />
+        <Dialog.Content className="pn-modal" aria-describedby={undefined}>
+          <div className="pn-modal__cab">
+            <Dialog.Title className="pn-modal__titulo">{title}</Dialog.Title>
+          </div>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
-          <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-          <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-        </div>
-
-        {/* Two-column body — cada columna tiene su propio scroll.
-            `min-w-0` en las dos columnas: sin él, el `min-content` de la
-            grilla de 3 columnas empujaba a la columna izquierda más allá del
-            50% y el desborde partía el modal en dos. */}
-        <div
-          className="flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-border flex-1 min-h-0 min-w-0 overflow-hidden max-md:overflow-y-auto"
-        >
-
-          {/* ── LEFT 50%: Información + Módulos, con scroll propio ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col divide-y divide-border overflow-y-auto max-md:overflow-visible max-md:shrink-0">
-
-            {/* TOP: Información del rol */}
-            <div className="px-5 py-3 space-y-2.5 shrink-0">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Información del rol</p>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Nombre *</label>
-                <input value={nombre}
-                  // P3: se limpia el error del envío al escribir; el error en
-                  // tiempo real (formato/duplicado/forma femenina o doble) se
-                  // deriva arriba y se pinta debajo del campo.
-                  onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(p => ({ ...p, nombre: undefined })); }}
-                  placeholder="Ej: Cajero"
-                  className={`${iCls} ${nombreError ? "!border-red-400 !bg-red-50/30" : ""}`} />
-                {nombreError && (
-                  <div className="mt-1">
-                    <p className="text-xs text-red-500 leading-tight">{nombreError}</p>
-                    {sugerida && nombreError === errFemenina && (
-                      <button
-                        type="button"
-                        onClick={aplicarSugerencia}
-                        className="mt-1.5 px-2.5 py-1 max-md:min-h-11 max-md:px-3.5 text-[11px] font-semibold rounded-lg border border-border bg-muted text-foreground hover:bg-border cursor-pointer transition-colors"
-                      >
-                        Usar «{sugerida}»
-                      </button>
+          <div className="pn-cargo-form">
+            <div className="pn-cargo-form__izq">
+              {/* 1 · Nombre */}
+              <SeccionFormulario numero={1} titulo="¿Cómo se llama el cargo?">
+                <div className="grid gap-4">
+                  <CampoFormulario
+                    etiqueta="Nombre del cargo"
+                    ayuda="Usa un nombre para todos, por ejemplo Mesero"
+                    error={nombreError}
+                  >
+                    {(p) => (
+                      <input
+                        {...p}
+                        value={nombre}
+                        // P3: se limpia el error del envío al escribir; el error en
+                        // tiempo real (formato/duplicado/forma femenina o doble) se
+                        // deriva arriba y se pinta debajo del campo.
+                        onChange={e => { setNombre(e.target.value); if (errors.nombre) setErrors(prev => ({ ...prev, nombre: undefined })); }}
+                        placeholder="Ej: Cajero"
+                      />
+                    )}
+                  </CampoFormulario>
+                  {sugerida && nombreError === errFemenina && (
+                    <div>
+                      <BotonAccion variante="normal" onClick={aplicarSugerencia}>Usar «{sugerida}»</BotonAccion>
+                    </div>
+                  )}
+                  <CampoFormulario etiqueta="Descripción" opcional ayuda="Una frase que explique para qué sirve este cargo">
+                    {(p) => (
+                      <textarea
+                        {...p}
+                        value={desc}
+                        onChange={e => setDesc(e.target.value)}
+                        rows={3}
+                        placeholder="Ej: Atiende la caja y cobra los pedidos"
+                      />
+                    )}
+                  </CampoFormulario>
+                  <div>
+                    <p className="pn-etiqueta">¿El cargo queda encendido?</p>
+                    {rolId ? (
+                      <p className="pn-campo__ayuda">
+                        Este cargo está apagado. Después de cambiarlo, enciéndelo desde la lista de cargos.
+                      </p>
+                    ) : (
+                      <OpcionesBotones
+                        etiqueta="Estado del cargo"
+                        valor={activo ? "activo" : "inactivo"}
+                        onChange={v => setActivo(v === "activo")}
+                        opciones={[
+                          { valor: "activo", etiqueta: "Encendido" },
+                          { valor: "inactivo", etiqueta: "Apagado" },
+                        ]}
+                      />
                     )}
                   </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Descripción</label>
-                <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={2}
-                  placeholder="Responsabilidades del rol..." className={iCls + " resize-none"} />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Estado</label>
-                {rolId
-                  ? <p className="text-sm text-muted-foreground py-2">Inactivo. Actívalo desde la lista después de editarlo.</p>
-                  : <select value={activo ? "activo" : "inactivo"} onChange={e => setActivo(e.target.value === "activo")}
-                      className={iCls + " cursor-pointer"}>
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>}
-              </div>
-            </div>
-
-            {/* BOTTOM: Grilla de módulos. El scroll vive DENTRO de la grilla;
-                `min-h-0` evita que el contenedor flex la recorte (antes usaba
-                overflow-hidden y "Ventas" quedaba inalcanzable). `px-5` es el
-                mismo padding que los campos de arriba, así la grilla queda
-                alineada con el input de Nombre; `min-w-0` y el grid con
-                minmax(0, 1fr) evitan que las tarjetas la desborden. */}
-            <div className="flex flex-col flex-1 min-h-0 min-w-0 px-5 py-3">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
-                Módulos y sub-opciones
-                 <span className="ml-2 text-primary font-semibold normal-case">{selectedSubs.length} permisos seleccionados</span>
-              </p>
-              {errors.modulos && <p className="text-xs text-red-500 mb-2">{errors.modulos}</p>}
-              <button
-                type="button"
-                onClick={() => { setMostrarResumen(true); setModuloResumen(null); setModuloActivo(null); }}
-                className={`w-full mb-3 inline-flex items-center justify-center gap-2 px-3 py-2 max-md:min-h-11 rounded-xl border text-sm font-semibold cursor-pointer transition-colors ${
-                  mostrarResumen
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border hover:bg-muted text-foreground"
-                }`}
-              >
-                Ver permisos
-              </button>
-              <div
-                className="grid grid-cols-2 md:grid-cols-3"
-                style={{ display: "grid", gap: "12px", gridAutoRows: "1fr", boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
-              >
-                {CELDAS.map(celda => {
-                  const modulo = celda.nombre;
-                  const Icon = CELDA_ICONOS[modulo];
-                  const subs = subsDeCelda(celda);
-                  const activo = moduloActivo === modulo;
-                  const allOn = isAllMod(celda.modulo, subs);
-                  const someOn = isSomeMod(celda.modulo, subs);
-                  return (
-                    <div
-                      key={modulo}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => { setMostrarResumen(false); setModuloResumen(null); setModuloActivo(modulo); }}
-                      onKeyDown={event => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setMostrarResumen(false);
-                          setModuloResumen(null);
-                          setModuloActivo(modulo);
-                        }
-                      }}
-                      aria-pressed={activo}
-                      style={{ boxSizing: "border-box", width: "100%", maxWidth: "100%" }}
-                      className={`relative h-full min-w-0 flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border transition-all cursor-pointer active:scale-95 ${
-                        activo
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-card hover:bg-muted hover:border-primary/30"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-label={`${allOn ? "Quitar" : "Asignar"} todos los permisos de ${modulo}`}
-                        aria-checked={allOn}
-                        onClick={event => { event.stopPropagation(); toggleCelda(celda); }}
-                        style={{ position: "absolute", top: "8px", right: "8px" }}
-                        className={`w-[18px] h-[18px] max-md:after:absolute max-md:after:-inset-3.5 max-md:after:content-[''] rounded-[5px] border flex items-center justify-center transition-colors ${
-                          allOn
-                            ? "bg-primary border-primary"
-                            : someOn
-                              ? "bg-primary/40 border-primary/40"
-                              : "border-border bg-background"
-                        }`}
-                      >
-                        {allOn && <Check className="w-3 h-3 text-white" />}
-                        {someOn && !allOn && <span className="w-1.5 h-0.5 rounded-full bg-primary" />}
-                      </button>
-                      {Icon
-                        ? <Icon className={`w-5 h-5 ${activo ? "text-primary" : "text-muted-foreground"}`} />
-                        : <span className="w-5 h-5" />}
-                      <span className={`text-[11px] font-semibold text-center leading-tight ${activo ? "text-primary" : "text-foreground"}`}>
-                        {modulo}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ── RIGHT 50%: Permisos CRUD — scroll independiente ── */}
-          <div className="md:w-1/2 min-w-0 flex flex-col min-h-0 px-5 py-4 overflow-y-auto max-md:overflow-visible max-md:shrink-0">
-           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 shrink-0">
-             Asignar permisos al rol
-           </p>
-             {mostrarResumen ? (
-               (() => {
-                 const asignados = CELDAS.filter(celda =>
-                   isSomeMod(celda.modulo, subsDeCelda(celda))
-                 );
-                 return (
-                    <div className="flex-1 min-h-0 space-y-3 overflow-y-auto max-md:overflow-visible pr-1">
-                     {asignados.length === 0 ? (
-                       <div className="flex flex-col items-center justify-center text-center min-h-40">
-                         <p className="text-sm font-semibold text-foreground mb-1">Sin permisos asignados</p>
-                         <p className="text-xs text-muted-foreground max-w-52">
-                           Selecciona un módulo o un privilegio para comenzar a configurar el rol.
-                         </p>
-                       </div>
-                     ) : (
-                       <>
-                         <p className="text-xs text-muted-foreground">
-                           Resumen de los permisos asignados. Selecciona un módulo para ver todas sus opciones.
-                         </p>
-                         <div className="space-y-2">
-                           {asignados.map(celda => {
-                             const abierto = celda.nombre === moduloResumen;
-                             return (
-                               <div key={celda.nombre} className="border border-border rounded-xl overflow-hidden">
-                                 <button
-                                   type="button"
-                                   onClick={() => setModuloResumen(abierto ? null : celda.nombre)}
-                                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 max-md:min-h-11 bg-muted/40 hover:bg-muted text-left cursor-pointer"
-                                 >
-                                    <span className="text-sm font-semibold text-foreground">{celda.nombre}</span>
-                                    <span className="text-xs font-semibold text-primary">
-                                      {countAssignedPermissions(celda)} permisos
-                                    </span>
-                                  </button>
-                                  {abierto ? renderAssignedDetails(celda) : renderAssignedSummary(celda)}
-                                </div>
-                             );
-                           })}
-                         </div>
-                       </>
-                     )}
-                   </div>
-                 );
-               })()
-             ) : moduloActivo === null ? (
-               <div className="flex flex-col items-center justify-center text-center flex-1">
-                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-2">
-                  <span className="text-2xl">🔒</span>
                 </div>
-                <p className="text-sm font-semibold text-foreground mb-1">Ningún módulo abierto</p>
-                <p className="text-xs text-muted-foreground max-w-44">
-                  Elige un módulo en la grilla para ver sus permisos y configurarlos
-                </p>
-              </div>
-            ) : (
-               <div className="flex-1 min-h-0 overflow-y-auto max-md:overflow-visible pr-1 space-y-4">
-                 {(() => {
-                  // Solo la celda abierta. Antes se iteraba todo MENU_TREE
-                  // filtrando por isSubOn, así que un módulo sin permisos no
-                  // mostraba nada; ahora se listan TODAS sus sub-opciones para
-                  // que sus botones aparezcan sin marcar hasta que se pulse uno.
-                  // Se resuelve por celda (no por módulo) para que "Usuarios",
-                  // que comparte módulo con Configuración, muestre las suyas.
-                  const celda = CELDAS.find(c => c.nombre === moduloActivo);
-                   if (!celda) return null;
-                   return (
-                     <>
-                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {celda.nombre}
-                      </p>
-                       {renderPermissionDetails(celda)}
-                     </>
-                   );
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
+              </SeccionFormulario>
 
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="px-5 py-2 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-          <button onClick={handleSave}
-            // P3: bloqueado mientras el nombre sea inválido o duplicado
-            // ("Este rol ya existe"), o falte elegir módulos tras un intento.
-            disabled={guardarNombreBloqueado}
-            title={guardarNombreBloqueado ? "Corrige el nombre del rol para guardarlo" : undefined}
-            className={`px-6 py-2 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold transition-colors active:scale-95 ${guardarNombreBloqueado ? "opacity-50 cursor-not-allowed" : "hover:bg-red-700 cursor-pointer"}`}>Guardar rol</button>
-        </div>
-      </motion.div>
-    </div>
+              {/* 2 · Matriz de permisos */}
+              <SeccionFormulario
+                numero={2}
+                titulo="¿Qué puede hacer esta persona?"
+                ayuda="Marca una casilla por cada cosa que podrá hacer. Lo que no marques, no podrá hacerlo."
+              >
+                {errors.modulos && (
+                  <p className="pn-campo__error" role="alert" style={{ marginBottom: 12 }}>
+                    <span>{errors.modulos}</span>
+                  </p>
+                )}
+                <div className="pn-matriz-caja">
+                  <table className="pn-matriz">
+                    <thead>
+                      <tr>
+                        <th scope="col">Opción del menú</th>
+                        {COLUMNAS_MATRIZ.map(a => (
+                          <th key={a} scope="col">{ETIQUETA_COLUMNA[a]}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    {AREAS_MATRIZ.map(({ modulo, subs }) => {
+                      const todo = isAllMod(modulo, subs);
+                      return (
+                        <tbody key={modulo}>
+                          <tr className="pn-matriz__area">
+                            <th scope="rowgroup" colSpan={COLUMNAS_MATRIZ.length + 1}>
+                              <span>{modulo}</span>
+                              <button
+                                type="button"
+                                className="pn-chip"
+                                onClick={() => toggleCelda({ nombre: modulo, modulo })}
+                              >
+                                {todo ? `Quitar todo de ${modulo}` : `Marcar todo en ${modulo}`}
+                              </button>
+                            </th>
+                          </tr>
+                          {subs.map(sub => {
+                            const k = KEY(modulo, sub);
+                            const marcadas = accesos[k] ?? [];
+                            const disponibles = accionesDeSub(modulo, sub);
+                            return (
+                              <tr key={sub}>
+                                <th scope="row">{sub}</th>
+                                {COLUMNAS_MATRIZ.map(a => {
+                                  if (!disponibles.includes(a)) {
+                                    return (
+                                      <td key={a} className="pn-matriz__na">
+                                        <span aria-hidden="true">—</span>
+                                        <span className="sr-only">{`${sub}: ${ETIQUETA_COLUMNA[a]} no aplica`}</span>
+                                      </td>
+                                    );
+                                  }
+                                  const permitido = puedeAsignar(modulo, sub, a);
+                                  return (
+                                    <td key={a}>
+                                      <input
+                                        type="checkbox"
+                                        checked={marcadas.includes(a)}
+                                        disabled={!permitido}
+                                        onChange={() => toggleAccion(modulo, sub, a)}
+                                        aria-label={`${sub}: ${ETIQUETA_COLUMNA[a]}`}
+                                        title={permitido ? undefined : "No tienes este permiso para poder darlo"}
+                                      />
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      );
+                    })}
+                  </table>
+                </div>
+              </SeccionFormulario>
+            </div>
+
+            {/* Resumen + botones (abajo en celular) */}
+            <aside className="pn-cargo-form__der">
+              <section className="pn-seccion">
+                <h2>Así queda el cargo</h2>
+                <p className="pn-seccion__ayuda">
+                  {nombreTrim ? `El cargo «${nombreTrim}»` : "Este cargo"}{" "}
+                  {selectedSubs.length === 0 ? "todavía no puede hacer nada." : "podrá hacer lo siguiente:"}
+                </p>
+                <div className="pn-resumen">
+                  {AREAS_MATRIZ.map(({ modulo, subs }) => (
+                    <div key={modulo}>
+                      <p className="pn-resumen__area">{modulo}</p>
+                      <ul>
+                        {subs.map(sub => {
+                          const perms = accesos[KEY(modulo, sub)] ?? [];
+                          const si = perms.length > 0;
+                          return (
+                            <li key={sub} className={si ? "pn-resumen__si" : "pn-resumen__no"}>
+                              {si
+                                ? <Check size={22} aria-hidden="true" style={{ color: "var(--verde)" }} />
+                                : <X size={22} aria-hidden="true" style={{ color: "var(--gris-texto)" }} />}
+                              <span>
+                                <strong>{sub}</strong>
+                                {si ? `: ${frasePermisos(perms)}` : ": no"}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                <div className="pn-resumen__botones">
+                  <BotonAccion
+                    variante="principal"
+                    onClick={handleSave}
+                    disabled={guardarNombreBloqueado}
+                    title={guardarNombreBloqueado ? "Corrige lo que está en rojo para guardar" : undefined}
+                  >
+                    Guardar cargo
+                  </BotonAccion>
+                  <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+// ── Ver qué puede hacer un cargo ──────────────────────────────────────
+function DetalleCargo({ rol, onClose, onCambiar, onIrAEmpleados, puedeCambiar }: {
+  rol: Rol;
+  onClose: () => void;
+  onCambiar: () => void;
+  onIrAEmpleados?: () => void;
+  puedeCambiar: boolean;
+}) {
+  const personas = rol.usuariosAsignados ?? 0;
+  return (
+    <Dialog.Root open onOpenChange={abierto => { if (!abierto) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="pn-dialogo-fondo" />
+        <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+          <div className="pn-modal__cab">
+            <Dialog.Title className="pn-modal__titulo">Cargo: {rol.nombre}</Dialog.Title>
+            <EstadoPill tono={rol.activo ? "verde" : "gris"}>{rol.activo ? "Encendido" : "Apagado"}</EstadoPill>
+          </div>
+          {rol.descripcion && <DatosDetalle datos={[{ etiqueta: "Para qué sirve", valor: rol.descripcion }]} />}
+
+          <div className="pn-cargo-detalle">
+            <section className="pn-seccion">
+              <h2>Qué puede hacer</h2>
+              {AREAS_MATRIZ.map(({ modulo, subs }) => (
+                <div key={modulo} style={{ marginTop: 14 }}>
+                  <p className="pn-resumen__area">{modulo}</p>
+                  <div className="pn-permisos">
+                    {subs.map(sub => {
+                      const perms = rol.accesos[KEY(modulo, sub)] ?? [];
+                      const n = perms.length;
+                      return (
+                        <div key={sub} className={`pn-permisos__fila${n === 0 ? " pn-permisos__fila--no" : ""}`}>
+                          <strong>{sub}</strong>
+                          <span>{n === 0 ? "No puede hacer nada aquí" : frasePermisos(perms)}</span>
+                          <EstadoPill tono={n === 0 ? "gris" : "verde"}>
+                            {n === 0 ? "No" : `${n} ${n === 1 ? "acción" : "acciones"}`}
+                          </EstadoPill>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </section>
+
+            <aside className="pn-seccion" style={{ alignSelf: "start" }}>
+              <h2>Quiénes lo tienen</h2>
+              <p className="pn-seccion__ayuda">{textoPersonas(personas)}</p>
+              {onIrAEmpleados && (
+                <BotonAccion variante="normal" onClick={() => { onClose(); onIrAEmpleados(); }}>
+                  Ir a Empleados
+                </BotonAccion>
+              )}
+            </aside>
+          </div>
+
+          <div className="pn-dialogo__botones" style={{ marginTop: 18 }}>
+            {puedeCambiar && !rol.activo && (
+              <BotonAccion variante="principal" onClick={onCambiar}>Cambiar permisos</BotonAccion>
+            )}
+            <BotonAccion variante="oscuro" onClick={onClose}>Cerrar</BotonAccion>
+          </div>
+          {puedeCambiar && rol.activo && (
+            <p className="pn-campo__ayuda" style={{ marginTop: 10 }}>
+              Para cambiar lo que puede hacer, primero apágalo desde la lista de cargos.
+            </p>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -904,6 +859,7 @@ export function GestionConfigScreen({
   canDelete = true,
   accesosPropios,
   loggedInRolId,
+  onIrAEmpleados,
 }: {
   canVer?: boolean;
   canCreate?: boolean;
@@ -911,12 +867,14 @@ export function GestionConfigScreen({
   canDelete?: boolean;
   accesosPropios?: AccesosMap;
   loggedInRolId?: string | null;
+  /** Lleva a la pantalla de Empleados (botón «Ir a Empleados»). */
+  onIrAEmpleados?: () => void;
 }) {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");
   const [page,       setPage]      = useState(1);
-  const PER_PAGE = 5;
+  const PER_PAGE = 10;
   const [showCreate, setShowCreate]= useState(false);
   const [editItem,   setEditItem]  = useState<Rol | null>(null);
   const [detailItem, setDetailItem]= useState<Rol | null>(null);
@@ -1055,299 +1013,219 @@ export function GestionConfigScreen({
     }
   };
 
-  // Piezas de una fila. Las usan la tabla (desde 768 px) y las tarjetas (menos de
-  // 768 px) para mostrar exactamente los mismos controles y handlers.
-  const estadoRol = (r: Rol) => (
-    <span
-      title={
-        esRolBase(r)
-          ? "Rol base: no se puede desactivar"
-          : r.id === loggedInRolId
-            ? "No puedes modificar tu propio rol"
-            : undefined
-      }
-    >
-      <EstadoSelect
-        value={r.activo ? "activo" : "inactivo"}
-        disabled={!canEdit || r.id === loggedInRolId || esRolBase(r) || estadoEnCurso === r.id}
-        onChange={nuevoEstado => {
-          if ((nuevoEstado === "activo") === r.activo) return;
-          const nuevo = nuevoEstado === "activo";
-          void aplicarEstado(r, nuevo);
-        }}
-        options={[
-          { value: "activo", label: "Activo", color: ESTADO_ACTIVO_COLOR },
-          { value: "inactivo", label: "Inactivo", color: ESTADO_INACTIVO_COLOR },
-        ]}
+  const tarjetaCargo = (r: Rol) => {
+    const fijo = esRolBase(r);
+    const propio = r.id === loggedInRolId;
+    const ocupado = estadoEnCurso === r.id;
+    const personas = r.usuariosAsignados ?? 0;
+    return (
+      <TarjetaFila
+        key={r.id}
+        nombre={<span style={{ fontSize: 24 }}>{r.nombre}</span>}
+        detalle={
+          <>
+            Puede usar: {textoPuedeUsar(r.accesos)}
+            {propio && <><br />Es tu propio cargo: no puedes apagarlo ni borrarlo.</>}
+          </>
+        }
+        datos={[{ etiqueta: "Personas con este cargo", valor: personas === 0 ? "Nadie" : String(personas) }]}
+        estado={
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+            <EstadoPill tono={r.activo ? "verde" : "gris"}>{r.activo ? "Encendido" : "Apagado"}</EstadoPill>
+            {fijo && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 17, fontWeight: 600, color: "var(--gris-texto)" }}>
+                <Lock size={20} aria-hidden="true" /> Fijo
+              </span>
+            )}
+          </div>
+        }
+        acciones={
+          fijo ? (
+            <BotonAccion variante="normal" onClick={() => setDetailItem(r)}>Ver qué puede hacer</BotonAccion>
+          ) : r.activo ? (
+            <>
+              {canEdit && (
+                <BotonAccion
+                  variante="principal"
+                  disabled={propio || ocupado}
+                  onClick={() => setDesactivarId(r.id)}
+                >
+                  Apagar para cambiarlo
+                </BotonAccion>
+              )}
+              <BotonAccion variante="normal" onClick={() => setDetailItem(r)}>Ver qué puede hacer</BotonAccion>
+            </>
+          ) : (
+            <>
+              {canEdit && (
+                <BotonAccion variante="principal" onClick={() => setEditItem(r)}>Cambiar permisos</BotonAccion>
+              )}
+              {canEdit && (
+                <BotonAccion variante="bien" disabled={propio || ocupado} onClick={() => void aplicarEstado(r, true)}>
+                  Encender
+                </BotonAccion>
+              )}
+              <BotonAccion variante="normal" onClick={() => setDetailItem(r)}>Ver qué puede hacer</BotonAccion>
+              {canDelete && (
+                <BotonAccion variante="peligro" disabled={propio} onClick={() => setDeleteId(r.id)}>
+                  Borrar cargo
+                </BotonAccion>
+              )}
+            </>
+          )
+        }
       />
-    </span>
-  );
-  const accionesRol = (r: Rol) => (
-    <ActionIcons
-      onView={() => setDetailItem(r)}
-      onEdit={canEdit ? () => setEditItem(r) : undefined}
-      editDisabled={esRolBase(r) || r.activo}
-      editTitle={esRolBase(r)
-        ? "Rol base: no se puede editar"
-        : r.activo
-          ? "Desactiva el rol para poder editarlo"
-          : "Editar"}
-      onDelete={
-        r.id === loggedInRolId
-          ? () => {}
-          : canDelete ? () => handleDelete(r.id) : undefined
-      }
-      deleteDisabled={
-        r.id === loggedInRolId ||
-        esRolBase(r) ||
-        (r.usuariosAsignados ?? 0) > 0
-      }
-      deleteTitle={
-        r.id === loggedInRolId
-          ? "No puedes modificar tu propio rol"
-          : esRolBase(r)
-            ? "No se puede eliminar un rol base"
-            : (r.usuariosAsignados ?? 0) > 0
-              ? `No se puede eliminar: ${r.usuariosAsignados} usuario(s) asignado(s)`
-              : "Eliminar"
-      }
-    />
-  );
+    );
+  };
 
   if (!canVer) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 px-6 text-center">
-        <div className="text-6xl mb-4">🔒</div>
-        <h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: SERIF }}>Acceso restringido</h2>
-        <p className="text-muted-foreground">No tienes permiso para ver Gestión Configuración. Pide acceso al administrador.</p>
+      <div className="pn-contenido">
+        <VacioEstado icono={Lock} titulo="No tienes permiso para ver los cargos">
+          Pide acceso a la persona que administra el sistema.
+        </VacioEstado>
       </div>
     );
   }
 
-  return (
-    <div className="px-4 sm:px-6 py-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-           <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Gestión de Roles</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{roles.length} roles registrados</p>
-        </div>
-         {canCreate && (
-         <button onClick={() => setShowCreate(true)}
-           className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md">
-           <Plus className="w-4 h-4" /> Crear Rol
-         </button>
-         )}
-      </div>
+  const cargosSistema = paged.filter(esRolBase);
+  const cargosPizzeria = paged.filter(r => !esRolBase(r));
+  const rolApagar = roles.find(r => r.id === desactivarId) ?? null;
+  const rolBorrar = roles.find(r => r.id === deleteId) ?? null;
+  const personasApagar = rolApagar?.usuariosAsignados ?? 0;
+  const personasBorrar = rolBorrar?.usuariosAsignados ?? 0;
 
-      {/* Search (fila propia, como en Gestión Proveedor) */}
-      <SearchInput
-        value={search}
-        onChange={v => { setSearch(v); setPage(1); }}
-        placeholder="Buscar por nombre o descripción..."
+  return (
+    <div className="pn-contenido">
+      <EncabezadoPagina
+        titulo="Roles"
+        descripcion="Cada cargo dice qué partes del sistema puede usar una persona"
+        acciones={canCreate && (
+          <BotonAccion variante="principal" icono={Plus} onClick={() => setShowCreate(true)}>
+            Crear un cargo nuevo
+          </BotonAccion>
+        )}
       />
 
-      {/* Menos de 768 px: cada rol como tarjeta (Estado y Acciones quedan fuera de vista en la tabla).
-          Reutiliza estadoRol y accionesRol, los mismos controles de la tabla. */}
-      <div className="md:hidden space-y-3 mb-2">
+      <BuscadorGrande
+        etiqueta="Buscar un cargo"
+        value={search}
+        onChange={e => { setSearch(e.target.value); setPage(1); }}
+        placeholder="Escribe el nombre del cargo"
+      />
+
+      <div style={{ marginTop: 24 }}>
         {cargando ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">Cargando roles…</div>
+          <p role="status" className="pn-nota">Cargando los cargos…</p>
         ) : errorCarga ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground">
-            <p role="alert">{errorCarga}</p>
-            <button onClick={() => void cargarRoles()} className="mt-2 underline text-primary max-md:min-h-11 max-md:px-3">Reintentar</button>
-          </div>
+          <AvisoBanner
+            titulo="No pudimos cargar los cargos"
+            boton={<BotonAccion onClick={() => void cargarRoles()}>Intentar de nuevo</BotonAccion>}
+          >
+            {errorCarga}
+          </AvisoBanner>
         ) : paged.length === 0 ? (
-          <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground"><p className="text-4xl mb-3">🔐</p><p>No se encontraron roles</p></div>
-        ) : paged.map(r => (
-          <div key={r.id} className="bg-card border border-border rounded-2xl p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs font-mono font-semibold text-muted-foreground">ID {r.id.replace("ROL-", "")}</p>
-                <p className="text-base font-semibold text-foreground break-words">{r.nombre}</p>
-              </div>
-              <div className="shrink-0">{estadoRol(r)}</div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-2 line-clamp-3 break-words">{r.descripcion || "—"}</p>
-            <div className="mt-3 pt-3 border-t border-border">{accionesRol(r)}</div>
-          </div>
-        ))}
+          <VacioEstado icono={Lock} titulo={search.trim() ? "No encontramos ningún cargo con ese nombre" : "Todavía no hay cargos"}>
+            {search.trim() ? "Revisa cómo lo escribiste o prueba con otra palabra." : "Crea el primero con el botón «Crear un cargo nuevo»."}
+          </VacioEstado>
+        ) : (
+          <>
+            {cargosSistema.length > 0 && (
+              <section style={{ marginBottom: 28 }}>
+                <h2 className="pn-h2">Cargos del sistema</h2>
+                <p className="pn-seccion__ayuda" style={{ margin: "4px 0 14px" }}>Vienen con el sistema y no se pueden cambiar.</p>
+                <div className="pn-lista">{cargosSistema.map(tarjetaCargo)}</div>
+              </section>
+            )}
+            {cargosPizzeria.length > 0 && (
+              <section>
+                <h2 className="pn-h2">Cargos de la pizzería</h2>
+                <p className="pn-seccion__ayuda" style={{ margin: "4px 0 14px" }}>Los que tú creaste. Para cambiarlos, primero apágalos.</p>
+                <div className="pn-lista">{cargosPizzeria.map(tarjetaCargo)}</div>
+              </section>
+            )}
+            <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
+            <p className="pn-nota">
+              Un cargo que tiene personas asignadas no se puede borrar. Primero cámbiales el cargo en Empleados.
+            </p>
+          </>
+        )}
       </div>
 
-      {/* Tabla: desde 768 px */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden max-md:hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>{["ID","Nombre","Descripción","Estado","Acciones"].map(h => (
-                <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {cargando ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">Cargando roles…</td></tr>
-              ) : errorCarga ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
-                  <p role="alert">{errorCarga}</p>
-                  <button onClick={() => void cargarRoles()} className="max-md:min-h-11 max-md:inline-flex max-md:items-center max-md:justify-center mt-2 underline text-primary">Reintentar</button>
-                </td></tr>
-              ) : paged.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-14 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">🔐</p><p>No se encontraron roles</p>
-                </td></tr>
-              ) : paged.map(r => (
-                <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{r.id.replace("ROL-", "")}</td>
-                  <td className="px-4 py-3.5 text-sm font-medium text-foreground">{r.nombre}</td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground max-w-[160px] truncate">{r.descripcion || "—"}</td>
-                  <td className="px-4 py-3.5">
-                   {/* El backend verifica en transacción las invariantes del estado. */}
-                   {estadoRol(r)}
-                  </td>
-                  <td className="px-4 py-3.5">
-                     {accionesRol(r)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
+      {showCreate && (
+        <RolModal key="create" title="Crear un cargo nuevo"
+          initialNombre="" initialDesc="" initialActivo={true} initialAccesos={{}}
+          roles={roles}
+          accesosPropios={accesosPropios}
+          onClose={() => setShowCreate(false)}
+          onSave={handleCreate}
+        />
       )}
 
-      <AnimatePresence>
-        {showCreate && (
-          <RolModal key="create" title="Crear Rol"
-            initialNombre="" initialDesc="" initialActivo={true} initialAccesos={{}}
-            roles={roles}
-            accesosPropios={accesosPropios}
-            onClose={() => setShowCreate(false)}
-            onSave={handleCreate}
-          />
-        )}
-      </AnimatePresence>
+      {editItem && (
+        <RolModal key={editItem.id} title={`Cambiar permisos del cargo ${editItem.nombre}`}
+          initialNombre={editItem.nombre} initialDesc={editItem.descripcion}
+          initialActivo={editItem.activo} initialAccesos={{ ...editItem.accesos }}
+          roles={roles} rolId={editItem.id} accesosPropios={accesosPropios}
+          onClose={() => setEditItem(null)}
+          onSave={(n,d,a,acc) => saveRol(editItem.id,n,d,a,acc)}
+        />
+      )}
 
-      <AnimatePresence>
-        {editItem && (
-          <RolModal key={editItem.id} title={`Editar Rol — ${editItem.id}`}
-            initialNombre={editItem.nombre} initialDesc={editItem.descripcion}
-            initialActivo={editItem.activo} initialAccesos={{ ...editItem.accesos }}
-            roles={roles} rolId={editItem.id} accesosPropios={accesosPropios}
-            onClose={() => setEditItem(null)}
-            onSave={(n,d,a,acc) => saveRol(editItem.id,n,d,a,acc)}
-          />
-        )}
-      </AnimatePresence>
+      {detailItem && (
+        <DetalleCargo
+          rol={detailItem}
+          puedeCambiar={canEdit && rolEditable(detailItem)}
+          onClose={() => setDetailItem(null)}
+          onCambiar={() => { setEditItem(detailItem); setDetailItem(null); }}
+          onIrAEmpleados={onIrAEmpleados}
+        />
+      )}
 
-      <AnimatePresence>
-        {detailItem && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-            <motion.div initial={{ scale:.95,opacity:0 }} animate={{ scale:1,opacity:1 }}
-              exit={{ scale:.95,opacity:0 }} transition={{ duration:.15 }}
-              className="bg-card rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-2rem)] shadow-2xl border border-border my-4 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
-                <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Detalle — {detailItem.nombre}</h3>
-                <button onClick={() => setDetailItem(null)} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-              </div>
-              {/* Todo el cuerpo (datos + tabla) vive en el área con scroll
-                  interno; el pie queda fuera, así "Editar rol" y "Cerrar"
-                  siempre se ven aunque la lista sea larga. */}
-              <div className="px-5 pb-4 flex-1 min-h-0 overflow-y-auto">
-                <div className="pt-4 space-y-4">
-                {/* Datos del rol en cuadrícula de 2 columnas: Nombre | Estado /
-                    Usuarios asignados | (Descripción ocupa las 2 columnas). */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                  {[
-                    { l: "Nombre",            v: detailItem.nombre,                     ancho: false },
-                    { l: "Estado",            v: detailItem.activo ? "Activo" : "Inactivo", ancho: false },
-                    { l: "Usuarios",          v: textoUsuariosAsignados(detailItem.usuariosAsignados ?? 0), ancho: false },
-                    { l: "Descripción",       v: detailItem.descripcion || "—",            ancho: true },
-                  ].map(({ l, v, ancho }) => (
-                    <div key={l} className={`flex flex-col gap-0.5 min-w-0 ${ancho ? "sm:col-span-2" : ""}`}>
-                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</span>
-                      <span className="text-sm font-semibold text-foreground break-words">{v}</span>
-                    </div>
-                  ))}
-                </div>
-                {/* Contador + tabla de permisos. */}
-                <div>
-                  <div className="flex items-center justify-between gap-3 pb-2 border-b border-border">
-                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Accesos configurados
-                    </p>
-                    <span className="text-xs text-primary font-semibold">
-                      {textoPermisosModulos(detailItem.accesos)}
-                    </span>
-                  </div>
-                  <PermisosTablaDetalle accesos={detailItem.accesos} />
-                </div>
-                </div>
-              </div>
-              <div className="px-5 py-3 border-t border-border flex gap-3 shrink-0">
-                {canEdit && rolEditable(detailItem) && !detailItem.activo && (
-                <button onClick={() => { setDetailItem(null); setEditItem(detailItem); }}
-                  className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  Editar rol
-                </button>
-                )}
-                {/* Segunda ruta al modal de edición: mismo criterio que el lápiz
-                    de la tabla (propio, no editable o sin permiso). */}
-                {rolEditable(detailItem) && detailItem.activo ? (
-                  <button disabled
-                    title="Desactiva el rol para poder editarlo"
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
-                    Editar rol
-                  </button>
-                ) : !rolEditable(detailItem) ? (
-                  <button disabled
-                    title="Rol base: no se puede editar"
-                    className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-muted-foreground opacity-60 cursor-not-allowed">
-                    Editar rol
-                  </button>
-                ) : null}
-                <button onClick={() => setDetailItem(null)}
-                  className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors">
-                  Cerrar
-                </button>
-              </div>
-            </motion.div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Apagar un cargo */}
+      <DialogoConfirmacion
+        abierto={!!rolApagar}
+        onCambiarAbierto={abierto => { if (!abierto) setDesactivarId(null); }}
+        titulo={`¿Apagar el cargo ${rolApagar?.nombre ?? ""}?`}
+        queVaAPasar={[
+          personasApagar > 0
+            ? `${personasApagar === 1 ? "La persona que lo tiene no podrá" : `Las ${personasApagar} personas que lo tienen no podrán`} usar ${textoPuedeUsar(rolApagar?.accesos ?? {})} mientras esté apagado`
+            : "Nadie lo tiene ahora, así que a nadie le cambia nada",
+          "Mientras esté apagado podrás cambiar sus permisos",
+          "Cuando termines, lo enciendes y todo vuelve a funcionar",
+        ]}
+        textoAccion="Sí, apagar el cargo"
+        onConfirmar={() => void confirmarDesactivacion()}
+      />
 
-      <AnimatePresence>
-        {deleteId && (() => {
-          const count = roles.find(r => r.id === deleteId)?.usuariosAsignados ?? 0;
-          // Por nombre, nunca por el ID técnico: "eliminar el rol Administrador".
-          const nombreRol = roles.find(r => r.id === deleteId)?.nombre ?? "";
-          const message = count > 0
-            ? `No se puede eliminar el rol: tiene ${count} usuario${count > 1 ? "s" : ""} asignado${count > 1 ? "s" : ""}.`
-            : `¿Seguro que deseas eliminar el rol ${nombreRol}? Se eliminan también sus accesos configurados.`;
-          return (
-            <ConfirmDeleteModal
-              title="Eliminar rol"
-              message={message}
-              onConfirm={() => handleDelete(deleteId)}
-              onCancel={() => setDeleteId(null)}
-            />
-          );
-        })()}
-      </AnimatePresence>
-      <AnimatePresence>
-        {desactivarId && (
-          <ConfirmDeleteModal
-            title="Desactivar rol"
-            message="Los usuarios con este rol perderán sus accesos mientras esté inactivo. ¿Deseas continuar?"
-            confirmLabel="Desactivar"
-            onConfirm={() => void confirmarDesactivacion()}
-            onCancel={() => setDesactivarId(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Borrar un cargo: sin personas se confirma; con personas se explica por qué no */}
+      {rolBorrar && personasBorrar > 0 ? (
+        <DialogoConfirmacion
+          variante="bloqueo"
+          abierto
+          onCambiarAbierto={abierto => { if (!abierto) setDeleteId(null); }}
+          titulo={`No se puede borrar el cargo ${rolBorrar.nombre}`}
+          porQueNo={[
+            personasBorrar === 1 ? "Hay 1 persona con este cargo" : `Hay ${personasBorrar} personas con este cargo`,
+            "Primero cámbiales el cargo en Empleados y después podrás borrarlo",
+          ]}
+          textoAlternativa={onIrAEmpleados ? "Ir a Empleados" : undefined}
+          onAlternativa={onIrAEmpleados}
+        />
+      ) : (
+        <DialogoConfirmacion
+          abierto={!!rolBorrar}
+          onCambiarAbierto={abierto => { if (!abierto) setDeleteId(null); }}
+          titulo={`¿Borrar el cargo ${rolBorrar?.nombre ?? ""}?`}
+          queVaAPasar={[
+            "Se borra para siempre",
+            "También se borran los permisos que tenía configurados",
+            "Nadie tiene este cargo, así que a ninguna persona le cambia nada",
+          ]}
+          textoAccion="Sí, borrar el cargo"
+          onConfirmar={() => { if (rolBorrar) void handleDelete(rolBorrar.id); }}
+        />
+      )}
     </div>
   );
 }

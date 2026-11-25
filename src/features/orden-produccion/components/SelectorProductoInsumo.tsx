@@ -185,11 +185,11 @@ export function SelectorProductoInsumo({
     <>
       <div
         ref={trigger}
-        className={`relative h-[54px] w-full rounded-[14px] bg-muted border focus-within:ring-2 focus-within:ring-primary/30 ${
+        className={`relative min-h-[56px] h-[56px] w-full rounded-[14px] bg-white border-2 focus-within:ring-2 focus-within:ring-primary/30 ${
           open ? "border-primary" : "border-border"
         }`}
       >
-        <Search className="absolute left-[18px] top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Search className="absolute left-[18px] top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <input
           ref={input}
           type="text"
@@ -209,7 +209,7 @@ export function SelectorProductoInsumo({
             ubicar();
           }}
           onKeyDown={alTeclado}
-          className="h-full w-full rounded-[14px] bg-transparent pl-[46px] pr-[46px] text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="h-full w-full rounded-[14px] bg-transparent pl-[46px] pr-[46px] text-lg text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
         <ChevronDown
           className={`absolute right-[18px] top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-transform pointer-events-none ${
@@ -234,13 +234,13 @@ export function SelectorProductoInsumo({
           className="z-[60] overflow-y-auto overscroll-contain bg-card border border-border rounded-2xl shadow-2xl p-2 text-foreground"
         >
           {gruposVisibles.length === 0 ? (
-            <p className="px-3.5 py-3 text-sm text-muted-foreground">
+            <p className="px-3.5 py-3 text-lg text-muted-foreground">
               No se encontraron productos
             </p>
           ) : (
             gruposVisibles.map((grupo) => (
               <div key={grupo.label}>
-                <div className="text-sm font-semibold px-3.5 pt-3 pb-1.5">{grupo.label}</div>
+                <div className="text-lg font-bold px-3.5 pt-3 pb-1.5">{grupo.label}</div>
                 {grupo.opciones.map((opcion) => (
                   <button
                     key={opcion.id}
@@ -256,7 +256,7 @@ export function SelectorProductoInsumo({
                       if (!opcion.disabled) setActiveId(opcion.id);
                     }}
                     onClick={() => seleccionar(opcion.id)}
-                    className={`w-full text-left px-3.5 py-2.5 text-[15px] rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                    className={`w-full text-left px-3.5 py-3 min-h-[48px] text-lg rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
                       opcion.disabled
                         ? "text-muted-foreground cursor-not-allowed"
                         : opcion.id === activeId
