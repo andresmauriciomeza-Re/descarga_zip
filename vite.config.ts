@@ -54,7 +54,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,tsx,webp}', 'icons/*.png'],
         globIgnores: ['**/img/**'],
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        // /legal/ son archivos estáticos: no deben responderse con index.html.
+        navigateFallbackDenylist: [/^\/api\//, /^\/legal\//],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3.5 * 1024 * 1024,
         runtimeCaching: [
