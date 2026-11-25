@@ -43,7 +43,6 @@ src/
     styles/                # CSS globales (index.css → fonts/tailwind/theme)
     utils/                 # utilidades (screen, catalogo, etc.)
   assets/img/              # imágenes y assets del proyecto
-db/                        # migraciones SQL
 docs/                      # documentación (brief de diseño)
 ```
 

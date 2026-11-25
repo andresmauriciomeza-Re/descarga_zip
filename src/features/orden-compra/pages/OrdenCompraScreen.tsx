@@ -102,7 +102,7 @@ export interface OrdenItem {
   iva?: number;
   /** Compras (IVA): base imponible de la línea guardada al crear la factura.
    *  Se recalcula en el backend con la misma fórmula (ver
-   *  `db/migracion_iva_compras.sql`). */
+   *  la fórmula de IVA del backend (src/utils/compras.js → calcularImporteLinea)). */
   baseSinIva?: number;
   /** Compras (IVA): valor del IVA de la línea en pesos. */
   montoIva?: number;
