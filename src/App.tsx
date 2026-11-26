@@ -112,6 +112,7 @@ import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { BloqueQrPago, CargaComprobanteCheckout, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
+import { RUTA_LICENCIAS, esRutaLicencias, useRutaLicencias } from "@/features/legal/navegacion";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
@@ -204,6 +205,7 @@ const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardS
 const SuppliersScreen = lazy(() => import("@/features/proveedores/pages/SuppliersScreen").then((m) => ({ default: m.SuppliersScreen })));
 const DevolucionesScreen = lazy(() => import("@/features/devoluciones/pages/DevolucionesScreen").then((m) => ({ default: m.DevolucionesScreen })));
 const MisPedidosScreen = lazy(() => import("@/features/ventas/pages/MisPedidosScreen").then((m) => ({ default: m.MisPedidosScreen })));
+const LicenciasScreen = lazy(() => import("@/features/legal/pages/LicenciasScreen").then((m) => ({ default: m.LicenciasScreen })));
 const MiPerfilScreen = lazy(() => import("@/features/usuarios/pages/MiPerfilScreen").then((m) => ({ default: m.MiPerfilScreen })));
 const GestionClientesScreen = lazy(() => import("@/features/clientes/pages/GestionClientesScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
@@ -2490,6 +2492,20 @@ function LandingScreen({
               registrado
             </p>
           </motion.div>
+          <div className="mt-3 flex justify-center md:justify-start">
+            <a
+              href={RUTA_LICENCIAS}
+              onClick={(e) => {
+                // Ctrl/Cmd/Mayús + clic conserva el comportamiento del navegador.
+                if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                navigate("licencias");
+              }}
+              className="inline-flex items-center max-md:min-h-11 rounded-sm text-xs text-white/55 underline-offset-4 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              Licencias y reconocimientos
+            </a>
+          </div>
         </div>
       </footer>
     </div>
@@ -7769,11 +7785,13 @@ export default function App() {
     const id = new URLSearchParams(window.location.search).get("factura");
     return id && /^[1-9]\d*$/.test(id) ? id : null;
   });
+  // /licencias es pública y tiene URL propia: no espera a restaurar la sesión.
+  const [arrancaEnLicencias] = useState(esRutaLicencias);
   const [pantallaPendiente, setPantallaPendiente] = useState(
-    facturaPedidoId ? null : sesionActiva?.screen ?? null,
+    facturaPedidoId || arrancaEnLicencias ? null : sesionActiva?.screen ?? null,
   );
   const [screen, setScreen] = useState<Screen>(
-    facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : sesionActiva ? "inicio" : "landing",
+    arrancaEnLicencias ? "licencias" : facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : sesionActiva ? "inicio" : "landing",
   );
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
@@ -8156,6 +8174,7 @@ export default function App() {
       "mis-pedidos": "Mis pedidos | La Sirena Pizza",
       login: "Iniciar sesión | S.I.V.PRO",
       register: "Crear cuenta | La Sirena Pizza",
+      licencias: "Licencias y reconocimientos | S.I.V.PRO",
       "client-profile": "Mi perfil | La Sirena Pizza",
     };
     const meta =
@@ -8745,7 +8764,7 @@ export default function App() {
     }
     setScreen(s);
     if (options?.replace) {
-      window.history.replaceState(null, "", "/");
+      window.history.replaceState(null, "", s === "licencias" ? RUTA_LICENCIAS : "/");
     }
     if (options?.restaurar) {
       const top = scrollPorPantalla.current[s] ?? 0;
@@ -8778,6 +8797,8 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
+
+  useRutaLicencias(screen, navigate);
 
   /** Desde la tabla de ventas, "Gestionar" salta al módulo de devoluciones con el
       modal de esa venta ya abierto. */
@@ -9307,7 +9328,7 @@ export default function App() {
   }) => {
     const silenciarAviso = opciones?.silenciarAviso ?? false;
     const aviso = opciones?.aviso ?? "Has cerrado sesión correctamente";
-    const destino: Screen = opciones?.destino ?? "landing";
+    const destino: Screen = esRutaLicencias() ? "licencias" : opciones?.destino ?? "landing";
     try {
       const endpoint = import.meta.env.VITE_AUTH_LOGOUT_URL;
       if (endpoint) {
@@ -9588,7 +9609,7 @@ export default function App() {
     escribirSesionGuardada({
       userId: loggedInUserId,
       rolActivo: rolActivoId,
-      screen,
+      screen: screen === "licencias" ? leerSesionGuardada()?.screen ?? "landing" : screen,
       ultimaActividad: ultimaActividadRef.current,
       avatarInicial: avatarParaHeader?.iniciales.charAt(0).toUpperCase(),
       avatarColor: avatarParaHeader?.avatarColor,
@@ -9640,7 +9661,7 @@ export default function App() {
         escribirSesionGuardada({
           userId: uid,
           rolActivo: rid,
-          screen: scr,
+          screen: scr === "licencias" ? leerSesionGuardada()?.screen ?? "landing" : scr,
           ultimaActividad: ahora,
           avatarInicial,
           avatarColor,
@@ -10053,6 +10074,9 @@ export default function App() {
                       darkMode={darkMode}
                       onRegistrado={trasRegistrarse}
                     />
+                  )}
+                  {screen === "licencias" && (
+                    <LicenciasScreen onVolver={() => navigate("landing")} />
                   )}
                   {screen === "client-profile" && (
                     <ClientProfileScreen

@@ -42,6 +42,7 @@ const PANTALLAS = [
   "devoluciones",
   "empleados",
   "mis-pedidos",
+  "licencias",
 ] as const;
 
 export type Screen = (typeof PANTALLAS)[number];
