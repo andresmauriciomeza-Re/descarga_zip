@@ -92,3 +92,14 @@ export const formaDobleGenerica = (nombre: string): string | null => {
   }
   return null;
 };
+
+// Administrador y Cliente se detectan SIEMPRE por el NOMBRE del rol (sin
+// tildes ni mayúsculas), nunca por los ids "ROL-001"/"ROL-002": el administrador
+// puede renombrarlos o restaurar semillas, y los ids son solo anclas de
+// migración para los datos viejos.
+export const normalizarNombreRol = (nombre: string) =>
+  nombre
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
