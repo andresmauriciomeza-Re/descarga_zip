@@ -3,15 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft, Briefcase, Lock, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import {
-  cambiarEstadoEmpleado,
-  crearContratacion,
-  crearEmpleado,
-  editarEmpleado,
-  listarCargos,
-  listarEmpleados,
-  reenviarInvitacion,
-} from "@/shared/services/employeesService";
+import { cambiarEstadoEmpleado, crearContratacion, crearEmpleado, editarEmpleado, reenviarInvitacion } from "@/shared/services/employeesService";
 import type { ApiErrorConEstado, ContratacionApi, CrearEmpleadoResponse, EmpleadoApi } from "@/types/api";
 import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
@@ -34,6 +26,7 @@ import { SelectorRoles } from "@/shared/components/RoleSelector";
 import { type Rol } from "@/features/roles/pages/RolesScreen";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
 import { type Cliente } from "@/features/customers/pages/CustomersScreen";
+import { useEmployees } from "@/features/employees/hooks/useEmployees";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
@@ -119,7 +112,7 @@ export const mapearEmpleadoApi = (e: EmpleadoApi): Empleado => {
 };
 
 /** Mensaje para el usuario a partir de un error de la API (403 y 409 con texto claro). */
-const mensajeError = (error: unknown, porDefecto: string): string => {
+export const mensajeError = (error: unknown, porDefecto: string): string => {
   const e = error as ApiErrorConEstado;
   if (e?.status === 403) return e.message || "No tienes permiso para realizar esta acción.";
   return e?.message || porDefecto;
@@ -144,39 +137,11 @@ export function GestionEmpleadosScreen({
   const [editItem,    setEditItem]  = useState<Empleado | null>(null);
   const [showCreate,  setShowCreate] = useState(false);
 
-  // Fuente de verdad = la base (API). Nada de esto se guarda en localStorage.
-  const [empleados,   setEmpleados] = useState<Empleado[]>([]);
-  const [cargosApi,   setCargosApi] = useState<{ id: string; nombre: string }[]>([]);
-  const [nombresRoles, setNombresRoles] = useState<Map<string, string>>(new Map());
-  const [cargando,    setCargando]  = useState(true);
-  const [errorCarga,  setErrorCarga] = useState<string | null>(null);
+  const { empleados, cargosApi, nombresRoles, cargando, errorCarga, cargarEmpleados } = useEmployees();
   const [guardando,   setGuardando] = useState(false);
   const [guardandoCtr, setGuardandoCtr] = useState(false);
 
-  // `mostrarCarga`: la primera carga y "Reintentar" reemplazan la tabla por el
-  // estado de carga/error; las recargas posteriores a un cambio son silenciosas
-  // (la lista se queda y, si fallan, avisan con un toast).
-  const cargarEmpleados = async (mostrarCarga = true) => {
-    if (mostrarCarga) { setCargando(true); setErrorCarga(null); }
-    try {
-      const [lista, cargos] = await Promise.all([listarEmpleados(), listarCargos()]);
-      const nombres = new Map<string, string>();
-      for (const emp of lista.empleados) {
-        for (const c of emp.contrataciones) for (const r of c.roles) nombres.set(String(r.idRol), r.nombre);
-      }
-      setNombresRoles(nombres);
-      setCargosApi(cargos.cargos.map(c => ({ id: String(c.idRol), nombre: c.nombre })));
-      const cargados = lista.empleados.map(mapearEmpleadoApi);
-      setEmpleados(cargados);
-    } catch (error) {
-      const mensaje = mensajeError(error, "No se pudieron cargar los empleados.");
-      if (mostrarCarga) setErrorCarga(mensaje); else toast.error(mensaje);
-    } finally {
-      if (mostrarCarga) setCargando(false);
-    }
-  };
 
-  useEffect(() => { void cargarEmpleados(); }, []);
 
   // Catálogo para el selector y para pintar nombres: los cargos asignables vienen
   // de GET /empleados/cargos (no depende del permiso de Roles); los demás roles
