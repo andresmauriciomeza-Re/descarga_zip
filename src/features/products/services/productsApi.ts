@@ -1,6 +1,6 @@
 import api from "@/shared/services/api";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
-import { normalizarTexto } from "@/shared/utils/nombres";
+import { normalizarTexto } from "@/shared/utils/names";
 
 export type EstadoProductoManual = "Descontinuado" | "Automático";
 

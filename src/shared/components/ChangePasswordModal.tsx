@@ -13,8 +13,8 @@ import {
   AUTH_GLASS_CARD,
   AUTH_GLASS_OVERLAY,
 } from "@/shared/styles/authGlass";
-import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
-import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
+import { PasoCodigoVerificacion } from "@/shared/components/VerificationCodeStep";
+import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
 
 const SERIF = "var(--font-titulo)";
 

@@ -8,8 +8,8 @@ async function importar(ruta) {
   const compilado = await build({ entryPoints: [fileURLToPath(new URL(ruta, import.meta.url))], bundle: true, write: false, format: "esm", platform: "node" });
   return import(`data:text/javascript;base64,${Buffer.from(compilado.outputFiles[0].text).toString("base64")}`);
 }
-const { validarArchivo, ARCHIVO_MAX_BYTES } = await importar("../src/shared/utils/validarArchivo.ts");
-const { esComprobantePdf } = await importar("../src/shared/utils/comprobante.ts");
+const { validarArchivo, ARCHIVO_MAX_BYTES } = await importar("../src/shared/utils/fileValidation.ts");
+const { esComprobantePdf } = await importar("../src/shared/utils/receipt.ts");
 
 test("valida PDF y límite de tamaño para comprobantes", () => {
   const pdf = { name: "pago.pdf", type: "application/pdf", size: 100 };

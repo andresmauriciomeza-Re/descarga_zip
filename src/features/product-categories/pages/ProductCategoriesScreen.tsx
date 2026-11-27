@@ -9,30 +9,30 @@ import {
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft as IconoVolver, Tag as IconoTag } from "lucide-react";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BotonRuta } from "@/shared/components/panel/BotonRuta";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { MensajeError } from "@/shared/components/campo";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { CampoFormulario } from "@/shared/components/panel/FormField";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
+import { MensajeError } from "@/shared/components/FormInputs";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { Paginador } from "@/shared/components/Paginator";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
   ESTADO_INACTIVO_COLOR,
   type EstadoOption,
-} from "@/shared/components/EstadoSelect";
+} from "@/shared/components/StatusSelect";
 import { GRUPOS_ICONOS } from "@/features/product-categories/services/categoryIcons";
 
 const SERIF = "var(--font-titulo)";

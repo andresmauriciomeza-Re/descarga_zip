@@ -11,37 +11,37 @@ import {
   UNIDADES_INSUMO,
   UNIDADES_Y_PRESENTACIONES_INSUMO,
   resolverPresentacionUnidad,
-} from "@/shared/utils/unidades";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+} from "@/shared/utils/units";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
+import { exportarExcelEstilizado } from "@/shared/utils/styledExcelExport";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 // Bloque 3: limpieza y comparación de nombres compartidas con Gestión de
 // Productos y el "+ Crear insumo" de Compras (una sola copia de las reglas).
-import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/nombres";
+import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/names";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
   ESTADO_INACTIVO_COLOR,
-} from "@/shared/components/EstadoSelect";
+} from "@/shared/components/StatusSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
-import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
-import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
+import { Paginador } from "@/shared/components/Paginator";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { CampoFormulario } from "@/shared/components/panel/FormField";
+import { DatosDetalle } from "@/shared/components/panel/DetailData";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
+import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/TechnicalSheetEditor";
 import {
   copiarFicha,
   emptyFichaVersion,
@@ -52,7 +52,7 @@ import {
   siguienteNumeroFicha,
   type FichaVersion,
   type FichasPorProducto,
-} from "@/shared/utils/fichas";
+} from "@/shared/utils/technicalSheets";
 import {
   actualizarInsumo,
   cambiarEstadoInsumo,
@@ -63,7 +63,7 @@ import {
 import { crearFicha, mapearFichaApi, obtenerFichasDe, payloadFicha } from "@/features/products/services/technicalSheetsApi";
 import {
   fmtCant,
-} from "@/shared/utils/disponibilidad";
+} from "@/shared/utils/availability";
 
 const SERIF = "var(--font-titulo)";
 const PER_PAGE = 10;

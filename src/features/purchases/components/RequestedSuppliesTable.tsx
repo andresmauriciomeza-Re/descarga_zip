@@ -1,7 +1,7 @@
 import React from "react";
 import { Package } from "lucide-react";
 import { calcularLineaIva, chipIvaSinPrefijo, etiquetaModoIvaSimple, formatearModoIvaEnTabla } from "@/features/purchases/services/vat";
-import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
 

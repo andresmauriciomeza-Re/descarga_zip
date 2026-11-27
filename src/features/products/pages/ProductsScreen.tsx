@@ -1,15 +1,15 @@
 import { Download, Package } from "lucide-react";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -25,9 +25,9 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { getImageUrl, imagenEnApi } from "@/shared/utils/getImageUrl";
-import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/FichaTecnicaEditor";
+import { FichaTecnicaDetalle, FichaTecnicaEditor } from "@/shared/components/TechnicalSheetEditor";
 import {
   copiarFicha,
   emptyFichaVersion,
@@ -37,7 +37,7 @@ import {
   type FichaVersion,
   type FichasPorProducto,
   type PorcionesTamano,
-} from "@/shared/utils/fichas";
+} from "@/shared/utils/technicalSheets";
 // Cálculo de disponibilidad compartido con Orden de Producción: un Producto
 // insumo no tiene stock propio, así que la celda Stock, Ver detalle y el
 // Excel leen cuántas unidades admite preparar SU FICHA con el stock real de
@@ -46,28 +46,28 @@ import {
   detalleDisponibilidad,
   fmtCant,
   motivoFaltante,
-} from "@/shared/utils/disponibilidad";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { Paginador } from "@/shared/components/Paginador";
-import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
+} from "@/shared/utils/availability";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
+import { Paginador } from "@/shared/components/Paginator";
+import { exportarExcelEstilizado } from "@/shared/utils/styledExcelExport";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Visor grande (lightbox) de las imágenes de la vista Crear producto.
-import { VisorImagen } from "@/shared/components/VisorImagen";
+import { VisorImagen } from "@/shared/components/ImageViewer";
 import {
   EstadoBadge,
   ESTADOS_PRODUCTO,
   ESTADO_COLORES,
   type EstadoProducto,
-} from "@/shared/components/EstadoProducto";
+} from "@/shared/components/ProductStatus";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import { estadoDe, type CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
 // Bloque 2.3: las reglas de una bebida (nombre único, contenido ml/L y
@@ -78,11 +78,11 @@ import {
   CONFIG_CATEGORIA,
   configDeCategoria,
   type ConfigCategoria,
-} from "@/shared/utils/configCategoria";
-import { nombreBuscable, presentacionDe } from "@/shared/utils/presentacion";
+} from "@/shared/utils/categoryConfig";
+import { nombreBuscable, presentacionDe } from "@/shared/utils/presentation";
 // Bloque 1.1: una sola función para comparar nombres (sin tildes, mayúsculas
 // ni espacios de más) compartida con Insumos y Compras.
-import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/nombres";
+import { mismoNombre, nombreLimpio, normalizarTexto } from "@/shared/utils/names";
 import {
   mensajeErrorProductos,
   type EstadoProductoManual,
@@ -101,17 +101,17 @@ import {
   obtenerFichasDe,
   payloadFicha,
 } from "@/features/products/services/technicalSheetsApi";
-import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
+import { idInsumoApiDesdeFront } from "@/shared/utils/technicalSheets";
 import {
   obtenerParametrosCostos,
 } from "@/features/products/services/costParametersApi";
-import { precioRecomendadoPorPorcion, type ParametrosCostos } from "@/shared/utils/costos";
+import { precioRecomendadoPorPorcion, type ParametrosCostos } from "@/shared/utils/costs";
 
 const mensajeGrandeMayorQueMediana = (mediana: number) =>
   `Debe ser mayor que el precio de la porción Mediana ($${mediana.toLocaleString("es-CO")})`;
 
-export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/configCategoria";
-export type { ConfigCategoria } from "@/shared/utils/configCategoria";
+export { CONFIG_CATEGORIA, configDeCategoria } from "@/shared/utils/categoryConfig";
+export type { ConfigCategoria } from "@/shared/utils/categoryConfig";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -249,8 +249,8 @@ export const tipoPillCls = (t: TipoProducto): string =>
 // Los estados y sus colores viven en components/EstadoProducto.tsx (de ahí
 // salen EstadoBadge y EstadoProductoSelect). Se reexportan para no romper
 // importaciones existentes.
-export { ESTADOS_PRODUCTO, ESTADO_COLORES } from "@/shared/components/EstadoProducto";
-export type { EstadoProducto } from "@/shared/components/EstadoProducto";
+export { ESTADOS_PRODUCTO, ESTADO_COLORES } from "@/shared/components/ProductStatus";
+export type { EstadoProducto } from "@/shared/components/ProductStatus";
 
 /** Clases Tailwind del pill de estado de la tabla (diseño de Proveedores),
     con el mismo tono de ESTADO_COLORES y su variante dark translúcida. */
@@ -551,8 +551,8 @@ export const INITIAL_PRODUCTOS: Producto[] = [
 // El modelo único vive en `@/shared/utils/fichas` (lo comparten este módulo,
 // Compras > Insumos y el componente FichaTecnicaEditor). Aquí solo se
 // reexportan los símbolos que ya importaban App y Orden de Producción.
-export { INITIAL_FICHAS, normalizarIdsFicha } from "@/shared/utils/fichas";
-export type { FichaVersion, FichasPorProducto } from "@/shared/utils/fichas";
+export { INITIAL_FICHAS, normalizarIdsFicha } from "@/shared/utils/technicalSheets";
+export type { FichaVersion, FichasPorProducto } from "@/shared/utils/technicalSheets";
 
 /** Etiqueta del tamaño único de una ficha cuya categoría no está en
     CONFIG_CATEGORIA: una sola fila con la etiqueta fija "Único" (solo se

@@ -87,7 +87,7 @@ import lasanaMixta from "@/assets/img/lasaña_mixta.webp";
 import lasanaPollo from "@/assets/img/lasaña_pollo.webp";
 import logoBlanco from "@/assets/img/logo-blanco.webp";
 import logoClaro from "@/assets/img/logoclaro2.webp";
-import { RutaPagina } from "@/shared/components/panel/RutaPagina";
+import { RutaPagina } from "@/shared/components/panel/PageBreadcrumb";
 import imgPepsi from "@/assets/img/Pepsi.webp";
 import pizzaCarnes from "@/assets/img/pizza_carnes.webp";
 import pizzaCañon from "@/assets/img/pizza_cañon.webp";
@@ -100,7 +100,7 @@ import pizzaTocineta from "@/assets/img/pizza_tocineta.webp";
 import imgPremio from "@/assets/img/Premio.webp";
 import imgQuatro from "@/assets/img/Quatro.webp";
 import StatsMarquee from "@/features/landing/components/StatsMarquee";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/campo";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono, validarTelefonoOpcional } from "@/shared/components/FormInputs";
 import {
   AUTH_GLASS_BUTTON_SECONDARY,
   AUTH_GLASS_CARD,
@@ -109,23 +109,23 @@ import {
   authInputCls,
 } from "@/shared/styles/authGlass";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
-import { ResumenTotales } from "@/shared/components/ResumenTotales";
-import { BloqueQrPago, CargaComprobanteCheckout, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
-import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
+import { ResumenTotales } from "@/shared/components/TotalsSummary";
+import { BloqueQrPago, CargaComprobanteCheckout, PAYMENT_INFO, useQrPago } from "@/shared/components/TransferPaymentStep";
+import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/termsAndConditions";
 import { RUTA_LICENCIAS, esRutaLicencias, useRutaLicencias } from "@/features/legal/navigation";
-import { VolverArriba } from "@/shared/components/VolverArriba";
-import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
-import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { VolverArriba } from "@/shared/components/BackToTop";
+import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/time";
+import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/dates";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/sales/services/salesApi";
 import type { Screen } from "@/shared/utils/screen";
 import { esPantalla, ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
-import { disponiblePizza } from "@/shared/utils/stockPizza";
+import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalog";
+import { disponiblePizza } from "@/shared/utils/pizzaStock";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
-import { obtenerCatalogo } from "@/shared/services/catalogoService";
+import { obtenerCatalogo } from "@/shared/services/catalogService";
 import { subirArchivo } from "@/shared/services/uploadService";
-import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
+import { useValidacionFormulario } from "@/shared/hooks/useFormValidation";
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import { crearError401Checkout, es401GenericoCheckout, registrarManejadorCierreSesion } from "@/shared/services/api";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
@@ -134,14 +134,14 @@ import type { Cliente } from "@/features/customers/pages/CustomersScreen";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/PurchasesScreen";
 import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/RolesScreen";
 import { GestionEmpleadosScreen, type Contratacion } from "@/features/employees/pages/EmployeesScreen";
-import { obtenerMiContratacion } from "@/shared/services/empleadosService";
+import { obtenerMiContratacion } from "@/shared/services/employeesService";
 import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "@/features/supplies/pages/SuppliesScreen";
 import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, imagenesDe, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/ProductsScreen";
-import { migrarFichasLegacy } from "@/shared/utils/fichas";
+import { migrarFichasLegacy } from "@/shared/utils/technicalSheets";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/products/services/productsApi";
 import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/supplies/services/suppliesApi";
 import { mapearFichasApi, obtenerFichasVigentes } from "@/features/products/services/technicalSheetsApi";
@@ -149,21 +149,23 @@ import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/product
 import { listarProveedores, mensajeErrorProveedores } from "@/features/suppliers/services/suppliersApi";
 import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/purchase-orders/services/purchaseOrdersApi";
 import { listarCompras, mensajeErrorCompras } from "@/features/purchases/services/purchasesApi";
-import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/configCategoria";
-import { mismoNombre } from "@/shared/utils/nombres";
-import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { EstadoMenuBadge, AgotadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/EstadoMenuBadge";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/categoryConfig";
+import { mismoNombre } from "@/shared/utils/names";
+import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/documentTypes";
+import { EstadoMenuBadge, AgotadoMenuBadge, NoDisponibleOverlay } from "@/shared/components/MenuStatusBadge";
+import { EstadoSelect } from "@/shared/components/StatusSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
+import { Paginador } from "@/shared/components/Paginator";
+import { GhostBtn } from "@/shared/components/buttons/GhostButton";
+import { PrimaryBtn } from "@/shared/components/buttons/PrimaryButton";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
+import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/UsersScreen";
-import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
-import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
-import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificacionService";
-import { PasoCodigoVerificacion } from "@/shared/components/PasoCodigoVerificacion";
-import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
+import { CambiarContrasenaModal } from "@/shared/components/ChangePasswordModal";
+import { ActivarCuentaModal } from "@/shared/components/ActivateAccountModal";
+import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificationService";
+import { PasoCodigoVerificacion } from "@/shared/components/VerificationCodeStep";
+import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
 import type {
   GestionCompra,
   OrdenCompra,
@@ -1006,57 +1008,6 @@ function Badge({
     >
       {children}
     </span>
-  );
-}
-
-function PrimaryBtn({
-  children,
-  onClick,
-  type = "button",
-  size = "md",
-  disabled = false,
-  className = "",
-}: {
-  children: React.ReactNode;
-  onClick?: React.MouseEventHandler<HTMLButtonElement>;
-  type?: "button" | "submit" | "reset";
-  size?: "sm" | "md" | "lg";
-  disabled?: boolean;
-  className?: string;
-}) {
-  const s = {
-    sm: "px-4 py-2 text-sm min-h-[38px] max-md:min-h-11",
-    md: "px-5 py-3 text-base min-h-[48px]",
-    lg: "px-7 py-4 text-lg min-h-[56px]",
-  }[size];
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-red-700 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md hover:shadow-lg ${s} ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function GhostBtn({
-  children,
-  onClick,
-  className = "",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 font-semibold rounded-xl border border-border text-foreground hover:bg-muted active:scale-95 transition-all duration-150 cursor-pointer px-5 py-3 text-base min-h-[48px] ${className}`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -6155,7 +6106,7 @@ function RegisterScreen({
     form.password === form.confirm;
 
   // ── Trampa de Tab, foco al primer inválido y aria ──
-  // Lógica compartida en src/shared/hooks/useValidacionFormulario.ts. El
+  // Lógica compartida en src/shared/hooks/useFormValidation.ts. El
   // orden coincide con el del tabulador de la tarjeta.
   const validacion = useValidacionFormulario([
     "docType", "docNum", "name", "email", "phone", "password", "confirm",

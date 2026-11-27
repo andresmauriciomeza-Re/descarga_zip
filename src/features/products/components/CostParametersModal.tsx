@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import {
   PARAMETROS_COSTOS_PREDETERMINADOS,
   type ParametrosCostos,
-} from "@/shared/utils/costos";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
+} from "@/shared/utils/costs";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 import type { ParametrosCostosPayload } from "@/features/products/services/costParametersApi";
 
 type ValoresFormulario = Record<keyof ParametrosCostosPayload, string>;

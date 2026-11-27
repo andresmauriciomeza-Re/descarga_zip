@@ -43,7 +43,7 @@ import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Cliente } from "@/features/customers/pages/CustomersScreen";
 import type { OrdenProduccion } from "@/features/production-orders/pages/ProductionOrdersScreen";
 import { listarClientes } from "@/shared/services/authService";
-import { formatearHora, minutosDeHora } from "@/shared/utils/hora";
+import { formatearHora, minutosDeHora } from "@/shared/utils/time";
 import {
   hoyBogota,
   agregarDias,
@@ -55,16 +55,16 @@ import {
   lunesDe,
   semanaDelMes,
   type Periodo,
-} from "@/shared/utils/fechas";
+} from "@/shared/utils/dates";
 import type { Screen } from "@/shared/utils/screen";
 import { ChartCard } from "@/shared/components/ChartCard";
-import { FiltroPeriodo } from "@/shared/components/FiltroPeriodo";
+import { FiltroPeriodo } from "@/shared/components/PeriodFilter";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";

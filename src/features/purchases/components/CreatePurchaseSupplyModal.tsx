@@ -11,9 +11,9 @@ import {
   PRESENTACIONES_INSUMO,
   UNIDADES_Y_PRESENTACIONES_INSUMO,
   resolverPresentacionUnidad,
-} from "@/shared/utils/unidades";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
+} from "@/shared/utils/units";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
+import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/names";
 
 const ICLS_MODAL =
   "w-full px-3 py-2.5 bg-muted rounded-xl border border-border text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";

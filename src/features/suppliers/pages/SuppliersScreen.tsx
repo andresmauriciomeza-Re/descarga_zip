@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, X, AlertCircle, ArrowLeft, Truck } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
@@ -14,7 +14,7 @@ import {
   ESTADO_ACTIVO_COLOR,
   ESTADO_INACTIVO_COLOR,
   type EstadoOption,
-} from "@/shared/components/EstadoSelect";
+} from "@/shared/components/StatusSelect";
 import { EstadoHistorialTooltip } from "@/features/purchases/components/StatusHistoryTooltip";
 import type { ProveedorRef } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 import {
@@ -24,17 +24,17 @@ import {
   eliminarProveedor,
   mensajeErrorProveedores,
 } from "@/features/suppliers/services/suppliersApi";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BotonRuta } from "@/shared/components/panel/BotonRuta";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DatosDetalle } from "@/shared/components/panel/DetailData";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 
 const SERIF = "var(--font-titulo)";
 

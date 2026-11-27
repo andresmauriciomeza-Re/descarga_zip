@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft, Briefcase, Lock, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import {
   cambiarEstadoEmpleado,
   crearContratacion,
@@ -11,26 +11,26 @@ import {
   listarCargos,
   listarEmpleados,
   reenviarInvitacion,
-} from "@/shared/services/empleadosService";
+} from "@/shared/services/employeesService";
 import type { ApiErrorConEstado, ContratacionApi, CrearEmpleadoResponse, EmpleadoApi } from "@/types/api";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BotonRuta } from "@/shared/components/panel/BotonRuta";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
-import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
-import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/campo";
-import { hoyISO } from "@/shared/utils/fechas";
-import { SelectorRoles } from "@/shared/components/SelectorRoles";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { CampoFormulario } from "@/shared/components/panel/FormField";
+import { DatosDetalle } from "@/shared/components/panel/DetailData";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
+import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/FormInputs";
+import { hoyISO } from "@/shared/utils/dates";
+import { SelectorRoles } from "@/shared/components/RoleSelector";
 import { type Rol } from "@/features/roles/pages/RolesScreen";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
 import { type Cliente } from "@/features/customers/pages/CustomersScreen";

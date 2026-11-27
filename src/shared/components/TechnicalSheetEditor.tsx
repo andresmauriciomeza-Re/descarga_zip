@@ -20,9 +20,9 @@ import { toast } from "sonner";
 import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import { InsumoSearchField, resolverInsumo } from "@/features/products/components/SupplySearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
-import { PRESENTACIONES_INSUMO, UNIDADES_INSUMO } from "@/shared/utils/unidades";
-import { unidadesCompatibles } from "@/shared/utils/disponibilidad";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { PRESENTACIONES_INSUMO, UNIDADES_INSUMO } from "@/shared/utils/units";
+import { unidadesCompatibles } from "@/shared/utils/availability";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import {
   TAMANOS_FICHA,
   UNIDADES_FICHA,
@@ -32,7 +32,7 @@ import {
   type PorcionesTamano,
   type RInsumo,
   type TamanoFicha,
-} from "@/shared/utils/fichas";
+} from "@/shared/utils/technicalSheets";
 
 /** Clase de los inputs del formulario (los contextos de Crear/Editar pasan la
     suya; el modal de Insumos usa esta por defecto). */

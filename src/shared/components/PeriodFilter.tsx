@@ -1,4 +1,4 @@
-import type { Periodo } from "@/shared/utils/fechas";
+import type { Periodo } from "@/shared/utils/dates";
 
 /** Opciones del filtro de periodo: Hoy · Esta semana · Este mes. Los valores
     internos (dia, semana, mes) no cambian; solo el texto que ve la persona. */

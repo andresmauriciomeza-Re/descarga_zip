@@ -1,12 +1,12 @@
 import api from "@/shared/services/api";
-import { type ConfigCategoria } from "@/shared/utils/configCategoria";
+import { type ConfigCategoria } from "@/shared/utils/categoryConfig";
 import {
   idInsumoApiDesdeFront,
   idInsumoFront,
   type DestinoFicha,
   type FichaVersion,
   type RInsumo,
-} from "@/shared/utils/fichas";
+} from "@/shared/utils/technicalSheets";
 
 /** Fila de insumo de una ficha tal como la devuelve el backend. */
 export interface FichaLineaApi {

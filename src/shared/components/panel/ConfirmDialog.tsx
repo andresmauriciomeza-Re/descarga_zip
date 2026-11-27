@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { BotonAccion } from "./BotonAccion";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 
 interface Base {
   abierto: boolean;

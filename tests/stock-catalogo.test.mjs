@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const { build } = createRequire(import.meta.resolve("vite"))("esbuild");
 const compilado = await build({
-  entryPoints: [fileURLToPath(new URL("../src/shared/utils/catalogo.ts", import.meta.url))],
+  entryPoints: [fileURLToPath(new URL("../src/shared/utils/catalog.ts", import.meta.url))],
   bundle: true, write: false, format: "esm", platform: "node",
   plugins: [{
     name: "dependencias-catalogo",

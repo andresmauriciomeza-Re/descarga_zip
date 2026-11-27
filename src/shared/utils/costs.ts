@@ -1,5 +1,5 @@
-import { convertirUnidad, requeridosPorUnidad } from "@/shared/utils/disponibilidad";
-import type { FichaVersion, PorcionesTamano } from "@/shared/utils/fichas";
+import { convertirUnidad, requeridosPorUnidad } from "@/shared/utils/availability";
+import type { FichaVersion, PorcionesTamano } from "@/shared/utils/technicalSheets";
 
 export interface ParametrosCostos {
   id_parametro: number;

@@ -1,7 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { useEffect, useRef, useState } from "react";
-import { UNIDADES } from "@/shared/utils/unidades";
+import { UNIDADES } from "@/shared/utils/units";
 
 /**
  * Select de "Unidad" (kg, g, lt, ml, und, paq, paca, caja, bolsa, sixpack).

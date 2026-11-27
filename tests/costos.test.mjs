@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const requireVite = createRequire(import.meta.resolve("vite"));
 const { build } = requireVite("esbuild");
 const compilado = await build({
-  entryPoints: [fileURLToPath(new URL("../src/shared/utils/costos.ts", import.meta.url))],
+  entryPoints: [fileURLToPath(new URL("../src/shared/utils/costs.ts", import.meta.url))],
   alias: { "@": fileURLToPath(new URL("../src", import.meta.url)) },
   bundle: true,
   write: false,

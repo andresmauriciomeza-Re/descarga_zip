@@ -1,9 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
-import type { EstadoProducto } from "@/shared/components/EstadoProducto";
+import type { EstadoProducto } from "@/shared/components/ProductStatus";
 import type { EntradaCompraApi } from "@/features/products/services/productsApi";
-import { mismoNombre } from "@/shared/utils/nombres";
+import { mismoNombre } from "@/shared/utils/names";
 
 /** Estado React de un catálogo del panel (insumos / productos). */
 export type SetCatalogo<T> = Dispatch<SetStateAction<T[]>>;

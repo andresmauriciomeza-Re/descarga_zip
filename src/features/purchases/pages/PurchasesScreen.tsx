@@ -5,9 +5,9 @@ import {
   Plus, Check, Ban, CheckCircle2, Pencil, Trash2, Download, Package,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { esIdInsumo } from "@/shared/utils/fichas";
-import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/exportExcelEstilizado";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
+import { esIdInsumo } from "@/shared/utils/technicalSheets";
+import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/styledExcelExport";
 import {
   calcularLineaIva,
   chipIvaSinPrefijo,
@@ -16,7 +16,7 @@ import {
   sumarTotales,
   type ModoIva,
 } from "@/features/purchases/services/vat";
-import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 import {
@@ -27,25 +27,25 @@ import {
 import { CrearInsumoCompraModal } from "@/features/purchases/components/CreatePurchaseSupplyModal";
 import { CrearProductoModal } from "@/features/products/components/CreateProductModal";
 import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BotonRuta } from "@/shared/components/panel/BotonRuta";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
+import { Paginador } from "@/shared/components/Paginator";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import {
   NuevoProveedorModal,
   ConfirmModal,
@@ -76,7 +76,7 @@ import {
   medidaCompra,
   nombreBuscable,
   presentacionCompra,
-} from "@/shared/utils/presentacion";
+} from "@/shared/utils/presentation";
 
 // ─── CONTROL DE STOCK DE LAS COMPRAS ─────────────────────────────────────────
 // Las funciones de inventario (sumar/revertir stock) viven en

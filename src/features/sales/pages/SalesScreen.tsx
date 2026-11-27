@@ -1,21 +1,21 @@
 import { ArrowLeft as IconoVolver, Download as IconoBajar, Plus as IconoMas, ShoppingCart as IconoCarro } from "lucide-react";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { DatosDetalle, Historial } from "@/shared/components/panel/DatosDetalle";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { DatosDetalle, Historial } from "@/shared/components/panel/DetailData";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
-import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
-import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
-import { disponiblePizza } from "@/shared/utils/stockPizza";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
+import { disponiblePizza } from "@/shared/utils/pizzaStock";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -37,25 +37,25 @@ import {
   Ban,
 } from "lucide-react";
 import { toast } from "sonner";
-import { normalizarTexto } from "@/shared/utils/nombres";
-import { esComprobantePdf } from "@/shared/utils/comprobante";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/campo";
-import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/tiposDocumento";
-import { VisorImagen } from "@/shared/components/VisorImagen";
+import { normalizarTexto } from "@/shared/utils/names";
+import { esComprobantePdf } from "@/shared/utils/receipt";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
+import { filtrarDocumento, MarcaObligatorio, normalizarNombre, validarDocumento } from "@/shared/components/FormInputs";
+import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/documentTypes";
+import { VisorImagen } from "@/shared/components/ImageViewer";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
+import { Paginador } from "@/shared/components/Paginator";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import type { OrdenProduccion } from "@/features/production-orders/pages/ProductionOrdersScreen";
 import { buscarClientePorDocumento, buscarClientesPorNombre, listarClientes, type ClienteListadoApi, type ClientePorNombreApi } from "@/shared/services/authService";
 import type { ApiErrorConEstado } from "@/types/api";
-import { hoyISO } from "@/shared/utils/fechas";
+import { hoyISO } from "@/shared/utils/dates";
 import { imprimirFactura } from "@/features/sales/services/saleInvoice";
 import { exportToExcel } from "@/features/sales/services/exportExcel";
-import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/CampoTiempoPreparacion";
+import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/PrepTimeField";
 import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi, confirmarPagoVenta, obtenerPagosVenta, type ResumenPagosVenta } from "@/features/sales/services/salesApi";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import {
   ESTADOS_ANULABLES,
   type EstadoVenta,

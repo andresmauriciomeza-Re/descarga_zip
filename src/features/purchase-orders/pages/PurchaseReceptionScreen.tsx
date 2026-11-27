@@ -40,21 +40,21 @@ import {
   empaqueDe,
   nombreBuscable,
   presentacionCompra,
-} from "@/shared/utils/presentacion";
-import { mismoNombre } from "@/shared/utils/nombres";
+} from "@/shared/utils/presentation";
+import { mismoNombre } from "@/shared/utils/names";
 // Catálogo único de unidades de Compras (antes había una copia local sin
 // paca/sixpack): una sola lista para validar y mostrar las medidas.
-import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/unidades";
+import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/units";
 import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
 import { CrearProductoModal } from "@/features/products/components/CreateProductModal";
 import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import {
   ConfirmModal,
   NuevoInsumoModal,

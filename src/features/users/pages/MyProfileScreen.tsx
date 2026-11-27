@@ -3,12 +3,12 @@ import { motion } from "motion/react";
 import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { type Contratacion, ordenarContrataciones } from "@/features/employees/pages/EmployeesScreen";
-import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
+import { etiquetaTipoDocumento } from "@/shared/utils/documentTypes";
+import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";
 import { type Rol } from "@/features/roles/pages/RolesScreen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { filtrarCorreo, validarCorreo, validarTelefono } from "@/shared/components/campo";
-import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
+import { filtrarCorreo, validarCorreo, validarTelefono } from "@/shared/components/FormInputs";
+import { CambiarContrasenaModal } from "@/shared/components/ChangePasswordModal";
 
 const SERIF = "var(--font-titulo)";
 

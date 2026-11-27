@@ -1,6 +1,6 @@
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
-import type { EstadoProducto } from "@/shared/components/EstadoProducto";
+import type { EstadoProducto } from "@/shared/components/ProductStatus";
 import { mapearProductoApi, type ProductoApi } from "@/features/products/services/productsApi";
 
 import { getImageUrl, IMAGEN_DEFAULT, imagenEnApi } from "@/shared/utils/getImageUrl";

@@ -1,4 +1,4 @@
-import type { PorcionesTamano } from "@/shared/utils/fichas";
+import type { PorcionesTamano } from "@/shared/utils/technicalSheets";
 import type { TipoProducto } from "@/features/products/pages/ProductsScreen";
 
 /** Lo que la CATEGORÍA define del producto (sección 3): su tipo y los

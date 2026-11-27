@@ -1,8 +1,8 @@
-import { formatearHora } from "@/shared/utils/hora";
+import { formatearHora } from "@/shared/utils/time";
 import api from '@/shared/services/api';
 import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
-import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalogo';
+import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalog';
 import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta, MetodoPago } from '@/features/sales/pages/SalesScreen';
 import { mapearOrdenApi, type OrdenApi } from '@/features/production-orders/services/productionOrdersApi';
 

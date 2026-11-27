@@ -1,5 +1,5 @@
 import api from "@/shared/services/api";
-import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/fichas";
+import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/technicalSheets";
 import type { NoConformidad } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
 
 /** Registro tal como lo devuelve el backend (tb_productos_no_conformes). */

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { BotonAccion } from "./BotonAccion";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 
 export const REGISTROS_POR_PAGINA = 10;
 

@@ -1,5 +1,5 @@
 import api from "@/shared/services/api";
-import type { ParametrosCostos } from "@/shared/utils/costos";
+import type { ParametrosCostos } from "@/shared/utils/costs";
 
 export interface ParametrosCostosPayload {
   mano_obra_hora: number;

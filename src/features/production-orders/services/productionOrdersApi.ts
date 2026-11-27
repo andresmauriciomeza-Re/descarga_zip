@@ -1,7 +1,7 @@
 import api from "@/shared/services/api";
 import type { AxiosResponse } from "axios";
-import type { FaltanteUnidad } from "@/shared/utils/disponibilidad";
-import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/fichas";
+import type { FaltanteUnidad } from "@/shared/utils/availability";
+import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/technicalSheets";
 import {
   type EstadoOrden,
   type InsumoRequerido,

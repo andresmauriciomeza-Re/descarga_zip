@@ -1,7 +1,7 @@
 import api from "@/shared/services/api";
 import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import { mapearFichaApi, type FichaApi } from "@/features/products/services/technicalSheetsApi";
-import { idInsumoFront, type FichaVersion } from "@/shared/utils/fichas";
+import { idInsumoFront, type FichaVersion } from "@/shared/utils/technicalSheets";
 
 /** Fila de categoría de insumos tal como la devuelve el backend. */
 export interface CategoriaInsumoApi {

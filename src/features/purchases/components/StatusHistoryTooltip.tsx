@@ -1,4 +1,4 @@
-import { formatearFechaHora } from "@/shared/utils/hora";
+import { formatearFechaHora } from "@/shared/utils/time";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 

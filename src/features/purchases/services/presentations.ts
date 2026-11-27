@@ -1,7 +1,7 @@
 import api from "@/shared/services/api";
-import { idInsumoApiDesdeFront } from "@/shared/utils/fichas";
-import { esEmpaque } from "@/shared/utils/unidades";
-export { esEmpaque, PRESENTACIONES_COMPRA } from "@/shared/utils/unidades";
+import { idInsumoApiDesdeFront } from "@/shared/utils/technicalSheets";
+import { esEmpaque } from "@/shared/utils/units";
+export { esEmpaque, PRESENTACIONES_COMPRA } from "@/shared/utils/units";
 
 /**
  * Presentaciones de compra (regla 2.2): cuántas unidades base trae cada

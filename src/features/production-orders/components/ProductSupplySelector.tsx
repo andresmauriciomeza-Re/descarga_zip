@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Search } from "lucide-react";
-import { normalizarTexto } from "@/shared/utils/nombres";
+import { normalizarTexto } from "@/shared/utils/names";
 
 export type OpcionProductoInsumo = {
   id: string;

@@ -10,7 +10,7 @@ import {
   AUTH_GLASS_BUTTON_SECONDARY,
   AUTH_GLASS_CARD,
 } from "@/shared/styles/authGlass";
-import { PasoNuevaContrasena } from "@/shared/components/PasoNuevaContrasena";
+import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
 
 const SERIF = "var(--font-titulo)";
 

@@ -1,9 +1,9 @@
 import type { ChangeEvent, ReactNode } from "react";
 import { AlertCircle, Check, ChevronDown } from "lucide-react";
 import * as RadixSelect from "@radix-ui/react-select";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { etiquetaTipoDocumento } from "@/shared/utils/documentTypes";
+import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import {
   filtrarNit,
   filtrarNumeroDocumento,

@@ -1,12 +1,12 @@
-import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { PackageCheck, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { EstadoSelect } from "@/shared/components/EstadoSelect";
+import { EstadoSelect } from "@/shared/components/StatusSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { Paginador } from "@/shared/components/Paginator";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 
 const SERIF = "var(--font-titulo)";
 

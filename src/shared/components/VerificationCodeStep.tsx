@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { MensajeError } from "@/shared/components/campo";
-import { CodigoVerificacionInput } from "@/shared/components/CodigoVerificacionInput";
+import { MensajeError } from "@/shared/components/FormInputs";
+import { CodigoVerificacionInput } from "@/shared/components/VerificationCodeInput";
 
 const SERIF = "var(--font-titulo)";
 

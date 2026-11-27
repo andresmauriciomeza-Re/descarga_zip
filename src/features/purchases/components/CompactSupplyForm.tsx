@@ -14,7 +14,7 @@ import {
   unidadesCompatibles,
   type PresentacionConfigurada,
 } from "@/features/purchases/services/presentations";
-import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
+import { UNIDADES_INSUMO } from "@/shared/utils/units";
 
 const SERIF = "var(--font-titulo)";
 
@@ -22,7 +22,7 @@ const SERIF = "var(--font-titulo)";
    en shared/utils/unidades: leerla aquí arriba, en el ciclo
    UnidadSelect ⇄ CompactInsumoForm, lanzaba "Cannot access 'UNIDADES' before
    initialization" y dejaba la app en blanco. */
-export { UNIDADES } from "@/shared/utils/unidades";
+export { UNIDADES } from "@/shared/utils/units";
 
 /** Labels de las guías: 13px en gris oscuro (los títulos de sección van en
  *  `seccionCls` de cada formulario). */

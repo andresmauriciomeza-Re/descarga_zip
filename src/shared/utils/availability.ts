@@ -14,7 +14,7 @@
  * estructuralmente (mismo criterio que `presentacion.ts`), así no se crean
  * ciclos entre módulos. Lo único que importa es el TIPO de las fichas.
  */
-import type { FichaVersion, PorcionesTamano, RInsumo } from "./fichas";
+import type { FichaVersion, PorcionesTamano, RInsumo } from "@/shared/utils/technicalSheets";
 
 // Compara sin distinguir mayúsculas, tildes ni espacios sobrantes: "mediana"
 // y "Mediana " son el mismo tamaño, "harina" y "Harina" el mismo insumo.

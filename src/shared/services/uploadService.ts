@@ -1,6 +1,6 @@
 import api from "./api";
 import type { CarpetaUpload, UploadResponse } from "@/types/api";
-import { validarArchivo } from "@/shared/utils/validarArchivo";
+import { validarArchivo } from "@/shared/utils/fileValidation";
 import { crearError401Checkout } from "./api";
 import { obtenerToken } from "./authService";
 

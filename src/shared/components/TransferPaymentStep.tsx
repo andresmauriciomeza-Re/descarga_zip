@@ -1,7 +1,7 @@
 import { QrCode, Upload, X, ImageIcon, FileText } from "lucide-react";
 import { useEffect, useState, type RefObject } from "react";
 import QRCode from "qrcode";
-import { esComprobantePdf } from "@/shared/utils/comprobante";
+import { esComprobantePdf } from "@/shared/utils/receipt";
 
 const MONO = "var(--font-texto)";
 const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;

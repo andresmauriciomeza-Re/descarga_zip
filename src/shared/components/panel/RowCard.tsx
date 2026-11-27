@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { TonoPill } from "./EstadoPill";
+import type { TonoPill } from "@/shared/components/panel/StatusPill";
 
 const COLOR_TONO: Record<TonoPill, string> = {
   verde: "var(--verde-texto)",

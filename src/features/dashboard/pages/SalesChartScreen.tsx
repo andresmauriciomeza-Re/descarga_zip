@@ -11,7 +11,7 @@ import type { GestionCompra, OrdenCompra, OrdenItem } from "@/features/purchase-
 import {
   esFechaISO,
   hoyISO,
-} from "@/shared/utils/fechas";
+} from "@/shared/utils/dates";
 
 const SERIF = "var(--font-titulo)";
 const DOW_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];

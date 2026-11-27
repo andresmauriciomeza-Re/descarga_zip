@@ -2,8 +2,8 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { X } from "lucide-react";
 import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
-import { configDeCategoria } from "@/shared/utils/configCategoria";
-import { mismoNombre, nombreLimpio } from "@/shared/utils/nombres";
+import { configDeCategoria } from "@/shared/utils/categoryConfig";
+import { mismoNombre, nombreLimpio } from "@/shared/utils/names";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 import { mensajeErrorProductos } from "@/features/products/services/productsApi";
 

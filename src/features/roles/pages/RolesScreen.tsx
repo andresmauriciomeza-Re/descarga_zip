@@ -2,22 +2,22 @@ import { useState, useMemo, useEffect } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Check, Plus, Lock, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { validarNombre } from "@/shared/components/campo";
-import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/nombreRol";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { CampoFormulario } from "@/shared/components/panel/CampoFormulario";
-import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
+import { validarNombre } from "@/shared/components/FormInputs";
+import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/roleName";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { CampoFormulario } from "@/shared/components/panel/FormField";
+import { DatosDetalle } from "@/shared/components/panel/DetailData";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import {
   cambiarEstadoRol as cambiarEstadoRolApi,
   crearRol as crearRolApi,

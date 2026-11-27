@@ -1,5 +1,5 @@
-import { OpcionesBotones } from "@/shared/components/panel/OpcionesBotones";
-import { EstadoPill } from "@/shared/components/panel/EstadoPill";
+import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { EstadoPill } from "@/shared/components/panel/StatusPill";
 import type { TipoPersona } from "@/features/suppliers/hooks/useSupplierForm";
 
 // Selector "Empresa / Persona natural" de los formularios de proveedor (Crear,

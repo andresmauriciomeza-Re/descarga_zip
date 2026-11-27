@@ -1,6 +1,6 @@
 import { type KeyboardEvent } from "react";
 import { authGlassOtpCls } from "@/shared/styles/authGlass";
-import { trampaTabOTP } from "@/shared/hooks/useValidacionFormulario";
+import { trampaTabOTP } from "@/shared/hooks/useFormValidation";
 
 /**
  * Casillas del código de verificación de 6 dígitos (vidrio esmerilado).

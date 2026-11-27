@@ -1,4 +1,4 @@
-import type { EstadoProducto } from "./EstadoProducto";
+import type { EstadoProducto } from "@/shared/components/ProductStatus";
 
 /** Etiqueta de estado del MENÚ PÚBLICO (tarjetas del catálogo, favoritas de la
     landing y detalle). A diferencia del `EstadoBadge` del panel —fondo suave y

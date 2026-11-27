@@ -16,13 +16,13 @@ import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { descargarFactura } from "@/features/sales/services/saleInvoice";
 import type { EstadoClienteVenta, Venta, VentaStatus } from "@/features/sales/pages/SalesScreen";
-import { formatearHora } from "@/shared/utils/hora";
-import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
-import { hoyISO } from "@/shared/utils/fechas";
-import { useSubirArchivo } from "@/shared/hooks/useSubirArchivo";
-import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
-import { esComprobantePdf } from "@/shared/utils/comprobante";
-import { VisorImagen } from "@/shared/components/VisorImagen";
+import { formatearHora } from "@/shared/utils/time";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
+import { hoyISO } from "@/shared/utils/dates";
+import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
+import { PasoPagoTransferencia, PAYMENT_INFO, useQrPago } from "@/shared/components/TransferPaymentStep";
+import { esComprobantePdf } from "@/shared/utils/receipt";
+import { VisorImagen } from "@/shared/components/ImageViewer";
 import {
   cancelarVentaApi,
   obtenerMiVenta,

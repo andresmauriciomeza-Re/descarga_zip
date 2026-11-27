@@ -6,9 +6,9 @@ import {
   RequisitosContrasena,
   faltantesContrasena,
   validarContrasena,
-} from "@/shared/components/campo";
+} from "@/shared/components/FormInputs";
 import { authGlassInputCls } from "@/shared/styles/authGlass";
-import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario";
+import { useValidacionFormulario } from "@/shared/hooks/useFormValidation";
 
 /**
  * Paso "nueva contraseña" del flujo de contraseña (vidrio esmerilado). Es

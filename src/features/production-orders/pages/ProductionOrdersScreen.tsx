@@ -1,40 +1,40 @@
 import { ChefHat, Download } from "lucide-react";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { useState, useMemo, useEffect, useCallback, type Dispatch, type SetStateAction } from "react";
-import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefrescarAlVencer";
+import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Plus, Search, Trash2, X, Play, CheckCircle2, Ban, Calculator,
   AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginador";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
-import { exportarExcelEstilizado } from "@/shared/utils/exportExcelEstilizado";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/CampoTiempoPreparacion";
-import { formatearFechaHora, formatearHora } from "@/shared/utils/hora";
+import { Paginador } from "@/shared/components/Paginator";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
+import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
+import { exportarExcelEstilizado } from "@/shared/utils/styledExcelExport";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
+import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/PrepTimeField";
+import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
-import { FichaTecnicaDetalle } from "@/shared/components/FichaTecnicaEditor";
+import { FichaTecnicaDetalle } from "@/shared/components/TechnicalSheetEditor";
 import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Venta } from "@/features/sales/pages/SalesScreen";
 import { tipoDe, type Producto, type FichasPorProducto } from "@/features/products/pages/ProductsScreen";
-import { porcionesReferencia, esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/fichas";
+import { porcionesReferencia, esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/technicalSheets";
 import {
   convertirUnidad,
   faltantesPara,
@@ -43,7 +43,7 @@ import {
   requeridosPorUnidad,
   unidadesCompatibles,
   type FaltanteUnidad,
-} from "@/shared/utils/disponibilidad";
+} from "@/shared/utils/availability";
 import type { NoConformidad } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
 import {
   actualizarOrdenProduccion,
@@ -72,7 +72,7 @@ import {
   precioRecomendadoPorPorcion,
   recomendadoGrandeIgualado,
   type ParametrosCostos,
-} from "@/shared/utils/costos";
+} from "@/shared/utils/costs";
 import {
   SelectorProductoInsumo,
   type GrupoProductoInsumo,

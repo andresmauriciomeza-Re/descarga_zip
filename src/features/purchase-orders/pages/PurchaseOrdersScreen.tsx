@@ -1,4 +1,4 @@
-import { formatearFechaHora } from "@/shared/utils/hora";
+import { formatearFechaHora } from "@/shared/utils/time";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 // Bloque 3: el "+ Crear insumo" comparte el mismo catálogo de categorías
 // obligatorias (A5.1) que usa Gestión de Insumos.
@@ -23,18 +23,18 @@ import {
   sumarTotales,
   type ModoIva,
 } from "@/features/purchases/services/vat";
-import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/unidades";
+import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import { InsumosSolicitadosTable, type InsumoSolicitadoRow } from "@/features/purchases/components/RequestedSuppliesTable";
-import { EstadoSelect, type EstadoOption } from "@/shared/components/EstadoSelect";
+import { EstadoSelect, type EstadoOption } from "@/shared/components/StatusSelect";
 import { UnidadSelect } from "@/features/purchases/components/UnitSelect";
 // Bloque 3 (A5.2): el modal de Nuevo Insumo usa la MISMA lista de unidades
 // (con etiqueta larga) que Crear Insumo en Gestión de Insumos.
-import { UNIDADES_INSUMO } from "@/shared/utils/unidades";
+import { UNIDADES_INSUMO } from "@/shared/utils/units";
 // Bloque 3: comparación de nombres (sin tildes ni mayúsculas) y nombre con
 // mayúscula inicial, compartidos con Gestión de Insumos y Productos.
-import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/nombres";
+import { mismoNombre, nombreLimpio, nombreParaGuardar } from "@/shared/utils/names";
 import { EstadoHistorialTooltip } from "@/features/purchases/components/StatusHistoryTooltip";
-import { SegmentadoButtons } from "@/shared/components/SegmentadoButtons";
+import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
 import { useProveedorForm, soloLetras, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type ProveedorFormValues } from "@/features/suppliers/hooks/useSupplierForm";
 import { crearProveedor, mensajeErrorProveedores } from "@/features/suppliers/services/suppliersApi";
 import { ProveedorFormCampos } from "@/features/suppliers/components/SupplierForm";
@@ -45,9 +45,9 @@ import {
   AlertTriangle, CheckCircle2, Lock, Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
-import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/exportExcelEstilizado";
-import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
+import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
+import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/styledExcelExport";
+import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/purchases/services/inventory";
 import {
   actualizarOrdenCompra,
@@ -63,25 +63,25 @@ import {
   medidaCompra,
   nombreBuscable,
   presentacionCompra,
-} from "@/shared/utils/presentacion";
-import { BotonDescargarExcel } from "@/shared/components/BotonDescargarExcel";
+} from "@/shared/utils/presentation";
+import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { ActionIcons } from "@/shared/components/ActionIcons";
-import { Paginador } from "@/shared/components/Paginador";
-import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
-import { BotonAccion } from "@/shared/components/panel/BotonAccion";
-import { BotonRuta } from "@/shared/components/panel/BotonRuta";
-import { BuscadorGrande } from "@/shared/components/panel/BuscadorGrande";
-import { DatosDetalle } from "@/shared/components/panel/DatosDetalle";
-import { Historial } from "@/shared/components/panel/DatosDetalle";
-import { DialogoConfirmacion } from "@/shared/components/panel/DialogoConfirmacion";
-import { EncabezadoPagina } from "@/shared/components/panel/EncabezadoPagina";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/EstadoPill";
-import { FiltrosChips } from "@/shared/components/panel/FiltrosChips";
-import { PaginadorGrande } from "@/shared/components/panel/PaginadorGrande";
-import { SeccionFormulario } from "@/shared/components/panel/SeccionFormulario";
-import { TarjetaFila } from "@/shared/components/panel/TarjetaFila";
-import { VacioEstado } from "@/shared/components/panel/VacioEstado";
+import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
+import { Paginador } from "@/shared/components/Paginator";
+import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
+import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
+import { DatosDetalle } from "@/shared/components/panel/DetailData";
+import { Historial } from "@/shared/components/panel/DetailData";
+import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
+import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
+import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
+import { FiltrosChips } from "@/shared/components/panel/FilterChips";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { VacioEstado } from "@/shared/components/panel/EmptyState";
 
 const SERIF = "var(--font-titulo)";
 
