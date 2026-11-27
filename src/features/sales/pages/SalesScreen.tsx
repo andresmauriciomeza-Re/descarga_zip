@@ -12,30 +12,12 @@ import { FiltrosChips } from "@/shared/components/panel/FilterChips";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import React, { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
 import { disponiblePizza } from "@/shared/utils/pizzaStock";
 import { motion, AnimatePresence } from "motion/react";
-import {
-  Search,
-  X,
-  ChevronDown,
-  ChevronLeft,
-  Check,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  ShieldCheck,
-  ShieldX,
-  Printer,
-  FileText,
-  ImageIcon,
-  Undo2,
-  CalendarDays,
-  Upload,
-  Ban,
-} from "lucide-react";
+import { Search, X, ChevronDown, ChevronLeft, Check, CheckCircle2, Clock, AlertCircle, ShieldCheck, ShieldX, Printer, FileText, ImageIcon, Undo2, CalendarDays, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { normalizarTexto } from "@/shared/utils/names";
 import { esComprobantePdf } from "@/shared/utils/receipt";
@@ -60,6 +42,9 @@ import { ESTADOS_ANULABLES } from "@/features/sales/services/saleStatuses";
 import { useSales } from "@/features/sales/hooks/useSales";
 import { type Venta, type VentaStatus, type DetalleProd, type MetodoPago, type ComprobanteVenta, type MotivoRechazo, METODO_PAGO_ADMIN } from "@/features/sales/utils/sales";
 import { etiquetaEstadoVenta, VENTA_STATUS_LABEL } from "@/features/sales/utils/sales";
+import { ConfirmModal } from "@/features/sales/components/ConfirmModal";
+import { CampoComprobante } from "@/features/sales/components/ReceiptField";
+import { PagoPill } from "@/features/sales/components/PaymentPill";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -91,128 +76,6 @@ const esPizzaVenta = (producto: { category?: string; tamaño?: string }) =>
   producto.tamaño === "Mediana" ||
   producto.tamaño === "Grande" ||
   producto.category?.toLowerCase().includes("pizza") === true;
-
-// ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
-
-function ConfirmModal({
-  title,
-  message,
-  onConfirm,
-  onCancel,
-  tone = "peligro",
-  children,
-  confirmDisabled = false,
-  confirmLabel = "Sí, confirmar",
-}: {
-  title: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  /** "aviso": el botón de la acción va en rojo lleno (no es destructiva). */
-  tone?: "peligro" | "aviso";
-  /** Slot opcional entre el mensaje y los botones (motivo del rechazo). */
-  children?: ReactNode;
-  /** Apaga el botón de confirmar sin desmontar el diálogo. */
-  confirmDisabled?: boolean;
-  confirmLabel?: string;
-}) {
-  useEffect(() => {
-    const alTeclear = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
-    window.addEventListener("keydown", alTeclear);
-    return () => window.removeEventListener("keydown", alTeclear);
-  }, [onCancel]);
-  return (
-    <>
-      <div className="pn-dialogo-fondo" onClick={onCancel} />
-      <div className="pn-dialogo" role="alertdialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        <div className="pn-dialogo__caja">
-          <strong>Qué va a pasar:</strong>
-          {message}
-        </div>
-        {children}
-        <div className="pn-dialogo__botones">
-          <BotonAccion variante="oscuro" onClick={onCancel}>No, dejarlo como está</BotonAccion>
-          <BotonAccion variante={tone === "aviso" ? "principal" : "peligro"} disabled={confirmDisabled} onClick={onConfirm}>
-            {confirmLabel}
-          </BotonAccion>
-        </div>
-      </div>
-    </>
-  );
-}
-
-/**
- * Bloque de comprobante (input oculto + vista previa + "Quitar") que comparten
- * los modales que adjuntan un soporte: sube a Cloudinary con las mismas reglas
- * de `useSubirArchivo` (JPG/PNG/WEBP/PDF, máx. 5 MB).
- * Se dejó de usar en la verificación de pago (el rechazo ya no pide adjunto y
- * su motivo se elige en el modal de confirmación); lo retoman los modales de
- * anulación, donde el comprobante de la devolución es opcional.
- */
-function CampoComprobante({
-  fileRef,
-  url,
-  onQuitar,
-  subiendo,
-  onSubir,
-  etiquetaBoton,
-}: {
-  fileRef: React.RefObject<HTMLInputElement | null>;
-  url: string | null;
-  onQuitar: () => void;
-  subiendo: boolean;
-  onSubir: (file: File) => void;
-  etiquetaBoton: string;
-}) {
-  const esPdf = !!url && esComprobantePdf(url);
-  return (
-    <>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,application/pdf"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          onSubir(file);
-          e.target.value = "";
-        }}
-      />
-      {url ? (
-        <div className="relative rounded-xl overflow-hidden border border-border">
-          {esPdf ? (
-            <div className="flex items-center gap-2 p-3 text-sm text-foreground">
-              <FileText className="w-4 h-4 text-primary" /> Comprobante adjunto
-            </div>
-          ) : (
-            <img src={url} alt="Comprobante" className="w-full object-contain max-h-56" />
-          )}
-          <button
-            onClick={onQuitar}
-            className="absolute top-1 right-1 p-1 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
-            aria-label="Quitar comprobante"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={subiendo}
-          className="w-full flex flex-col items-center justify-center gap-2 py-8 rounded-xl border-2 border-dashed border-border text-center hover:border-primary/40 cursor-pointer transition-colors"
-        >
-          <Upload className="w-6 h-6 text-muted-foreground/50" />
-          <span className="text-sm font-semibold text-foreground">
-            {subiendo ? "Subiendo..." : etiquetaBoton}
-          </span>
-          <span className="text-xs text-muted-foreground">JPG, PNG, WEBP o PDF · máx 5 MB</span>
-        </button>
-      )}
-    </>
-  );
-}
 
 // ─────────────────────────── VENTAS TYPES & DATA ───────────────────────────
 
@@ -283,36 +146,8 @@ const VENTA_STATUS_COLOR: Record<VentaStatus, string> = {
 };
 
 
-const METODO_PAGO_ESTILO: Record<
-  Exclude<MetodoPago, "">,
-  { pill: string; btn: string }
-> = {
-  Nequi:       { pill: "bg-purple-100 text-purple-800", btn: "bg-purple-600 border-purple-600" },
-  Bancolombia: { pill: "bg-yellow-100 text-yellow-800",  btn: "bg-yellow-500 border-yellow-500" },
-  Efectivo:    { pill: "bg-emerald-100 text-emerald-800", btn: "bg-emerald-600 border-emerald-600" },
-};
-
 const nowHora = () =>
   formatearHora(new Date());
-
-/** Etiqueta del método de pago con su color. "Efectivo" es exclusivo de los
-    pedidos que crea el administrador. Se exporta para que Devoluciones muestre
-    el mismo color sin duplicar la tabla de métodos. */
-export function PagoPill({ metodo }: { metodo?: string }) {
-  const est = METODO_PAGO_ESTILO[metodo as Exclude<MetodoPago, "">];
-  if (!est) {
-    return (
-      <span className="text-xs text-muted-foreground italic">—</span>
-    );
-  }
-  return (
-    <span
-      className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full ${est.pill}`}
-    >
-      {metodo}
-    </span>
-  );
-}
 
 /** Fecha local en formato YYYY-MM-DD (el que espera CalendarDropdown). */
 const hoyFecha = () => {

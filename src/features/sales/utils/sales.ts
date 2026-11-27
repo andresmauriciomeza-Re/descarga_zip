@@ -163,3 +163,85 @@ export const etiquetaEstadoVenta = (p: Venta) =>
   p.estado === "Anulado" && p.montoReembolso !== undefined
     ? "Anulado"
     : VENTA_STATUS_LABEL[p.estado];
+
+export const METODO_PAGO_ESTILO: Record<
+  Exclude<MetodoPago, "">,
+  { pill: string; btn: string }
+> = {
+  Nequi:       { pill: "bg-purple-100 text-purple-800", btn: "bg-purple-600 border-purple-600" },
+  Bancolombia: { pill: "bg-yellow-100 text-yellow-800",  btn: "bg-yellow-500 border-yellow-500" },
+  Efectivo:    { pill: "bg-emerald-100 text-emerald-800", btn: "bg-emerald-600 border-emerald-600" },
+};
+
+export const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
+
+/** Etiquetas y mensajes PARA EL CLIENTE de cada estado de la venta (la tabla
+    de la sección 3 difiere de los nombres del panel admin). */
+export const ESTADO: Record<string, { label: string; color: string; mensaje: string }> = {
+  Pendiente: {
+    label: "Pendiente",
+    color: "bg-amber-100 text-amber-800",
+    mensaje: "Estamos verificando tu pago.",
+  },
+  "Por verificar": {
+    label: "Pendiente",
+    color: "bg-amber-100 text-amber-800",
+    mensaje: "Estamos verificando tu pago.",
+  },
+  Aceptado: {
+    label: "Aceptado",
+    color: "bg-sky-100 text-sky-800",
+    mensaje: "Pago aceptado, tu pedido entra a cocina.",
+  },
+  "En proceso": {
+    label: "En preparación",
+    color: "bg-indigo-100 text-indigo-800",
+    mensaje: "Tu pedido ya está en preparación.",
+  },
+  "Por entregar": {
+    label: "Por entregar",
+    color: "bg-blue-100 text-blue-800",
+    mensaje: "Tu pedido está listo para recoger.",
+  },
+  Completado: {
+    label: "Completado",
+    color: "bg-emerald-100 text-emerald-800",
+    mensaje: "¡Gracias por tu compra!",
+  },
+  Rechazado: {
+    label: "Rechazado",
+    color: "bg-red-100 text-red-700",
+    mensaje: "El comprobante de este pedido fue rechazado.",
+  },
+  Anulado: {
+    label: "Anulado",
+    color: "bg-red-100 text-red-700",
+    mensaje: "Este pedido fue anulado por la pizzería.",
+  },
+  "Devolución": {
+    label: "Devolución",
+    color: "bg-orange-100 text-orange-800",
+    mensaje: "Este pedido tiene una devolución registrada.",
+  },
+  Devolucion: {
+    label: "Devolución",
+    color: "bg-orange-100 text-orange-800",
+    mensaje: "Este pedido tiene una devolución registrada.",
+  },
+  "En espera": {
+    label: "En espera",
+    color: "bg-violet-100 text-violet-800",
+    mensaje: "Falta parte del pago.",
+  },
+};
+
+export const PASOS_PEDIDO: EstadoClienteVenta[] = [
+  "Pendiente",
+  "Aceptado",
+  "En proceso",
+  "Por entregar",
+  "Completado",
+];
+
+export const estadoCliente = (p: Venta): EstadoClienteVenta | VentaStatus =>
+  p.estadoCliente ?? p.estado;

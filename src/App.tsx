@@ -63,7 +63,8 @@ import { ProductosPerecederosScreen } from "@/features/non-conforming-products/p
 import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-conforming-products/services/nonConformingApi";
 import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriesApi";
-import { PagoPill, VentasScreen } from "@/features/sales/pages/SalesScreen";
+import { VentasScreen } from "@/features/sales/pages/SalesScreen";
+import { PagoPill } from "@/features/sales/components/PaymentPill";
 import type { DevolucionTipo, Venta } from "@/features/sales/utils/sales";
 import type { CartItem } from "@/types/cart";
 import { DASHBOARD_PERM_KEY, canViewPermission } from "@/shared/utils/navigation";
