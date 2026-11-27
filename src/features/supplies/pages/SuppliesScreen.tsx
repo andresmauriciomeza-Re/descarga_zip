@@ -15,7 +15,6 @@ import {
 import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
 import { exportarExcelEstilizado } from "@/shared/utils/styledExcelExport";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 // Bloque 3: limpieza y comparación de nombres compartidas con Gestión de
 // Productos y el "+ Crear insumo" de Compras (una sola copia de las reglas).
 import { mismoNombre, nombreLimpio, nombreParaGuardar, normalizarTexto } from "@/shared/utils/names";
@@ -64,9 +63,10 @@ import { crearFicha, mapearFichaApi, obtenerFichasDe, payloadFicha } from "@/fea
 import {
   fmtCant,
 } from "@/shared/utils/availability";
+import { useSupplies } from "@/features/supplies/hooks/useSupplies";
 
 const SERIF = "var(--font-titulo)";
-const PER_PAGE = 10;
+export const PER_PAGE = 10;
 const formatoCantidad = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
 const esOtraPresentacion = (valor: string) =>
   valor === OTRA_PRESENTACION_G || valor === OTRA_PRESENTACION_ML;
@@ -223,17 +223,13 @@ const fmtCOP = (n: number): string =>
     "bajo" (mayor a 0 y hasta el stock mínimo) u "ok". El listado pinta el
     badge según esto: "Sin stock" en ROJO, "Stock bajo" en ÁMBAR; el aviso
     del listado y su filtro cuentan los dos primeros. */
-const estadoStock = (insumo: Insumo): "sin-stock" | "bajo" | "ok" =>
+export const estadoStock = (insumo: Insumo): "sin-stock" | "bajo" | "ok" =>
   insumo.stockActual <= 0
     ? "sin-stock"
     : insumo.stockActual <= insumo.stockMinimo
       ? "bajo"
       : "ok";
 
-const formatearId = (id: string): string => {
-  const match = id.match(/(\d+)$/);
-  return match ? match[1] : id;
-};
 
 // ─── Producto Insumo: limpieza de nombres ───────────────────────────────────
 // Bloque 3: `nombreLimpio`, `nombreParaGuardar` (mayúscula inicial, sólo al
@@ -392,20 +388,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     const ins = insumos.find((i) => normalizarTexto(i.nombre) === clave);
     return ins ? idInsumoApiDesdeFront(ins.id) : null;
   };
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { search, setSearch, page, setPage, filtroEstado, setFiltroEstado, filtroTipo, setFiltroTipo, filtroStockBajo, setFiltroStockBajo, filtroCategoria, setFiltroCategoria, filtered, paged, insumosStockBajo } = useSupplies(insumos, categoriaNombre);
   const [showModal, setShowModal] = useState(false);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [detalleItem, setDetalleItem] = useState<Insumo | ProductoInsumo | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filtroEstado, setFiltroEstado] = useState<"todos" | "activos" | "inactivos">("todos");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | "insumos" | "productos">("todos");
-  // A5.5 — Aviso de stock bajo: al apretar el aviso el listado queda
-  // mostrando SOLO esos insumos; el segundo clic lo apaga (el aviso se
-  // mantiene visible mientras el filtro esté activo, para poder salir).
-  const [filtroStockBajo, setFiltroStockBajo] = useState(false);
-  /** Filtro por categoría (botones de la lista). "" = todas. */
-  const [filtroCategoria, setFiltroCategoria] = useState("");
   /** Borrado rechazado por el servidor (tiene historial): se explica en un diálogo. */
   const [bloqueoBorrado, setBloqueoBorrado] = useState<{ id: string; nombre: string; mensaje: string } | null>(null);
   /** true = el registro en edición es un Producto Insumo (el tipo del
@@ -472,37 +459,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     }
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    let result = insumos;
-    if (filtroEstado === "activos") result = result.filter(i => i.estado === "activo");
-    if (filtroEstado === "inactivos") result = result.filter(i => i.estado === "inactivo");
-    if (filtroTipo === "insumos") result = result.filter(i => i.tipo !== "ProductoInsumo");
-    if (filtroTipo === "productos") result = result.filter(i => i.tipo === "ProductoInsumo");
-    // A5.5: filtro del aviso de stock bajo (solo activos, igual que el aviso).
-    if (filtroStockBajo)
-      result = result.filter(i => i.estado === "activo" && estadoStock(i) !== "ok");
-    if (filtroCategoria) result = result.filter(i => i.categoriaId === filtroCategoria);
-    if (q) {
-      result = result.filter(i =>
-        i.nombre.toLowerCase().includes(q) ||
-        i.id.toLowerCase().includes(q) ||
-        formatearId(i.id).includes(q) ||
-        categoriaNombre(i.categoriaId).toLowerCase().includes(q)
-      );
-    }
-    return ordenarPorIdDescendente(result, (insumo) => insumo.id);
-  }, [insumos, search, filtroEstado, filtroTipo, filtroStockBajo, filtroCategoria]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  /** A5.5 — Insumos activos que hoy están en "Sin stock" o "Stock bajo":
-      los que cuentan el aviso del listado y los que muestra su filtro. */
-  const insumosStockBajo = useMemo(
-    () => insumos.filter(i => i.estado === "activo" && estadoStock(i) !== "ok"),
-    [insumos],
-  );
 
   // Descarga del listado completo (buscador + estado + tipo, sin importar
   // la página actual del paginador).
