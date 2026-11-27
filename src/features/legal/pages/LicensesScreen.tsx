@@ -46,7 +46,7 @@ function Seccion({ indice, children }: { indice: number; children: ReactNode }) 
 }
 
 export function LicenciasScreen({ onVolver }: { onVolver: () => void }) {
-  // Enlace directo a una sección (/licencias#reconocimientos): el contenido se
+  // Enlace directo a una sección (/licenses#reconocimientos): el contenido se
   // monta después de que el navegador intentó ubicar el ancla.
   useEffect(() => {
     const id = window.location.hash.slice(1);

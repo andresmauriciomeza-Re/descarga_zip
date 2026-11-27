@@ -4,7 +4,10 @@ import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState } from 
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 
-import { RUTA_LICENCIAS, esRutaLicencias, useRutaLicencias } from "@/features/legal/navigation";
+import { esRutaLicencias } from "@/features/legal/navigation";
+import { BrowserRouter } from "react-router";
+import { AppRoutes, leerRuta } from "@/AppRoutes";
+import { useRouteSync } from "@/shared/hooks/useRouteSync";
 import { formatearHora } from "@/shared/utils/time";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/dates";
 import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/sales/services/salesApi";
@@ -170,7 +173,11 @@ export default function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        <AppContent />
+        {/* Sin transiciones: las redirecciones de `AppContent` esperan que la
+            ruta cambie junto con el resto del estado. */}
+        <BrowserRouter useTransitions={false}>
+          <AppRoutes shell={<AppContent />} />
+        </BrowserRouter>
       </CartProvider>
     </AuthProvider>
   );
@@ -191,12 +198,31 @@ function AppContent() {
   });
   // /licencias es pública y tiene URL propia: no espera a restaurar la sesión.
   const [arrancaEnLicencias] = useState(esRutaLicencias);
+  // Pantalla pedida en la URL. "/" no cuenta: ahí se restaura la última
+  // pantalla de la sesión, como antes.
+  const [rutaInicial] = useState(() => {
+    const ruta = leerRuta(window.location.pathname);
+    if (!ruta || ruta.screen === "landing") return null;
+    if (sesionActiva && (ruta.screen === "login" || ruta.screen === "register")) return null;
+    return ruta;
+  });
   const [pantallaPendiente, setPantallaPendiente] = useState(
-    facturaPedidoId || arrancaEnLicencias ? null : sesionActiva?.screen ?? null,
+    facturaPedidoId || arrancaEnLicencias ? null : sesionActiva ? rutaInicial?.screen ?? sesionActiva.screen : null,
   );
-  const [screen, setScreen] = useState<Screen>(
-    arrancaEnLicencias ? "licencias" : facturaPedidoId ? (sesionActiva ? "mis-pedidos" : "login") : sesionActiva ? "inicio" : "landing",
+  const [screen, setScreen] = useState<Screen>(() => {
+    if (arrancaEnLicencias) return "licencias";
+    if (facturaPedidoId) return sesionActiva ? "mis-pedidos" : "login";
+    if (sesionActiva) return "inicio";
+    if (!rutaInicial) return "landing";
+    const privada = ADMIN_SCREENS.includes(rutaInicial.screen) ||
+      ["mis-pedidos", "client-profile", "store-profile"].includes(rutaInicial.screen);
+    return privada ? "login" : rutaInicial.screen;
+  });
+  /** Registro pedido por la URL que falta buscar en los datos cargados. */
+  const [idPendiente, setIdPendiente] = useState<{ screen: Screen; id: string } | null>(() =>
+    rutaInicial?.id ? { screen: rutaInicial.screen, id: rutaInicial.id } : null,
   );
+  const reemplazarRutaRef = useRef(false);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -933,7 +959,9 @@ function AppContent() {
     const inicioSesion = isAdminRole ? adminHomeScreen : "landing";
     const pantalla = esPantalla(pantallaPendiente) ? pantallaPendiente : inicioSesion;
     // Estas vistas necesitan una orden seleccionada, que vive en memoria.
-    const requiereOrden = pantalla === "recepcion-compra" || pantalla === "orden-detalle";
+    // Con el id en la URL sí se puede: se busca al cargar las órdenes.
+    const requiereOrden = (pantalla === "recepcion-compra" || pantalla === "orden-detalle") &&
+      idPendiente?.screen !== pantalla;
     const panelSinAcceso = ADMIN_SCREENS.includes(pantalla) &&
       (!isAdminRole || !puedeVerPantallaPanel(pantalla));
     setScreen(requiereOrden || panelSinAcceso ? inicioSesion : pantalla);
@@ -1146,10 +1174,8 @@ function AppContent() {
     if (!options?.restaurar) {
       scrollPorPantalla.current[screen] = window.scrollY;
     }
+    if (options?.replace && s !== screen) reemplazarRutaRef.current = true;
     setScreen(s);
-    if (options?.replace) {
-      window.history.replaceState(null, "", s === "licencias" ? RUTA_LICENCIAS : "/");
-    }
     if (options?.restaurar) {
       const top = scrollPorPantalla.current[s] ?? 0;
       // Punto 2.3: la pantalla entrante tarda en montarse (`AnimatePresence
@@ -1181,8 +1207,6 @@ function AppContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
-
-  useRutaLicencias(screen, navigate);
 
   /** Desde la tabla de ventas, "Gestionar" salta al módulo de devoluciones con el
       modal de esa venta ya abierto. */
@@ -1248,7 +1272,7 @@ function AppContent() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("activar");
     if (!token) return;
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(window.history.state, "", "/");
     setActivacionToken(token);
     navigate("login");
   }, []);
@@ -1260,7 +1284,7 @@ function AppContent() {
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("verificar");
     if (!token) return;
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(window.history.state, "", "/");
     // Se navega al login cuando responde la API: LoginScreen toma el correo
     // precargado solo al montarse.
     void verificarCorreo(token)
@@ -1278,6 +1302,55 @@ function AppContent() {
       })
       .finally(() => navigate("login"));
   }, []);
+
+  // ── URL ↔ pantalla ─────────────────────────────────────────────────
+  const idDeRuta = idPendiente?.screen === screen ? idPendiente.id
+    : screen === "product-detail" ? selectedProduct.id
+      : screen === "orden-detalle" ? ordenDetalle?.id
+        : screen === "recepcion-compra" ? ordenRecepcion?.id
+          : null;
+
+  useRouteSync({
+    screen,
+    id: idDeRuta,
+    pausado: pantallaPendiente !== null && isLoggedIn,
+    reemplazarRef: reemplazarRutaRef,
+    // Atrás / adelante del navegador.
+    alVolver: ({ screen: pedida, id }) => {
+      let destino = pedida;
+      if (isLoggedIn && (destino === "login" || destino === "register")) {
+        destino = isAdminRole ? adminHomeScreen : "landing";
+      } else if (!isLoggedIn && ADMIN_SCREENS.includes(destino)) {
+        destino = "login";
+      }
+      setIdPendiente(id && destino === pedida ? { screen: destino, id } : null);
+      if (destino !== screen) navigate(destino, { restaurar: true });
+    },
+  });
+
+  // Busca el producto u orden que pide la URL cuando sus datos ya llegaron.
+  useEffect(() => {
+    if (!idPendiente || pantallaPendiente !== null) return;
+    if (screen !== idPendiente.screen) {
+      setIdPendiente(null);
+      return;
+    }
+    if (idPendiente.screen === "product-detail") {
+      if (catalogoCargando) return;
+      const producto = productosCatalogo
+        .map((p) => productoACatalogo(p, categoriasCatalogo))
+        .find((p) => String(p.id) === idPendiente.id);
+      if (producto) setSelectedProduct(producto);
+      else navigate("catalog", { replace: true });
+    } else if (idPendiente.screen === "orden-detalle" || idPendiente.screen === "recepcion-compra") {
+      if (!ordenesCompraCargadas) return;
+      const orden = ordenes.find((o) => String(o.id) === idPendiente.id);
+      if (!orden) navigate("orden-compra", { replace: true });
+      else if (idPendiente.screen === "orden-detalle") setOrdenDetalle(orden);
+      else setOrdenRecepcion(orden);
+    }
+    setIdPendiente(null);
+  }, [idPendiente, pantallaPendiente, screen, catalogoCargando, productosCatalogo, categoriasCatalogo, ordenesCompraCargadas, ordenes]);
 
   /** Fin del registro público: la cuenta queda pendiente de confirmar el
       correo, así que se va al login con el correo escrito y el aviso. */
@@ -2142,6 +2215,12 @@ function AppContent() {
     setTimeout(() => navigate(adminHomeScreen), 0);
   }
 
+  const cargandoPantalla = (
+    <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Cargando">
+      <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+    </div>
+  );
+
   const alternarMenu = () => {
     if (esMovil) {
       if (!sidebarMovilAbierto) {
@@ -2319,13 +2398,7 @@ function AppContent() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
             >
-              <Suspense
-                fallback={
-                  <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-label="Cargando">
-                    <div className="w-10 h-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                  </div>
-                }
-              >
+              <Suspense fallback={cargandoPantalla}>
                 <LandingErrorBoundary resetKey={screen}>
                   {screen === "landing" && (
                     <Landing
@@ -2368,7 +2441,8 @@ function AppContent() {
                       productos={productosCatalogo.map((p) => productoACatalogo(p, categoriasCatalogo))}
                     />
                   )}
-                  {screen === "product-detail" && (
+                  {idPendiente?.screen === screen && cargandoPantalla}
+                  {screen === "product-detail" && !idPendiente && (
                     <ProductDetailScreen
                       key={selectedProduct.id}
                       product={selectedProduct}
@@ -2625,7 +2699,7 @@ function AppContent() {
                       initialItems={ordenCompraItemsIniciales}
                     />
                   )}
-                  {screen === "recepcion-compra" && ordenRecepcion && (
+                  {screen === "recepcion-compra" && !idPendiente && ordenRecepcion && (
                     <RecepcionCompraScreen
                       orden={ordenRecepcion}
                       insumos={insumos}
@@ -2680,7 +2754,7 @@ function AppContent() {
                       }}
                     />
                   )}
-                  {screen === "orden-detalle" && ordenDetalle && (
+                  {screen === "orden-detalle" && !idPendiente && ordenDetalle && (
                     <OrdenDetallePage
                       orden={ordenDetalle}
                       gestiones={gestiones}

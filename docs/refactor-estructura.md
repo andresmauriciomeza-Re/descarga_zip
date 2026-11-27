@@ -47,3 +47,13 @@ Pendiente:
 ## Contextos
 
 `AuthContext` y `CartContext` guardan el estado de sesión y carrito. Los efectos, `handleLogin` y `logout` siguen en `App` porque cruzan sesión, carrito, roles y navegación, y moverlos cambiaría el orden en que se ejecutan.
+
+## Fase 7: React Router
+
+- Tabla de rutas en `src/AppRoutes.tsx`; sincronización URL ↔ pantalla en `src/shared/hooks/useRouteSync.ts`. `App` sigue decidiendo qué pantalla pintar y llamando `navigate(screen)`.
+- Se usa `react-router` 7 con `useTransitions={false}`. La versión 6 tenía avisos de seguridad.
+- Sin `ProtectedRoute` ni layouts por ruta: los permisos y la disposición siguen en `App`. Queda como mejora posterior.
+- `/` con sesión abierta restaura la última pantalla, como antes.
+- Sin sesión, las rutas privadas llevan a `/login`; tras entrar se va al inicio, no a la ruta pedida.
+- `/licencias` redirige a `/licenses`. `store-profile` usa `/account`.
+- `vercel.json` reescribe todas las rutas a `index.html`. Falta confirmarlo en un despliegue real.
