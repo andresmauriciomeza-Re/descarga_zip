@@ -40,3 +40,8 @@ export interface NoConformidad {
   /** Merma de producción o devolución: los crea el backend y no se eliminan. */
   generadoPorSistema?: boolean;
 }
+
+export const ESTADO_CONFIG: Record<EstadoNC, string> = {
+  Pendiente:  "bg-amber-100 text-amber-800",
+  Completado: "bg-emerald-100 text-emerald-800",
+};

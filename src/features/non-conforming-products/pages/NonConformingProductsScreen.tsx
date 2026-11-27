@@ -41,7 +41,7 @@ import {
   mensajeErrorNoConformes,
 } from "@/features/non-conforming-products/services/nonConformingApi";
 import { useNonConformingProducts } from "@/features/non-conforming-products/hooks/useNonConformingProducts";
-import { type EstadoNC, type Tipo, PER_PAGE, type NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
+import { type Tipo, PER_PAGE, type NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 
 const SERIF = "var(--font-titulo)";
 const SOLUCION_TXT: Record<string, string> = {
@@ -55,11 +55,6 @@ interface VentaSugerida {
   id: string;
   usuario: string;
 }
-
-const ESTADO_CONFIG: Record<EstadoNC, string> = {
-  Pendiente:  "bg-amber-100 text-amber-800",
-  Completado: "bg-emerald-100 text-emerald-800",
-};
 
 const AREAS = ["Producción", "Compras", "Almacén", "Distribución", "Cocina", "Ventas"];
 const TIPOS_SOLUCION = [
@@ -177,27 +172,6 @@ function downloadXLSX(data: NoConformidad[]) {
   const date = new Date().toLocaleDateString("en-CA");
   XLSX.writeFile(wb, `no-conformidades-${date}.xlsx`);
   toast.success("Archivo Excel descargado");
-}
-
-function EstadoBadge({ e }: { e: EstadoNC }) {
-  return (
-    <span className={`text-base font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${ESTADO_CONFIG[e]}`}>
-      {e}
-    </span>
-  );
-}
-
-function TipoBadge({ tipo }: { tipo: Tipo }) {
-  const cfg: Record<Tipo, string> = {
-    Producto: "bg-blue-100 text-blue-800",
-    "Producto insumo":   "bg-amber-100 text-amber-800",
-    Venta:    "bg-red-100 text-red-700",
-  };
-  return (
-    <span className={`text-base font-semibold px-2.5 py-1 rounded-full whitespace-nowrap ${cfg[tipo]}`}>
-      {tipo}
-    </span>
-  );
 }
 
 const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted dark:bg-input border border-transparent rounded-xl text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50";
