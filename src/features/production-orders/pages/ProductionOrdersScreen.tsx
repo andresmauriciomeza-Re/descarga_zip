@@ -18,7 +18,6 @@ import {
   AlertCircle, AlertTriangle, Clock, Minus, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginator";
@@ -77,6 +76,7 @@ import {
   SelectorProductoInsumo,
   type GrupoProductoInsumo,
 } from "@/features/production-orders/components/ProductSupplySelector";
+import { useProductionOrders } from "@/features/production-orders/hooks/useProductionOrders";
 
 const SERIF = "var(--font-titulo)";
 
@@ -567,7 +567,7 @@ export const INITIAL_ORDENES: OrdenProduccion[] = [
   },
 ];
 
-const PER_PAGE = 10;
+export const PER_PAGE = 10;
 
 const emptyForm = (tipo: TipoOrden = "preparacion"): OrdenForm => ({
   tipo,
@@ -1483,10 +1483,7 @@ export function OrdenProduccionScreen({
       `setOrdenAAbrir`. */
   setDetalleOrdenAAbrir?: Dispatch<SetStateAction<string | null>>;
 }) {
-  const [search, setSearch] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | TipoOrden>("todos");
-  const [filtroEstado, setFiltroEstado] = useState<"todos" | EstadoOrden>("todos");
-  const [page, setPage] = useState(1);
+  const { search, setSearch, filtroTipo, setFiltroTipo, filtroEstado, setFiltroEstado, page, setPage, filtradas } = useProductionOrders(ordenes);
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<OrdenProduccion | null>(null);
   const [detailItem, setDetailItem] = useState<OrdenProduccion | null>(null);
@@ -1753,21 +1750,7 @@ export function OrdenProduccionScreen({
     return nombres.length === 1 ? nombres[0] : `${nombres[0]} +${nombres.length - 1} más`;
   };
 
-  const filtradas = useMemo(() =>
-    ordenarPorIdDescendente(ordenes.filter((o) => {
-      if (filtroTipo !== "todos" && o.tipo !== filtroTipo) return false;
-      if (filtroEstado !== "todos" && o.estadoOrden !== filtroEstado) return false;
-      const q = search.trim().toLowerCase();
-      if (!q) return true;
-      return o.id.toLowerCase().includes(q)
-        || (o.ventaNumero ?? "").toLowerCase().includes(q)
-        || (o.cliente ?? "").toLowerCase().includes(q)
-        || o.lineas.some((l) => l.nombre.toLowerCase().includes(q));
-    }), (orden) => orden.id),
-    [ordenes, search, filtroTipo, filtroEstado]);
 
-  const totalPages = Math.ceil(filtradas.length / PER_PAGE);
-  const paged = filtradas.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   // ── Numeración ─────────────────────────────────────────────────────
   const siguienteId = () => siguienteOrdenId(ordenes);
