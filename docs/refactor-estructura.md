@@ -1,6 +1,6 @@
 # Reestructuración de carpetas y archivos
 
-Rama: `refactor/estructura-ingles` (creada desde `feature/compra`, igual en ese momento a `origin/develop`). Fases 0 a 7 y 9 completadas; la 8 (hooks por módulo, opcional) no se ha hecho. La estructura final está descrita en el `README.md`.
+Rama: `refactor/estructura-ingles` (creada desde `feature/compra`, igual en ese momento a `origin/develop`). Fases 0 a 9 completadas (la 8, en parte; ver abajo). La estructura final está descrita en el `README.md`.
 
 ## Línea base y cierre (2026-11-27)
 
@@ -9,7 +9,7 @@ Rama: `refactor/estructura-ingles` (creada desde `feature/compra`, igual en ese 
 | `npm run typecheck` | 0 errores | 0 errores |
 | `node --test tests/*.mjs` | 25 de 25 | 30 de 30 |
 | CSS del build | `index-cNTtHrwS.css` | el mismo archivo |
-| JavaScript principal | 1207,71 kB | 1251,34 kB (React Router) |
+| JavaScript principal | 1207,71 kB | 1254,35 kB (sobre todo React Router) |
 | `App.tsx` | 10 769 líneas | unas 3200 |
 
 En Windows, `npm run build` falla si la terminal está en `d:\…` (letra minúscula). Usar `D:\…`.
@@ -36,6 +36,12 @@ En Windows, `npm run build` falla si la terminal está en `d:\…` (letra minús
 - `/licencias` redirige a `/licenses`. `store-profile` usa `/account`.
 - `/` con sesión abierta restaura la última pantalla, como antes.
 
+## Fase 8: hooks por módulo
+
+Cada hook agrupa carga de datos, búsqueda, filtros y paginación; formularios, diálogos y acciones siguen en la pantalla. Un commit por módulo: clientes, usuarios, proveedores, roles, categorías, productos terminados, compras, órdenes de compra, no conformes, órdenes de producción, insumos, ventas, empleados (solo carga), devoluciones y menú público.
+
+Las quince pantallas dieron el mismo texto antes y después al cargar, buscar, filtrar y paginar con datos simulados.
+
 ## Antes de publicar
 
 Las pruebas de navegador se hicieron con el backend simulado.
@@ -49,4 +55,5 @@ Las pruebas de navegador se hicieron con el backend simulado.
 - `leerListaPersistida`, `esOrdenProduccionValida`, `esInsumoValido` y `esFichasValidas` (`storage.ts`) no tienen usos.
 - `DownloadExcelButton` se importa en 7 archivos y no se dibuja en ninguno; revisar si falta el botón de Excel.
 - Botones escritos a mano que podrían usar `ActionButton` (sección 3.3 del SDD).
-- Fase 8: extraer la carga de datos de las pantallas grandes a `hooks/`.
+- Fase 8, lo que falta: pantalla principal de productos, dashboard, carrito, mis pedidos, recepción de compra, perfiles, login y registro.
+- Once hooks de la Fase 8 importan funciones o constantes de su propia pantalla (importación circular). Funciona porque solo se usan dentro del hook; conviene moverlas a `utils/` del módulo.
