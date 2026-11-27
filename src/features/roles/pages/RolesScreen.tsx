@@ -1,8 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Check, Plus, Lock, Home, Settings, Users, ShoppingBag, Layers, DollarSign } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { validarNombre } from "@/shared/components/FormInputs";
 import { claveGeneroRol, formatearNombreRol, formaDobleGenerica, sugerenciaGenerica } from "@/shared/utils/roleName";
 import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
@@ -18,16 +17,8 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import {
-  cambiarEstadoRol as cambiarEstadoRolApi,
-  crearRol as crearRolApi,
-  editarRol as editarRolApi,
-  eliminarRol as eliminarRolApi,
-  listarPermisosRoles,
-  listarRoles as listarRolesApi,
-  type RolApi,
-  type RolPayloadApi,
-} from "@/shared/services/authService";
+import { cambiarEstadoRol as cambiarEstadoRolApi, crearRol as crearRolApi, editarRol as editarRolApi, eliminarRol as eliminarRolApi, type RolApi, type RolPayloadApi } from "@/shared/services/authService";
+import { useRoles } from "@/features/roles/hooks/useRoles";
 
 const SERIF = "var(--font-titulo)";
 
@@ -832,7 +823,7 @@ const idRolUiAApi = (id: string) => {
   return String(numero);
 };
 
-const adaptarRolApi = (rol: RolApi): Rol => ({
+export const adaptarRolApi = (rol: RolApi): Rol => ({
   id: idApiARolUi(rol.id),
   nombre: rol.nombre,
   descripcion: rol.descripcion ?? "",
@@ -848,7 +839,7 @@ const payloadRolApi = (nombre: string, descripcion: string, activo: boolean, acc
   accesos,
 });
 
-const mensajeError = (error: unknown, fallback: string) =>
+export const mensajeError = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 // ── Pantalla principal ────────────────────────────────────────────────
@@ -870,56 +861,17 @@ export function GestionConfigScreen({
   /** Lleva a la pantalla de Empleados (botón «Ir a Empleados»). */
   onIrAEmpleados?: () => void;
 }) {
-  const [roles, setRoles] = useState<Rol[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [errorCarga, setErrorCarga] = useState("");
-  const [page,       setPage]      = useState(1);
-  const PER_PAGE = 10;
+  const { roles, setRoles, cargando, errorCarga, page, setPage, PER_PAGE, search, setSearch, cargarRoles, filtered, paged } = useRoles(canVer);
   const [showCreate, setShowCreate]= useState(false);
   const [editItem,   setEditItem]  = useState<Rol | null>(null);
   const [detailItem, setDetailItem]= useState<Rol | null>(null);
   const [deleteId,   setDeleteId]  = useState<string | null>(null);
   const [desactivarId, setDesactivarId] = useState<string | null>(null);
   const [estadoEnCurso, setEstadoEnCurso] = useState<string | null>(null);
-  const [search,     setSearch]    = useState("");
 
-  const cargarRoles = async () => {
-    setCargando(true);
-    setErrorCarga("");
-    try {
-      const [rolesApi, permisosApi] = await Promise.all([listarRolesApi(), listarPermisosRoles()]);
-      const catalogoApi = new Set(permisosApi.map(p => `${p.modulo}::${p.nombre}`));
-      const faltantes = MENU_TREE.flatMap(({ modulo, subs }) =>
-        subs.filter(sub => !catalogoApi.has(KEY(modulo, sub))).map(sub => KEY(modulo, sub)),
-      );
-      if (faltantes.length) {
-        throw new Error(`El catálogo de permisos no contiene: ${faltantes.join(", ")}.`);
-      }
-      setRoles(rolesApi.map(adaptarRolApi));
-    } catch (error) {
-      const mensaje = mensajeError(error, "No se pudieron cargar los roles.");
-      setErrorCarga(mensaje);
-      toast.error(mensaje);
-    } finally {
-      setCargando(false);
-    }
-  };
 
-  useEffect(() => {
-    if (canVer) void cargarRoles();
-  }, [canVer]);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    const filtrados = !q ? roles : roles.filter(r =>
-      r.nombre.toLowerCase().includes(q) ||
-      (r.descripcion ?? "").toLowerCase().includes(q)
-    );
-    return ordenarPorIdDescendente(filtrados, (rol) => rol.id);
-  }, [roles, search]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
 
   const handleCreate = async (nombre: string, desc: string, activo: boolean, accesos: AccesosMap) => {
     try {
