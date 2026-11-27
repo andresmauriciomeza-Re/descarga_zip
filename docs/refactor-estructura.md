@@ -1,6 +1,6 @@
 # Reestructuración de carpetas y archivos
 
-Rama: `refactor/estructura-ingles` (creada desde `develop`). Fases 0 a 7 y 9 completadas; la 8 (hooks por módulo, opcional) no se ha hecho. La estructura final está descrita en el `README.md`.
+Rama: `refactor/estructura-ingles` (creada desde `feature/compra`, igual en ese momento a `origin/develop`). Fases 0 a 7 y 9 completadas; la 8 (hooks por módulo, opcional) no se ha hecho. La estructura final está descrita en el `README.md`.
 
 ## Línea base y cierre (2026-11-27)
 
