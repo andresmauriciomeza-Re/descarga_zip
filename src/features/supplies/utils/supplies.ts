@@ -47,3 +47,5 @@ export const estadoStock = (insumo: Insumo): "sin-stock" | "bajo" | "ok" =>
     : insumo.stockActual <= insumo.stockMinimo
       ? "bajo"
       : "ok";
+
+export const SERIF = "var(--font-titulo)";
