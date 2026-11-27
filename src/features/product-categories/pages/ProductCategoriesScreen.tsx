@@ -1,11 +1,6 @@
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import {
-  X,
-  Plus,
-  AlertCircle,
-  RefreshCw,
-} from "lucide-react";
+import { useState } from "react";
+import { AnimatePresence } from "motion/react";
+import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowLeft as IconoVolver, Tag as IconoTag } from "lucide-react";
@@ -35,63 +30,6 @@ import {
 import { GRUPOS_ICONOS } from "@/features/product-categories/services/categoryIcons";
 import { useProductCategories } from "@/features/product-categories/hooks/useProductCategories";
 import type { CategoriaProducto, EstadoCategoria } from "@/features/product-categories/utils/product-categories";
-
-const SERIF = "var(--font-titulo)";
-
-// ─────────────────────────── LOCAL CONFIRM MODAL ───────────────────────────
-
-function ConfirmModal({
-  title,
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  title: string;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ scale: 0.94, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.94, opacity: 0 }}
-        transition={{ duration: 0.18 }}
-        className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border"
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-          </div>
-          <h3
-            className="text-xl font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            {title}
-          </h3>
-        </div>
-        <p className="text-muted-foreground mb-6 leading-relaxed">
-          {message}
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 py-3 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer"
-          >
-            Sí, confirmar
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 // ─────────────────────────── CATEGORÍA PRODUCTO ───────────────────────────
 
@@ -143,77 +81,6 @@ const claveNombre = (valor: string) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-
-function SmModal({
-  title,
-  onClose,
-  onConfirm,
-  confirmLabel,
-  children,
-  ancho = "max-w-sm",
-  scroll = false,
-}: {
-  title: string;
-  onClose: () => void;
-  onConfirm: () => void;
-  confirmLabel: string;
-  children: React.ReactNode;
-  /** Ancho del modal; max-w-sm por defecto para que Editar quede igual. */
-  ancho?: string;
-  /** Con true el cuerpo scrollea por dentro (max-h-[90vh]) y header/pie
-      quedan fijos. Solo lo usa el modal Crear. */
-  scroll?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        transition={{ duration: 0.16 }}
-        className={`bg-card rounded-2xl w-full ${ancho} shadow-2xl border border-border ${
-          scroll ? "max-h-[90vh] flex flex-col" : ""
-        }`}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h3
-            className="text-lg font-bold text-foreground"
-            style={{ fontFamily: SERIF }}
-          >
-            {title}
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div
-          className={`px-5 py-4 ${
-            scroll ? "flex-1 min-h-0 overflow-y-auto" : ""
-          }`}
-        >
-          {children}
-        </div>
-        <div className="flex gap-3 px-5 py-4 border-t border-border shrink-0">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95"
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 /** Datos que la pantalla envía al guardar (`emoji` lleva el emoji elegido). */
 export interface CategoriaGuardar {

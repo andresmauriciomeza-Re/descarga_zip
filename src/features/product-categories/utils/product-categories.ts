@@ -28,3 +28,5 @@ export interface CategoriaProducto {
 }
 
 export type EstadoCategoria = "Activo" | "Inactivo";
+
+export const SERIF = "var(--font-titulo)";
