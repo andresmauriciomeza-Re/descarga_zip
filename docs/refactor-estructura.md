@@ -34,3 +34,13 @@ Fases 0 a 5 completadas (un commit por fase, 1 a 5). Siguiente: Fase 6 (vaciar `
 
 Fase 5: `Header` (`PublicNav`) se sigue montando desde `App.tsx` porque lo comparten otras pantallas públicas; `Landing` arma `Content` y `Footer`.
 Falta la revisión manual de las pantallas del panel con sesión iniciada.
+
+## Fase 6 (sub-fases 6.1 a 6.8, un commit cada una)
+
+Hecho: `App.tsx` conserva el estado y el armado de pantallas; las llamadas de respaldo de `localStorage` siguen ahí para ejecutarse en el mismo momento.
+
+Pendiente:
+
+- `AuthContext` (6.2) y `CartContext` (6.4): mueven estado y efectos, no solo código. Necesarios antes o durante la Fase 7.
+- Probar a mano el cambio de rol, registro completo y checkout contra el backend real.
+- `leerListaPersistida`, `esOrdenProduccionValida`, `esInsumoValido` y `esFichasValidas` (`storage.ts`) no tienen usos; revisar si se eliminan.

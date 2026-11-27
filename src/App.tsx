@@ -111,35 +111,6 @@ const LicenciasScreen = lazy(() => import("@/features/legal/pages/LicensesScreen
 const MiPerfilScreen = lazy(() => import("@/features/users/pages/MyProfileScreen").then((m) => ({ default: m.MiPerfilScreen })));
 const GestionClientesScreen = lazy(() => import("@/features/customers/pages/CustomersScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
-// ─────────────────────────── TYPES ───────────────────────────
-
-// ─────────────────────────── MOCK DATA ───────────────────────────
-
-// ─────────────────────────── CONSTANTS ───────────────────────────
-
-// ─────────────────────────── SESIÓN PERSISTENTE ───────────────────────────
-// ─────────────────────────── SIDEBAR NAV ───────────────────────────
-
-// ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
-
-// ─────────────────────────── CATALOG ───────────────────────────
-
-// ─────────────────────────── PRODUCT DETAIL ───────────────────────────
-
-// ─────────────────────────── CART ───────────────────────────
-
-// ─────────────────────────── CLIENT PROFILE ───────────────────────────
-
-// ─────────────────────────── AUTH LAYOUT ───────────────────────────
-
-// ─────────────────────────── LOGIN ───────────────────────────
-
-// ─────────────────────────── REGISTER ───────────────────────────
-
-// ─────────────────────────── MANAGE PRODUCTS ───────────────────────────
-
-// ─────────────────────────── GENERIC ADMIN ───────────────────────────
-
 // ─────────────────────────── APP ROOT ───────────────────────────
 
 respaldarEmpleadosLocales();
