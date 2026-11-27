@@ -21,7 +21,7 @@ import type { CategoriaProducto } from "@/features/product-categories/utils/prod
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { FichasPorProducto } from "@/features/products/pages/ProductsScreen";
 import type { Producto } from "@/features/products/utils/products";
-import { normalizarNombre } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { normalizarNombre } from "@/features/production-orders/utils/production-orders";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
 import { PagoPill } from "@/features/sales/components/PaymentPill";
 import { METODO_PAGO_ADMIN, type DevolucionTipo, type MetodoPago, type Venta, type VentaStatus } from "@/features/sales/utils/sales";

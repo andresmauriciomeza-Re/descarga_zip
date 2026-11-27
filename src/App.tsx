@@ -58,7 +58,8 @@ import {
   OrdenDetallePage,
   PROVEEDORES_INIT,
 } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
-import { OrdenProduccionScreen, INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId, normalizarNombre, type Faltante } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { OrdenProduccionScreen, INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { normalizarNombre, type Faltante } from "@/features/production-orders/utils/production-orders";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
 import { ProductosPerecederosScreen } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
 import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";

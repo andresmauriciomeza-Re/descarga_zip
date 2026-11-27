@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalog";
-import { normalizarNombre } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { normalizarNombre } from "@/features/production-orders/utils/production-orders";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 
 /** Filtro por categoría, búsqueda y paginación del menú. */
