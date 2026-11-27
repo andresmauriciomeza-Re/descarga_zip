@@ -19,32 +19,15 @@ import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
 import { type Usuario } from "@/features/users/pages/UsersScreen";
-import { type Rol } from "@/features/roles/pages/RolesScreen";
+import type { Rol } from "@/features/roles/utils/roles";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreoBasico, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/FormInputs";
 import { cambiarEstadoCliente, crearCliente } from "@/shared/services/authService";
 import { useCustomers } from "@/features/customers/hooks/useCustomers";
+import type { Cliente } from "@/features/customers/utils/customers";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
 
-export const AVATAR_COLORS = [
-  "bg-red-500","bg-blue-500","bg-emerald-500",
-  "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
-];
-
-
-export interface Cliente {
-  id: string;
-  nombre: string;
-  iniciales: string;
-  avatarColor: string;
-  correo: string;
-  telefono: string;
-  tipoDocumento: string;
-  numeroDocumento: string;
-  pedidos: number;
-  activo: boolean;
-}
 
 export function GestionClientesScreen({ canCreate = true, canEdit = true, canDelete: _canDelete = true, clientes: _clientes, setClientes: _setClientes, usuarios, roles = [], sesionCorreo = "" }: {
   canCreate?: boolean; canEdit?: boolean; canDelete?: boolean;

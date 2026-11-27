@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
-import { etiquetaEstadoVenta } from "@/features/sales/pages/SalesScreen";
-import type { VentasScreen } from "@/features/sales/pages/SalesScreen";
+import { etiquetaEstadoVenta } from "@/features/sales/utils/sales";
+import type { Venta } from "@/features/sales/utils/sales";
 
 /** Búsqueda, filtro y paginación de ventas. */
-export function useSales(pedidos: Parameters<typeof VentasScreen>[0]["pedidos"]) {
+export function useSales(pedidos: Venta[]) {
   const [search, setSearch] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [page, setPage] = useState(1);

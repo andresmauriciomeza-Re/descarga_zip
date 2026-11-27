@@ -2,7 +2,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { motion } from "motion/react";
 import { Check, X } from "lucide-react";
 import { toast } from "sonner";
-import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import { crearInsumo, mensajeErrorInsumos } from "@/features/supplies/services/suppliesApi";
 import { UnidadSelect } from "@/features/purchases/components/UnitSelect";
 import {

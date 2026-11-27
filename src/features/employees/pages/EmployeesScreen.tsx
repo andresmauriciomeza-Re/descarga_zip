@@ -4,7 +4,7 @@ import { ArrowLeft, Briefcase, Lock, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { cambiarEstadoEmpleado, crearContratacion, crearEmpleado, editarEmpleado, reenviarInvitacion } from "@/shared/services/employeesService";
-import type { ApiErrorConEstado, ContratacionApi, CrearEmpleadoResponse, EmpleadoApi } from "@/types/api";
+import type { ApiErrorConEstado, CrearEmpleadoResponse } from "@/types/api";
 import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
@@ -23,100 +23,20 @@ import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/FormInputs";
 import { hoyISO } from "@/shared/utils/dates";
 import { SelectorRoles } from "@/shared/components/RoleSelector";
-import { type Rol } from "@/features/roles/pages/RolesScreen";
+import type { Rol } from "@/features/roles/utils/roles";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
-import { type Cliente } from "@/features/customers/pages/CustomersScreen";
+import type { Cliente } from "@/features/customers/utils/customers";
 import { useEmployees } from "@/features/employees/hooks/useEmployees";
+import { type Empleado, mensajeError, type Contratacion } from "@/features/employees/utils/employees";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
-
-const AVATAR_COLORS = [
-  "bg-red-500","bg-blue-500","bg-emerald-500",
-  "bg-purple-500","bg-amber-500","bg-pink-500","bg-indigo-500","bg-teal-500",
-];
-
-// Una contratación del empleado. `Empleado.rolIds/fechaInicio/fechaFinal`
-// guarda SOLO la contratación actual (lo que ve la tabla); aquí va el
-// historial completo, para no perder los cambios de cargo ni los reingresos.
-// CARGO = ROL: no existe un texto de cargo aparte, cada entrada guarda los
-// roles (cargos) que el empleado tenía en ese período. Todos los ids vienen de
-// la base (id_contrato / id_rol) y viajan como texto.
-export interface Contratacion {
-  id: string;           // id_contrato ("7")
-  rolIds: string[];     // String(id_rol) de los cargos de esa contratación
-  fechaInicio: string;  // YYYY-MM-DD
-  fechaFinal: string;   // "" si no tiene fecha final
-}
-
-export interface Empleado {
-  id: string;              // id_empleado de la base ("12"), NO el documento
-  nombre: string;
-  iniciales: string;
-  avatarColor: string;
-  correo: string;
-  telefono: string;
-  tipoDocumento: string;
-  numeroDocumento: string;
-  rolIds: string[];        // cargos/roles de la contratación actual
-  activo: boolean;         // Tb_Empleado.Estado
-  esSuperAdmin?: boolean;
-  fechaInicio: string;     // Contratacion_empleado.Fecha_inicio (actual)
-  fechaFinal: string;      // Contratacion_empleado.Fecha_final ("" si no tiene)
-  /** La contratación actual sigue abierta (vigente o por empezar): solo esa se edita. */
-  contratoAbierto?: boolean;
-  /** La cuenta aún no se activó: se le puede reenviar la invitación. */
-  invitacionPendiente?: boolean;
-  contrataciones: Contratacion[]; // historial
-}
 
 // De la más reciente a la más antigua. Primero por fecha de inicio y, si empatan
 // (dos contrataciones el mismo día), por id, que ya refleja el orden en que se
 // fueron registrando.
 export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
   [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
-
-const mapearContratacionApi = (c: ContratacionApi): Contratacion => ({
-  id: String(c.idContrato),
-  rolIds: c.roles.map(r => String(r.idRol)),
-  fechaInicio: c.fechaInicio,
-  fechaFinal: c.fechaFinal ?? "",
-});
-
-/** Respuesta de la API → ficha de la pantalla. La contratación "actual" es la
- *  vigente; si no hay, la abierta más reciente (por empezar) y, si tampoco, la
- *  última del historial. */
-export const mapearEmpleadoApi = (e: EmpleadoApi): Empleado => {
-  const actual = e.contratacionVigente
-    ?? e.contrataciones.find(c => c.abierta)
-    ?? e.contrataciones[0]
-    ?? null;
-  return {
-    id: String(e.idEmpleado),
-    nombre: e.nombre,
-    iniciales: e.nombre.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase(),
-    avatarColor: AVATAR_COLORS[e.idEmpleado % AVATAR_COLORS.length],
-    correo: e.correo,
-    telefono: e.telefono,
-    tipoDocumento: e.tipoDocumento,
-    numeroDocumento: e.numeroDocumento,
-    rolIds: actual ? actual.roles.map(r => String(r.idRol)) : [],
-    activo: e.estado,
-    esSuperAdmin: e.esSuperAdmin,
-    fechaInicio: actual?.fechaInicio ?? "",
-    fechaFinal: actual?.fechaFinal ?? "",
-    contratoAbierto: actual?.abierta ?? false,
-    invitacionPendiente: e.invitacionPendiente,
-    contrataciones: e.contrataciones.map(mapearContratacionApi),
-  };
-};
-
-/** Mensaje para el usuario a partir de un error de la API (403 y 409 con texto claro). */
-export const mensajeError = (error: unknown, porDefecto: string): string => {
-  const e = error as ApiErrorConEstado;
-  if (e?.status === 403) return e.message || "No tienes permiso para realizar esta acción.";
-  return e?.message || porDefecto;
-};
 
 // ── Cuenta de super administrador (Gloria) ─────────────────────────────────
 // La marca proviene del usuario autenticado/del API, no de la semilla local.

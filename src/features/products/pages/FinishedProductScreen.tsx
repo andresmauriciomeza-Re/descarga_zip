@@ -7,10 +7,9 @@ import { EstadoSelect } from "@/shared/components/StatusSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginator";
 import { useFinishedProducts } from "@/features/products/hooks/useFinishedProducts";
+import type { ProductoTerminado, EstadoEntrega } from "@/features/products/utils/products";
 
 const SERIF = "var(--font-titulo)";
-
-type EstadoEntrega = "listo" | "entregado";
 
 const ESTADO_COLOR: Record<EstadoEntrega, string> = {
   listo:      "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
@@ -20,19 +19,6 @@ const ESTADO_LABEL: Record<EstadoEntrega, string> = {
   listo:     "Listo",
   entregado: "Entregado",
 };
-
-export interface ProductoTerminado {
-  id: string;
-  idReceta: string;
-  nombreReceta: string;
-  fechaEntrega: string;
-  horaEntrega: string;
-  cantidad: number;
-  tamano: "Mediana" | "Grande";
-  estadoEntrega: EstadoEntrega;
-  recalentado?: boolean;
-  fechaEntregaReal?: string;
-}
 
 interface PizzaStock {
   id: string;

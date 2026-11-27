@@ -1,7 +1,7 @@
 import api from "@/shared/services/api";
 import type { CategoriaApi } from "@/shared/services/catalogService";
 import { categoriaApiACategoria } from "@/shared/utils/catalog";
-import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { ApiErrorConEstado } from "@/types/api";
 
 /** Fila de GET /categorias-productos/gestion: la categoría (activa o

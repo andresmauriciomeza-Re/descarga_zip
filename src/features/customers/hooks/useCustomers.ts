@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { listarClientes, type ClienteListadoApi } from "@/shared/services/authService";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { type Cliente, AVATAR_COLORS } from "@/features/customers/pages/CustomersScreen";
+import { type Cliente, AVATAR_COLORS } from "@/features/customers/utils/customers";
 
 function adaptarClienteApi(c: ClienteListadoApi, index: number): Cliente {
   const nombre = c.nombre ?? "";

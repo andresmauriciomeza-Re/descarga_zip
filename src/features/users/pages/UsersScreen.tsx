@@ -14,10 +14,10 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import type { Rol } from "@/features/roles/pages/RolesScreen";
-import type { UsuarioListadoApi } from "@/shared/services/authService";
+import type { Rol } from "@/features/roles/utils/roles";
 import { cambiarEstadoUsuario, eliminarUsuario } from "@/shared/services/authService";
 import { useUsers } from "@/features/users/hooks/useUsers";
+import { type UsuarioGestion, normalizar } from "@/features/users/utils/users";
 
 const SERIF = "var(--font-titulo)";
 export const DOC_TIPOS = [
@@ -53,18 +53,7 @@ export interface Usuario {
   rolesSesionApi?: import("@/types/api").RolSesionApi[];
 }
 
-export type UsuarioGestion = Omit<UsuarioListadoApi, "tipo_documento" | "correo" | "telefono" | "rolesExtra"> & {
-  id: string;
-  tipo_documento: string;
-  correo: string;
-  telefono: string;
-  rolesExtra: string[];
-  iniciales: string;
-  avatarColor: string;
-};
 
-
-export const normalizar = (s: string) => s.trim().toLocaleLowerCase();
 const esAdministrador = (u: UsuarioGestion) =>
   u.esSuperAdmin || normalizar(u.rol || "") === "administrador" || (u.rolesExtra ?? []).some(r => normalizar(r) === "administrador");
 

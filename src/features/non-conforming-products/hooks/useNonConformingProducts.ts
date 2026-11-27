@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { type EstadoNC, type Tipo, PER_PAGE } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
-import type { ProductosPerecederosScreen } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
+import { type EstadoNC, type Tipo, PER_PAGE } from "@/features/non-conforming-products/utils/non-conforming-products";
+import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 
 /** Búsqueda, filtros y paginación de productos no conformes. */
-export function useNonConformingProducts(noConformidades: Parameters<typeof ProductosPerecederosScreen>[0]["noConformidades"]) {
+export function useNonConformingProducts(noConformidades: NoConformidad[]) {
   const [search, setSearch] = useState("");
   const [filterEst, setFilterEst] = useState<EstadoNC | "">("");
   /** Botón de origen: de la cocina, de un pedido o de un insumo. */

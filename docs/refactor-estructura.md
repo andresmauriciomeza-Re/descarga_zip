@@ -56,4 +56,19 @@ Las pruebas de navegador se hicieron con el backend simulado.
 - `DownloadExcelButton` se importa en 7 archivos y no se dibuja en ninguno; revisar si falta el botón de Excel.
 - Botones escritos a mano que podrían usar `ActionButton` (sección 3.3 del SDD).
 - Fase 8, lo que falta: pantalla principal de productos, dashboard, carrito, mis pedidos, recepción de compra, perfiles, login y registro.
-- Once hooks de la Fase 8 importan funciones o constantes de su propia pantalla (importación circular). Funciona porque solo se usan dentro del hook; conviene moverlas a `utils/` del módulo.
+
+## Importaciones circulares
+
+Medidas con `npx madge --circular --extensions ts,tsx --ts-config tsconfig.json src`. Sin `--ts-config`, madge no resuelve `@/` y solo ve 1 ciclo.
+
+Había 42; 15 eran entre un hook de la Fase 8 y su pantalla. Se movió lo compartido a `utils/` de cada módulo y no queda ninguno entre hooks y pantallas.
+
+Quedan 5, anteriores a esa tarea:
+
+1. `shared/services/authService.ts` > `shared/services/api.ts`
+2. `products/pages/ProductsScreen.tsx` > `products/components/CreateProductModal.tsx`
+3. `products/pages/ProductsScreen.tsx` > `CreateProductModal.tsx` > `products/services/productsApi.ts`
+4. `products/pages/ProductsScreen.tsx` > `CreateProductModal.tsx` > `shared/utils/categoryConfig.ts`
+5. `supplies/pages/SuppliesScreen.tsx` > `supplies/services/suppliesApi.ts`
+
+Sin formar ciclo, `useCatalogFilters` importa `normalizarNombre` de la pantalla de órdenes de producción y `useSession` importa `claveDoc` y `docValida` de la pantalla de usuarios.

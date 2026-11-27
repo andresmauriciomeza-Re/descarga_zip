@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 
 // Rango de marcas diacríticas combinantes (U+0300–U+036F) que NFD separa de la
 // letra base. Se escribe con escapes para que no dependa de caracteres literales.

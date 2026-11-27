@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import type { ProductoTerminado } from "@/features/products/pages/FinishedProductScreen";
+import type { ProductoTerminado } from "@/features/products/utils/products";
 
 const INITIAL_PRODUCTOS: ProductoTerminado[] = [
   { id:"ORD-001", idReceta:"REC-001", nombreReceta:"Margarita Clásica",   fechaEntrega:"2024-01-15", horaEntrega:"19:00", cantidad:20, tamano:"Mediana", estadoEntrega:"entregado", recalentado:true,  fechaEntregaReal:"2024-01-15" },

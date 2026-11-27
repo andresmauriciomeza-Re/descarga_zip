@@ -2,11 +2,10 @@ import { useState, useMemo, useEffect } from "react";
 import { listarPermisosRoles, listarRoles as listarRolesApi } from "@/shared/services/authService";
 import { toast } from "sonner";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { type Rol, MENU_TREE, KEY, adaptarRolApi, mensajeError } from "@/features/roles/pages/RolesScreen";
-import type { GestionConfigScreen } from "@/features/roles/pages/RolesScreen";
+import { type Rol, MENU_TREE, KEY, adaptarRolApi, mensajeError } from "@/features/roles/utils/roles";
 
 /** Carga, búsqueda y paginación de roles. */
-export function useRoles(canVer: Parameters<typeof GestionConfigScreen>[0]["canVer"]) {
+export function useRoles(canVer: boolean) {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");

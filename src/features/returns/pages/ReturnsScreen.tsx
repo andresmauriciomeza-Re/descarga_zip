@@ -17,13 +17,16 @@ import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { normalizarTexto } from "@/shared/utils/names";
 import { limiteStockDe, productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalog";
-import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { FichasPorProducto, Producto } from "@/features/products/pages/ProductsScreen";
-import { normalizarNombre, type OrdenProduccion } from "@/features/production-orders/pages/ProductionOrdersScreen";
-import { METODO_PAGO_ADMIN, type DevolucionTipo, type MetodoPago, PagoPill, type Venta, type VentaStatus } from "@/features/sales/pages/SalesScreen";
+import { normalizarNombre } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
+import { PagoPill } from "@/features/sales/pages/SalesScreen";
+import { METODO_PAGO_ADMIN, type DevolucionTipo, type MetodoPago, type Venta, type VentaStatus } from "@/features/sales/utils/sales";
 import { marcarDevolucionApi, obtenerVentasPanel, resolverDevolucionApi } from "@/features/sales/services/salesApi";
 import { useReturnsFilter } from "@/features/returns/hooks/useReturnsFilter";
+import { etiquetaEstadoDev } from "@/features/returns/utils/returns";
 
 // ─────────────────────────── DEVOLUCIONES SCREEN ───────────────────────────
 
@@ -33,17 +36,6 @@ const fmtCOPDev = (n: number) =>
   new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
 const nowHoraDev = () =>
   formatearHora(new Date());
-
-/** Etiqueta del estado que se ve en la fila — y con la que también busca el
-    buscador: "Pendiente" o "Resuelta · <tipo de la devolución>". */
-export const etiquetaEstadoDev = (dev: Venta): string =>
-  !dev.devolucionResuelta
-    ? "Pendiente"
-    : dev.devolucionTipo === "dinero"
-      ? "Resuelta · Dinero"
-      : dev.devolucionTipo === "producto"
-        ? "Resuelta · Canje"
-        : "Resuelta · Mixta";
 
 // Producto del menú elegido como canje de la devolución. `tamaño` forma parte de
 // la identidad: la misma pizza puede canjearse en Mediana o en Grande, y cada

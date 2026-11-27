@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import type { CategoriaProductoScreen } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 
 /** Búsqueda y paginación de categorías de producto. */
-export function useProductCategories(categorias: Parameters<typeof CategoriaProductoScreen>[0]["categorias"]) {
+export function useProductCategories(categorias: CategoriaProducto[]) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const PER_PAGE = 10;

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 import type { EstadoProducto } from "@/shared/components/ProductStatus";
 import type { EntradaCompraApi } from "@/features/products/services/productsApi";

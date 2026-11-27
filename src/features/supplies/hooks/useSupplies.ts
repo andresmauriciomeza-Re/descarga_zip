@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { estadoStock, PER_PAGE } from "@/features/supplies/pages/SuppliesScreen";
-import type { GestionInsumosScreen } from "@/features/supplies/pages/SuppliesScreen";
+import { estadoStock, PER_PAGE } from "@/features/supplies/utils/supplies";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 
 const formatearId = (id: string): string => {
   const match = id.match(/(\d+)$/);
@@ -9,7 +9,7 @@ const formatearId = (id: string): string => {
 };
 
 /** Búsqueda, filtros, paginación y stock bajo de insumos. */
-export function useSupplies(insumos: Parameters<typeof GestionInsumosScreen>[0]["insumos"], categoriaNombre: (id: string) => string) {
+export function useSupplies(insumos: Insumo[], categoriaNombre: (id: string) => string) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "activos" | "inactivos">("todos");

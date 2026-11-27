@@ -1,5 +1,5 @@
 import type { Screen } from "@/shared/utils/screen";
-import { type Rol } from "@/features/roles/pages/RolesScreen";
+import type { Rol } from "@/features/roles/utils/roles";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { Menu, Moon, Store, Sun } from "lucide-react";
 import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";

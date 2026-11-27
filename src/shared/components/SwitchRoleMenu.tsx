@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronsUpDown, UserCog, User } from "lucide-react";
-import { type Rol } from "@/features/roles/pages/RolesScreen";
+import type { Rol } from "@/features/roles/utils/roles";
 
 // Menú "Cambiar de rol" del encabezado (y de Mi perfil).
 // El padre pasa los roles extra activos distintos del rol activo.

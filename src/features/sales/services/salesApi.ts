@@ -3,7 +3,7 @@ import api from '@/shared/services/api';
 import { crearError401Checkout } from '@/shared/services/api';
 import { obtenerToken } from '@/shared/services/authService';
 import { IMAGENES_PIZZA, resolverImagenCatalogo } from '@/shared/utils/catalog';
-import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta, MetodoPago } from '@/features/sales/pages/SalesScreen';
+import type { EstadoClienteVenta, Venta, VentaStatus, ComprobanteVenta, MetodoPago } from "@/features/sales/utils/sales";
 import { mapearOrdenApi, type OrdenApi } from '@/features/production-orders/services/productionOrdersApi';
 
 export interface PagoVentaApi {

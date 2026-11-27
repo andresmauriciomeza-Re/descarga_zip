@@ -19,13 +19,17 @@ import { obtenerCatalogo } from "@/shared/services/catalogService";
 import { actualizarPerfil, borrarToken, obtenerPerfil, obtenerToken } from "@/shared/services/authService";
 import { crearError401Checkout, registrarManejadorCierreSesion } from "@/shared/services/api";
 import type { ApiErrorConEstado } from "@/types/api";
-import { CategoriaProductoScreen, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/product-categories/pages/ProductCategoriesScreen";
-import type { Cliente } from "@/features/customers/pages/CustomersScreen";
+import { CategoriaProductoScreen, type CategoriaGuardar } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto, EstadoCategoria } from "@/features/product-categories/utils/product-categories";
+import type { Cliente } from "@/features/customers/utils/customers";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/PurchasesScreen";
-import { GestionConfigScreen, KEY, ACCION_EXCEL, fullAccesos, type AccesosMap, type Rol } from "@/features/roles/pages/RolesScreen";
-import { GestionEmpleadosScreen, type Contratacion } from "@/features/employees/pages/EmployeesScreen";
+import { GestionConfigScreen, fullAccesos } from "@/features/roles/pages/RolesScreen";
+import { KEY, ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
+import { GestionEmpleadosScreen } from "@/features/employees/pages/EmployeesScreen";
+import type { Contratacion } from "@/features/employees/utils/employees";
 import { obtenerMiContratacion } from "@/shared/services/employeesService";
-import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
@@ -44,12 +48,7 @@ import { mismoNombre } from "@/shared/utils/names";
 import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/UsersScreen";
 import { ActivarCuentaModal } from "@/shared/components/ActivateAccountModal";
 import { verificarCorreo } from "@/shared/services/verificationService";
-import type {
-  GestionCompra,
-  OrdenCompra,
-  OrdenItem,
-  ProveedorRef,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { GestionCompra, OrdenCompra, OrdenItem, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 import {
   INITIAL_GESTIONES,
   INITIAL_ORDENES,
@@ -58,21 +57,14 @@ import {
   OrdenDetallePage,
   PROVEEDORES_INIT,
 } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
-import {
-  OrdenProduccionScreen,
-  INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
-  crearOrdenPedido,
-  crearOrdenPreparacion,
-  crearOrdenReemplazo,
-  siguienteOrdenId,
-  normalizarNombre,
-  type Faltante,
-  type OrdenProduccion,
-} from "@/features/production-orders/pages/ProductionOrdersScreen";
-import { ProductosPerecederosScreen, type NoConformidad } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
+import { OrdenProduccionScreen, INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId, normalizarNombre, type Faltante } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
+import { ProductosPerecederosScreen } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
+import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-conforming-products/services/nonConformingApi";
 import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriesApi";
-import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/sales/pages/SalesScreen";
+import { PagoPill, VentasScreen } from "@/features/sales/pages/SalesScreen";
+import type { DevolucionTipo, Venta } from "@/features/sales/utils/sales";
 import type { CartItem } from "@/types/cart";
 import { DASHBOARD_PERM_KEY, canViewPermission } from "@/shared/utils/navigation";
 import { PublicNav } from "@/layout/components/Header";

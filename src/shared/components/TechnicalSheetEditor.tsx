@@ -17,7 +17,7 @@
 import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import { InsumoSearchField, resolverInsumo } from "@/features/products/components/SupplySearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
 import { PRESENTACIONES_INSUMO, UNIDADES_INSUMO } from "@/shared/utils/units";

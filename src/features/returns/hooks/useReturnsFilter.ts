@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { normalizarTexto } from "@/shared/utils/names";
 import { compararIdsDesc } from "@/shared/utils/sortById";
-import { etiquetaEstadoDev } from "@/features/returns/pages/ReturnsScreen";
-import type { Venta } from "@/features/sales/pages/SalesScreen";
+import { etiquetaEstadoDev } from "@/features/returns/utils/returns";
+import type { Venta } from "@/features/sales/utils/sales";
 
 /** Búsqueda y filtro de la lista de devoluciones. */
 export function useReturnsFilter(pendientes: Venta[], resueltas: Venta[]) {

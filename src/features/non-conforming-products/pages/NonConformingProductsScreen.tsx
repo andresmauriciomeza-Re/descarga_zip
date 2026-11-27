@@ -28,9 +28,9 @@ import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons"
 import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
-import type { OrdenProduccion } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
 import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import {
@@ -41,54 +41,14 @@ import {
   mensajeErrorNoConformes,
 } from "@/features/non-conforming-products/services/nonConformingApi";
 import { useNonConformingProducts } from "@/features/non-conforming-products/hooks/useNonConformingProducts";
+import { type EstadoNC, type Tipo, PER_PAGE, type NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 
 const SERIF = "var(--font-titulo)";
-export const PER_PAGE = 10;
 const SOLUCION_TXT: Record<string, string> = {
   "Reposición del producto": "Se repuso",
   Reproceso: "Se rehizo",
   "Reembolso al cliente": "Se devolvió la plata",
 };
-
-export type Tipo = "Producto" | "Producto insumo" | "Venta";
-export type EstadoNC = "Pendiente" | "Completado";
-
-export interface NoConformidad {
-  id: string;
-  tipo: Tipo;
-  nombre: string;
-  categoria: string;
-  fechaRegistro: string;
-  cantidadAfectada: number;
-  unidadMedida: string;
-  tamano?: "Mediana" | "Grande";
-  tipoNoConformidad: string;
-  descripcionProblema: string;
-  causa: string;
-  evidencia?: string;
-  areaProceso: string;
-  proveedor?: string;
-  lote?: string;
-  responsable: string;
-  estado: EstadoNC;
-  accionTomada?: string;
-  accionCorrectiva?: string;
-  fechaLimite?: string;
-  responsableAccion?: string;
-  fechaCierre?: string;
-  tipoSolucion?: string;
-  solucion?: string;
-  ventaRef?: string;
-  ordenRef?: string;
-  /** Ids reales del catálogo (vienen de la API). Producto: id_producto como
-      texto; Producto insumo: "INS-###". */
-  idProducto?: string;
-  idInsumo?: string;
-  /** id_orden_produccion de la merma (el detalle de la orden la busca así). */
-  idOrdenProduccion?: number;
-  /** Merma de producción o devolución: los crea el backend y no se eliminan. */
-  generadoPorSistema?: boolean;
-}
 
 /** Venta que se puede enlazar a una no conformidad (buscador del formulario). */
 interface VentaSugerida {

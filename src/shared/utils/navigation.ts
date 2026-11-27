@@ -1,4 +1,4 @@
-import { KEY, type AccesosMap } from "@/features/roles/pages/RolesScreen";
+import { KEY, type AccesosMap } from "@/features/roles/utils/roles";
 import { AlertTriangle, DollarSign, FileText, Home, IdCard, Layers, Package, RefreshCw, Settings, ShoppingBag, ShoppingCart, Tag, Truck, UserCircle, Users } from "lucide-react";
 import type { Screen } from "@/shared/utils/screen";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";

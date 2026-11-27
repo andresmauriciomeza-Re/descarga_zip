@@ -1,6 +1,6 @@
 import { type Usuario } from "@/features/users/pages/UsersScreen";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
-import { type Rol } from "@/features/roles/pages/RolesScreen";
+import type { Rol } from "@/features/roles/utils/roles";
 import type { Screen } from "@/shared/utils/screen";
 import { useRef, useState } from "react";
 import { reenviarVerificacion } from "@/shared/services/verificationService";

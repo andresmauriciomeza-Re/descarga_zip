@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { type TipoOrden, type EstadoOrden, PER_PAGE } from "@/features/production-orders/pages/ProductionOrdersScreen";
-import type { OrdenProduccionScreen } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { type TipoOrden, type EstadoOrden, PER_PAGE } from "@/features/production-orders/utils/production-orders";
+import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
 
 /** Búsqueda, filtros y paginación de órdenes de producción. */
-export function useProductionOrders(ordenes: Parameters<typeof OrdenProduccionScreen>[0]["ordenes"]) {
+export function useProductionOrders(ordenes: OrdenProduccion[]) {
   const [search, setSearch] = useState("");
   const [filtroTipo, setFiltroTipo] = useState<"todos" | TipoOrden>("todos");
   const [filtroEstado, setFiltroEstado] = useState<"todos" | EstadoOrden>("todos");

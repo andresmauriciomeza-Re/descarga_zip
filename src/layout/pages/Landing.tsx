@@ -1,7 +1,7 @@
 import { MotionConfig } from "motion/react";
 import type { Screen } from "@/shared/utils/screen";
 import { type Product } from "@/shared/utils/catalog";
-import { type CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { type Producto } from "@/features/products/pages/ProductsScreen";
 import { Content } from "@/layout/components/Content";
 import { Footer } from "@/layout/components/Footer";

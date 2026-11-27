@@ -1,7 +1,7 @@
 import type React from "react";
 import type { Screen } from "@/shared/utils/screen";
 import { type Usuario } from "@/features/users/pages/UsersScreen";
-import type { Cliente } from "@/features/customers/pages/CustomersScreen";
+import type { Cliente } from "@/features/customers/utils/customers";
 import { useRef, useState } from "react";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/FormInputs";
 import { useValidacionFormulario } from "@/shared/hooks/useFormValidation";

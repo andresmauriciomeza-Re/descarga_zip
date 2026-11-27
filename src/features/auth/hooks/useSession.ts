@@ -1,4 +1,4 @@
-import { KEY, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/RolesScreen";
+import { KEY, type AccesosMap, type Accion, type Rol } from "@/features/roles/utils/roles";
 import { normalizarNombreRol } from "@/shared/utils/roleName";
 import { claveDoc, docValida, type Usuario } from "@/features/users/pages/UsersScreen";
 import { AVATAR_PALETTE } from "@/shared/utils/avatar";

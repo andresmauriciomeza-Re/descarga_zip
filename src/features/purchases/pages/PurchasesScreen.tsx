@@ -16,7 +16,8 @@ import {
   type ModoIva,
 } from "@/features/purchases/services/vat";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
-import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 import {
   CompactInsumoForm,
@@ -25,7 +26,7 @@ import {
 } from "@/features/purchases/components/CompactSupplyForm";
 import { CrearInsumoCompraModal } from "@/features/purchases/components/CreatePurchaseSupplyModal";
 import { CrearProductoModal } from "@/features/products/components/CreateProductModal";
-import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
@@ -45,17 +46,8 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import {
-  NuevoProveedorModal,
-  ConfirmModal,
-  FORM_MAXW,
-  type GestionCompra,
-  type OrdenItem,
-  type OrdenCompra,
-  type EstadoGestion,
-  type EstadoOrden,
-  type ProveedorRef,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { NuevoProveedorModal, ConfirmModal, FORM_MAXW } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { GestionCompra, OrdenItem, OrdenCompra, EstadoGestion, EstadoOrden, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 import {
   historialCompraDe,
   esLineaProducto,
@@ -99,7 +91,7 @@ import { usePurchases } from "@/features/purchases/hooks/usePurchases";
  *   se busca "difusamente" por nombre: un `id_proveedor` NULL devuelve el
  *   proveedor vacío y la fila muestra «—».
  */
-declare module "@/features/purchase-orders/pages/PurchaseOrdersScreen" {
+declare module "@/features/purchase-orders/utils/purchase-orders" {
   interface GestionCompra {
     stockAplicado?: boolean;
     stockRevertido?: boolean;

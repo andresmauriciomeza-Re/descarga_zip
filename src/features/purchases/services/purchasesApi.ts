@@ -1,5 +1,5 @@
 import api from "@/shared/services/api";
-import type { EstadoGestion, GestionCompra, OrdenItem } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { EstadoGestion, GestionCompra, OrdenItem } from "@/features/purchase-orders/utils/purchase-orders";
 import { mapearItemCompraApi, payloadItemCompra, type ItemCompraApi } from "@/features/purchase-orders/services/purchaseOrdersApi";
 
 /** Compra tal como la devuelve el backend. Los ítems viajan en `items` (o en

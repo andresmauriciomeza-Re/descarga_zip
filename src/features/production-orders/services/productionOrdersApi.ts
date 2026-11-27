@@ -2,13 +2,7 @@ import api from "@/shared/services/api";
 import type { AxiosResponse } from "axios";
 import type { FaltanteUnidad } from "@/shared/utils/availability";
 import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/technicalSheets";
-import {
-  type EstadoOrden,
-  type InsumoRequerido,
-  type LineaOrden,
-  type OrdenProduccion,
-  type TipoOrden,
-} from "@/features/production-orders/pages/ProductionOrdersScreen";
+import type { EstadoOrden, InsumoRequerido, LineaOrden, OrdenProduccion, TipoOrden } from "@/features/production-orders/utils/production-orders";
 
 /** Fila de línea de orden tal como la devuelve el backend. */
 export interface LineaOrdenApi {

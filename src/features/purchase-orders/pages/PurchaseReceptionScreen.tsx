@@ -45,28 +45,19 @@ import { mismoNombre } from "@/shared/utils/names";
 // Catálogo único de unidades de Compras (antes había una copia local sin
 // paca/sixpack): una sola lista para validar y mostrar las medidas.
 import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/units";
-import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/pages/ProductsScreen";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
 import { CrearProductoModal } from "@/features/products/components/CreateProductModal";
-import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
 import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
-import {
-  ConfirmModal,
-  NuevoInsumoModal,
-  insumoDeAlta,
-  type OrdenCompra,
-  type Recepcion,
-  type ItemRecibido,
-  type GestionCompra,
-  type OrdenItem,
-  type EstadoOrden,
-  type ProveedorRef,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { ConfirmModal, NuevoInsumoModal, insumoDeAlta } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { OrdenCompra, Recepcion, ItemRecibido, GestionCompra, OrdenItem, EstadoOrden, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 
 const SERIF = "var(--font-titulo)";
 

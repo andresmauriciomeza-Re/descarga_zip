@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { listarCargos, listarEmpleados } from "@/shared/services/employeesService";
 import { toast } from "sonner";
-import { type Empleado, mapearEmpleadoApi, mensajeError } from "@/features/employees/pages/EmployeesScreen";
+import { type Empleado, mapearEmpleadoApi, mensajeError } from "@/features/employees/utils/employees";
 
 /** Carga de empleados y sus cargos. */
 export function useEmployees() {

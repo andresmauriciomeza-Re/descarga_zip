@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Screen } from "@/shared/utils/screen";
-import { type AccesosMap } from "@/features/roles/pages/RolesScreen";
+import type { AccesosMap } from "@/features/roles/utils/roles";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Home, Menu, Search, X } from "lucide-react";
 import logoClaro from "@/assets/img/logoclaro2.webp";

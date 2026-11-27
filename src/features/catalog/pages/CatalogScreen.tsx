@@ -1,7 +1,7 @@
 import type { Screen } from "@/shared/utils/screen";
 import { type Product } from "@/shared/utils/catalog";
 import type { CartItem } from "@/types/cart";
-import { type CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 import { toast } from "sonner";
 import fondoMenu from "@/assets/img/fondo_menu.webp";

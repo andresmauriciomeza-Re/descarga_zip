@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { X } from "lucide-react";
-import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { configDeCategoria } from "@/shared/utils/categoryConfig";
 import { mismoNombre, nombreLimpio } from "@/shared/utils/names";
 import type { Producto } from "@/features/products/pages/ProductsScreen";

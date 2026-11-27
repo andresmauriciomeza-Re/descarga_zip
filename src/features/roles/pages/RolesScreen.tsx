@@ -17,19 +17,11 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import { cambiarEstadoRol as cambiarEstadoRolApi, crearRol as crearRolApi, editarRol as editarRolApi, eliminarRol as eliminarRolApi, type RolApi, type RolPayloadApi } from "@/shared/services/authService";
+import { cambiarEstadoRol as cambiarEstadoRolApi, crearRol as crearRolApi, editarRol as editarRolApi, eliminarRol as eliminarRolApi, type RolPayloadApi } from "@/shared/services/authService";
 import { useRoles } from "@/features/roles/hooks/useRoles";
+import { type Rol, MENU_TREE, KEY, adaptarRolApi, mensajeError, type AccesosMap, type Accion, ACCIONES, ACCION_EXCEL } from "@/features/roles/utils/roles";
 
 const SERIF = "var(--font-titulo)";
-
-// ── Árbol de módulos / sub-opciones del sistema ──────────────────────
-export const MENU_TREE = [
-  { modulo: "Dashboard",     subs: ["Dashboard"] },
-  { modulo: "Configuración", subs: ["Roles", "Usuarios"] },
-  { modulo: "Compras",       subs: ["Insumos", "Proveedores", "Orden de Compra", "Compra"] },
-  { modulo: "Producción",    subs: ["Categoría de Producto", "Productos", "Orden de Producción", "Empleados", "Producto No Conforme"] },
-  { modulo: "Ventas",        subs: ["Clientes", "Ventas", "Devoluciones"] },
-];
 
 // ── Celdas de la grilla de módulos ──────────────────────────────────────
 // Replican el orden de las secciones del sidebar del Admin (NAV_SECTIONS en
@@ -80,24 +72,9 @@ const CELDA_ICONOS: Record<string, typeof Home> = {
   Ventas:        DollarSign,
 };
 
-export const ACCIONES = ["Ver", "Crear", "Editar", "Eliminar"] as const;
-
-// Privilegio aparte de los CRUD: habilita el botón "Descargar Excel" del módulo.
-// No es una acción más del CRUD porque no crea ni edita nada, y porque solo se
-// ofrece en los sub-módulos de `SUBS_CON_EXCEL` (en el resto no se puede
-// descargar nada, así que ofrecerlo sería un privilegio que no hace nada).
-export const ACCION_EXCEL = "Descargar Excel" as const;
-
-export type Accion = typeof ACCIONES[number] | typeof ACCION_EXCEL;
-
 // Todas las acciones, para leer de un `AccesosMap` sin usar solo ACCIONES: el
 // resumen de permisos debe sacar también el chip de "Descargar Excel".
 export const TODAS_ACCIONES: readonly Accion[] = [...ACCIONES, ACCION_EXCEL];
-
-// AccesosMap: "Módulo::SubOpcion" → Accion[]
-export type AccesosMap = Record<string, Accion[]>;
-
-export const KEY = (modulo: string, sub: string) => `${modulo}::${sub}`;
 
 // "Dashboard" admite SOLO el permiso "Ver": es un indicador global, no un
 // módulo con CRUD. La celda aparece en el editor (independiente de Ventas y
@@ -140,15 +117,6 @@ export const fullAccesos = (): AccesosMap => {
   );
   return m;
 };
-
-export interface Rol {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  accesos: AccesosMap;
-  activo: boolean;
-  usuariosAsignados?: number;
-}
 
 const conAcciones = (base: AccesosMap, ks: string[], acts: Accion[]): AccesosMap => {
   const m: AccesosMap = { ...base };
@@ -816,21 +784,11 @@ function DetalleCargo({ rol, onClose, onCambiar, onIrAEmpleados, puedeCambiar }:
   );
 }
 
-const idApiARolUi = (id: string | number) => `ROL-${String(id).padStart(3, "0")}`;
 const idRolUiAApi = (id: string) => {
   const numero = Number(id.replace(/^ROL-/, ""));
   if (!Number.isSafeInteger(numero) || numero <= 0) throw new Error("El identificador del rol no es válido.");
   return String(numero);
 };
-
-export const adaptarRolApi = (rol: RolApi): Rol => ({
-  id: idApiARolUi(rol.id),
-  nombre: rol.nombre,
-  descripcion: rol.descripcion ?? "",
-  activo: rol.activo,
-  usuariosAsignados: Number(rol.usuariosAsignados ?? 0),
-  accesos: rol.accesos as AccesosMap,
-});
 
 const payloadRolApi = (nombre: string, descripcion: string, activo: boolean, accesos: AccesosMap): RolPayloadApi => ({
   nombre,
@@ -838,9 +796,6 @@ const payloadRolApi = (nombre: string, descripcion: string, activo: boolean, acc
   activo,
   accesos,
 });
-
-export const mensajeError = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
 
 // ── Pantalla principal ────────────────────────────────────────────────
 export function GestionConfigScreen({

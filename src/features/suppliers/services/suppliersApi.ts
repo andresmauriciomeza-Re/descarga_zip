@@ -1,7 +1,7 @@
 import api from "@/shared/services/api";
-import type { ProveedorRef } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 import type { TipoDocumento, TipoPersona, TipoSociedad } from "@/features/suppliers/hooks/useSupplierForm";
-import type { Supplier, SupplierStatus } from "@/features/suppliers/pages/SuppliersScreen";
+import type { Supplier, SupplierStatus } from "@/features/suppliers/utils/suppliers";
 
 /** Proveedor completo: el modelo del panel (`Supplier`, con los datos por tipo
     de persona) y lo que leen Compras/Órdenes (`ProveedorRef`). */

@@ -15,7 +15,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { descargarFactura } from "@/features/sales/services/saleInvoice";
-import type { EstadoClienteVenta, Venta, VentaStatus } from "@/features/sales/pages/SalesScreen";
+import type { EstadoClienteVenta, Venta, VentaStatus } from "@/features/sales/utils/sales";
 import { formatearHora } from "@/shared/utils/time";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
 import { hoyISO } from "@/shared/utils/dates";

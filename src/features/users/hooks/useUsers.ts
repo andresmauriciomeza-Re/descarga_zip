@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { listarUsuarios } from "@/shared/services/authService";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import type { UsuarioListadoApi } from "@/shared/services/authService";
-import { type UsuarioGestion, normalizar } from "@/features/users/pages/UsersScreen";
-import type { GestionUsuariosScreen } from "@/features/users/pages/UsersScreen";
+import { type UsuarioGestion, normalizar } from "@/features/users/utils/users";
 
 function adaptarUsuarioApi(u: UsuarioListadoApi, index: number): UsuarioGestion {
   const nombre = u.nombre ?? "";
@@ -24,7 +23,7 @@ function adaptarUsuarioApi(u: UsuarioListadoApi, index: number): UsuarioGestion 
 }
 
 /** Carga, búsqueda, filtros y paginación de usuarios. */
-export function useUsers(canVer: Parameters<typeof GestionUsuariosScreen>[0]["canVer"]) {
+export function useUsers(canVer: boolean) {
   const [usuarios, setUsuarios] = useState<UsuarioGestion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState("");

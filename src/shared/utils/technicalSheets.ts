@@ -17,7 +17,7 @@
  * unificación. Nada los vuelve a escribir; los lee el fallback de Orden de
  * Producción para líneas antiguas y `fichaDesdeLegacyInsumo` para migrar.
  */
-import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { Insumo } from "@/features/supplies/utils/supplies";
 import { resolverInsumo } from "@/features/products/components/SupplySearchField";
 
 /** Fila de insumo de la ficha. `insumoId` es el id real del catálogo; las

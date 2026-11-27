@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import type { GestionCompraScreen } from "@/features/purchases/pages/PurchasesScreen";
+import type { OrdenCompra, GestionCompra } from "@/features/purchase-orders/utils/purchase-orders";
 
 /** Búsqueda, filtro y paginación de compras. */
-export function usePurchases(ordenes: Parameters<typeof GestionCompraScreen>[0]["ordenes"], gestiones: Parameters<typeof GestionCompraScreen>[0]["gestiones"]) {
+export function usePurchases(ordenes: OrdenCompra[], gestiones: GestionCompra[]) {
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   /** Botones de filtro de la lista: todas, recibidas o anuladas. */

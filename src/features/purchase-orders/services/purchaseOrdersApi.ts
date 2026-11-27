@@ -1,12 +1,6 @@
 import api from "@/shared/services/api";
 import { MODOS_IVA, type ModoIva } from "@/features/purchases/services/vat";
-import type {
-  EstadoOrden,
-  ItemRecibido,
-  OrdenCompra,
-  OrdenItem,
-  Recepcion,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import type { EstadoOrden, ItemRecibido, OrdenCompra, OrdenItem, Recepcion } from "@/features/purchase-orders/utils/purchase-orders";
 
 /** Ítem de orden/compra tal como lo devuelve el backend. */
 export interface ItemCompraApi {

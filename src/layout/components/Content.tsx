@@ -1,6 +1,7 @@
 import type { Screen } from "@/shared/utils/screen";
 import { productoACatalogo, limiteStockDe, estadoDeProducto, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalog";
-import { estadoDe, type CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import { estadoDe } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { type Producto } from "@/features/products/pages/ProductsScreen";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";

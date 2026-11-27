@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
-import { INITIAL_SUPPLIERS, type Supplier } from "@/features/suppliers/pages/SuppliersScreen";
-import type { SuppliersScreen } from "@/features/suppliers/pages/SuppliersScreen";
+import { INITIAL_SUPPLIERS, type Supplier } from "@/features/suppliers/utils/suppliers";
+import type React from "react";
+import type { ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 
 /** Lista de proveedores (global o local), búsqueda y paginación. */
-export function useSuppliers(proveedoresProp: Parameters<typeof SuppliersScreen>[0]["proveedores"], setProveedoresProp: Parameters<typeof SuppliersScreen>[0]["setProveedores"]) {
+export function useSuppliers(proveedoresProp: ProveedorRef[] | undefined, setProveedoresProp: React.Dispatch<React.SetStateAction<ProveedorRef[]>> | undefined) {
   // Usar el estado global de proveedores si está disponible, si no, usar datos locales
   const [suppliersLocal, setSuppliersLocal] = useState<Supplier[]>(INITIAL_SUPPLIERS);
   const suppliers = proveedoresProp ?? suppliersLocal;

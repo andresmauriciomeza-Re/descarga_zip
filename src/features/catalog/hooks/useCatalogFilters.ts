@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from "react";
 import { estadoDeProducto, productoDisponible, type Product } from "@/shared/utils/catalog";
 import { normalizarNombre } from "@/features/production-orders/pages/ProductionOrdersScreen";
-import type { CatalogScreen } from "@/features/catalog/pages/CatalogScreen";
+import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 
 /** Filtro por categoría, búsqueda y paginación del menú. */
-export function useCatalogFilters(productos: Parameters<typeof CatalogScreen>[0]["productos"], categorias: Parameters<typeof CatalogScreen>[0]["categorias"], isMobile: boolean, categoria: Parameters<typeof CatalogScreen>[0]["categoria"], search: Parameters<typeof CatalogScreen>[0]["search"], page: Parameters<typeof CatalogScreen>[0]["page"], setPage: Parameters<typeof CatalogScreen>[0]["setPage"]) {
+export function useCatalogFilters(productos: Product[], categorias: CategoriaProducto[], isMobile: boolean, categoria: string | null, search: string, page: number, setPage: (p: number | ((prev: number) => number)) => void) {
   const productosSeguros = Array.isArray(productos) ? productos : [];
   const categoriasSeguras = Array.isArray(categorias) ? categorias : [];
   // 9 = 3 columnas del grid, así cada página cierra en filas completas.
