@@ -1,4 +1,5 @@
-import { INITIAL_ROLES, completarRolesSemilla, SUBS_CON_EXCEL } from "@/features/roles/pages/RolesScreen";
+import { INITIAL_ROLES, completarRolesSemilla } from "@/features/roles/pages/RolesScreen";
+import { SUBS_CON_EXCEL } from "@/features/roles/utils/roles";
 import { ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
 import { DASHBOARD_PERM_KEY } from "@/shared/utils/navigation";
 import { INITIAL_PRODUCTOS, type Producto } from "@/features/products/pages/ProductsScreen";
