@@ -55,3 +55,5 @@ export interface Supplier {
 }
 
 export const INITIAL_SUPPLIERS: Supplier[] = [];
+
+export const SERIF = "var(--font-titulo)";

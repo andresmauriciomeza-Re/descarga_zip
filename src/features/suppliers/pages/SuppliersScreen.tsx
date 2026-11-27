@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Plus, X, AlertCircle, ArrowLeft, Truck } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import { Plus, ArrowLeft, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
@@ -27,43 +27,12 @@ import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
 import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
-import { DatosDetalle } from "@/shared/components/panel/DetailData";
 import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
 import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-
-const SERIF = "var(--font-titulo)";
-
-function ConfirmModal({
-  title, message, onConfirm, onCancel,
-}: {
-  title: string; message: string; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.94, opacity: 0 }} transition={{ duration: 0.18 }}
-        className="bg-card rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border"
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-          </div>
-          <h3 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-        </div>
-        <p className="text-muted-foreground mb-6 leading-relaxed">{message}</p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 max-md:min-h-11 border border-border rounded-xl font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer">Cancelar</button>
-          <button onClick={onConfirm} className="flex-1 py-3 max-md:min-h-11 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors active:scale-95 cursor-pointer">Sí, confirmar</button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
 
 // ─────────────────────────── SUPPLIERS ───────────────────────────
 
@@ -112,139 +81,10 @@ const emptySupplier = (): ProveedorFormValues => ({
   repLegalEmail: "",
 });
 
-/**
- * Cuerpo del detalle: pinta EXACTAMENTE los campos que pide cada tipo de
- * persona (misma sección y mismo orden que el formulario), así lo que se guardó
- * es lo que se ve. Los campos sin dato salen "—". Los proveedores antiguos sin
- * tipo siguen mostrando el bloque de contacto viejo.
- */
-function DetalleContenido({ s }: { s: Supplier }) {
-  const esNatural = s.tipoPersona === "Persona Natural";
-  const esJuridica = s.tipoPersona === "Persona Jurídica";
-  const v = (x?: string) => (x ?? "").trim() || "—";
-  const nombreCompleto = [s.nombres ?? "", s.apellidos ?? ""]
-    .map(x => x.trim())
-    .filter(Boolean)
-    .join(" ") || (s.nombre ?? "");
-  const documento = (tipo?: string, numero?: string) =>
-    [tipo, numero].map(x => (x ?? "").trim()).filter(Boolean).join(" ") || "—";
-
-  return (
-    <div className="grid gap-5">
-      {esNatural && (
-        <>
-          <SeccionFormulario titulo="Datos del proveedor">
-            <DatosDetalle datos={[
-              { etiqueta: "Nombre completo", valor: v(nombreCompleto) },
-              { etiqueta: "Documento", valor: documento(s.tipoDocumento, s.numeroDocumento) },
-            ]} />
-          </SeccionFormulario>
-          <SeccionFormulario titulo="Con quién hablar para pedir">
-            <DatosDetalle datos={[
-              { etiqueta: "Teléfono", valor: v(s.telefono) },
-              { etiqueta: "Correo", valor: v(s.email) },
-              { etiqueta: "Dirección", valor: v(s.direccion) },
-            ]} />
-          </SeccionFormulario>
-        </>
-      )}
-
-      {esJuridica && (
-        <>
-          <SeccionFormulario titulo="Datos de la empresa">
-            <DatosDetalle datos={[
-              /* En Jurídica el nombre guardado ES la razón social. */
-              { etiqueta: "Razón social", valor: v(s.nombre) },
-              { etiqueta: "Nombre comercial", valor: v(s.nombreComercial) },
-              { etiqueta: "NIT", valor: formatoNit(s.nit) || "—" },
-              { etiqueta: "Tipo de sociedad", valor: v(s.tipoSociedad) },
-              {
-                etiqueta: "Cámara de Comercio",
-                valor: s.camaraComercioArchivo ? (
-                  <a
-                    href={s.camaraComercioArchivo}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline break-all"
-                    title={s.camaraComercioNombre}
-                  >
-                    {s.camaraComercioNombre || "Ver el archivo"}
-                  </a>
-                ) : v(s.camaraComercioNombre),
-              },
-              { etiqueta: "Fecha de la Cámara de Comercio", valor: v(s.fechaExpedicionCamara) },
-            ]} />
-          </SeccionFormulario>
-          <SeccionFormulario titulo="Representante legal">
-            <DatosDetalle datos={[
-              {
-                etiqueta: "Nombre",
-                valor: v([s.repLegalNombres ?? "", s.repLegalApellidos ?? ""].map(x => x.trim()).filter(Boolean).join(" ")),
-              },
-              { etiqueta: "Documento", valor: documento(s.repLegalTipoDocumento, s.repLegalNumeroDocumento) },
-              { etiqueta: "Celular", valor: v(s.repLegalTelefono) },
-              { etiqueta: "Correo", valor: v(s.repLegalEmail) },
-            ]} />
-          </SeccionFormulario>
-          <SeccionFormulario titulo="Con quién hablar para pedir">
-            <DatosDetalle datos={[
-              { etiqueta: "Asesor", valor: v(s.contactoNombre || s.asesorComercial) },
-              { etiqueta: "Teléfono", valor: v(s.contactoTelefono || s.telefono) },
-              { etiqueta: "Teléfono fijo", valor: v(s.contactoTelefonoFijo) },
-              { etiqueta: "Correo", valor: v(s.contactoEmail || s.email) },
-              { etiqueta: "Dirección", valor: v(s.direccion) },
-            ]} />
-          </SeccionFormulario>
-        </>
-      )}
-
-      {/* Proveedor antiguo sin tipo de persona registrado. */}
-      {!esNatural && !esJuridica && (
-        <SeccionFormulario titulo="Datos del proveedor">
-          <DatosDetalle datos={[
-            { etiqueta: "Nombre", valor: v(s.nombre) },
-            { etiqueta: "Asesor", valor: v(s.asesorComercial) },
-            { etiqueta: "Teléfono", valor: v(s.telefono) },
-            { etiqueta: "Correo", valor: v(s.email) },
-            { etiqueta: "Dirección", valor: v(s.direccion) },
-          ]} />
-        </SeccionFormulario>
-      )}
-    </div>
-  );
-}
-
-function Modal({
-  title, onClose, onConfirm, confirmLabel = "Guardar", children,
-}: {
-  title: string; onClose: () => void; onConfirm: () => void; confirmLabel?: string; children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }} transition={{ duration: 0.16 }}
-          className="bg-card rounded-2xl w-full max-w-md shadow-2xl border border-border my-4"
-        >
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>{title}</h3>
-            <button onClick={onClose} className="p-1.5 max-md:p-3.5 max-md:-m-2 rounded-lg hover:bg-muted cursor-pointer text-muted-foreground"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="px-5 py-4 space-y-4">{children}</div>
-          <div className="flex gap-3 px-5 py-4 border-t border-border">
-            <button onClick={onClose} className="flex-1 py-2.5 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">Cancelar</button>
-            <button onClick={onConfirm} className="flex-1 py-2.5 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer transition-colors active:scale-95">{confirmLabel}</button>
-          </div>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
-
 import type { OrdenCompra, GestionCompra } from "@/features/purchase-orders/utils/purchase-orders";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import type { Supplier, SupplierStatus } from "@/features/suppliers/utils/suppliers";
+import { DetalleContenido } from "@/features/suppliers/components/SupplierDetailContent";
 
 /** 409/400 del servidor: NIT, documento y correo repetidos se pintan bajo su
     campo; el resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
