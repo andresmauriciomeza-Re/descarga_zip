@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   X,
@@ -21,7 +21,6 @@ import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { MensajeError } from "@/shared/components/FormInputs";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { SearchInput } from "@/shared/components/SearchInput";
@@ -34,6 +33,7 @@ import {
   type EstadoOption,
 } from "@/shared/components/StatusSelect";
 import { GRUPOS_ICONOS } from "@/features/product-categories/services/categoryIcons";
+import { useProductCategories } from "@/features/product-categories/hooks/useProductCategories";
 
 const SERIF = "var(--font-titulo)";
 
@@ -273,7 +273,7 @@ const mensajeError = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function CategoriaProductoScreen({ categorias, cargando = false, errorCarga, onReintentar, onCrear, onEditar, onCambiarEstado, onEliminar, canCreate = true, canEdit = true, canDelete = true }: Props) {
-  const [search, setSearch] = useState("");
+  const { search, setSearch, page, setPage, PER_PAGE, filtered, totalPages, paged } = useProductCategories(categorias);
   // Evita el doble envío mientras una petición está en curso (sin cambio visual).
   const [guardando, setGuardando] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -342,31 +342,9 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
       ? `La descripción no puede superar ${MAX_DESCRIPCION} caracteres`
       : undefined;
 
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 10;
 
-  const filtered = useMemo(
-    () =>
-      ordenarPorIdDescendente(categorias.filter(
-        (c) =>
-          c.id.toLowerCase().includes(search.toLowerCase()) ||
-          c.nombre.toLowerCase().includes(search.toLowerCase()),
-      ), (categoria) => categoria.id),
-    [categorias, search],
-  );
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice(
-    (page - 1) * PER_PAGE,
-    page * PER_PAGE,
-  );
 
-  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
-  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
-  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, totalPages)));
-  }, [totalPages]);
 
   const handleCreate = async () => {
     if (guardando) return;
