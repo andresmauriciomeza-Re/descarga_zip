@@ -9,8 +9,8 @@ import type {
   TablaDatos,
 } from "@/features/legal/types/licenses.types";
 
-export const FECHA_ACTUALIZACION = "25 de noviembre de 2026";
-export const FECHA_ACTUALIZACION_ISO = "2026-11-25";
+export const FECHA_ACTUALIZACION = "27 de noviembre de 2026";
+export const FECHA_ACTUALIZACION_ISO = "2026-11-27";
 export const URL_AVISOS_TERCEROS = "/legal/THIRD-PARTY-NOTICES.txt";
 
 export const SECCIONES: SeccionIndice[] = [
@@ -32,6 +32,7 @@ export const TABLA_FRONTEND: TablaDatos = {
   filas: [
     ["React", "18.3.1", "MIT"],
     ["React DOM", "18.3.1", "MIT"],
+    ["React Router", "7.18.7", "MIT"],
     ["TypeScript", "7.0.2", "Apache 2.0"],
     ["Vite", "6.3.5", "MIT"],
     ["Tailwind CSS", "4.1.12", "MIT"],

@@ -1,5 +1,7 @@
 # Informe: página «Licencias y reconocimientos»
 
+> **Actualización del 27 de noviembre de 2026.** La URL de la página pasó a `/licenses` (`/licencias` redirige) y la navegación usa React Router: `useRutaLicencias` ya no existe. Se agregaron `react-router`, `cookie` y `set-cookie-parser` (MIT) y se regeneraron los avisos y el inventario. Las cifras y la descripción de la navegación de más abajo son de la revisión original.
+
 Fecha: 25 de noviembre de 2026. Base de trabajo: rama `feature/limpieza-codigo`, en el mismo commit que
 `origin/develop` (`1d6ce99`). No se hicieron commits, push ni despliegues.
 
