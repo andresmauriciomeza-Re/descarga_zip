@@ -154,3 +154,78 @@ export const NAV_SECTIONS = [
 
 export const canViewPermission = (accesos: AccesosMap, permKey: string) =>
   accesos[permKey]?.includes("Ver") ?? false;
+
+export const SCREEN_META: Partial<
+  Record<Screen, { title: string; icon: string; desc: string }>
+> = {
+  reports: {
+    title: "Reportes e Informes",
+    icon: "📊",
+    desc: "Analiza las métricas de tu negocio en tiempo real.",
+  },
+  clients: {
+    title: "Gestión de Clientes",
+    icon: "👥",
+    desc: "Administra tu base de datos de clientes.",
+  },
+  roles: {
+    title: "Roles",
+    icon: "🔐",
+    desc: "Configura los roles de tu equipo.",
+  },
+  permissions: {
+    title: "Permisos",
+    icon: "🔑",
+    desc: "Gestiona los permisos de acceso al sistema.",
+  },
+  users: {
+    title: "Gestión de Usuarios",
+    icon: "👤",
+    desc: "Administra los usuarios del sistema.",
+  },
+  access: {
+    title: "Gestión de Acceso",
+    icon: "🚪",
+    desc: "Controla quién accede a qué sección.",
+  },
+  "supply-categories": {
+    title: "Categorías de Insumos",
+    icon: "🏷️",
+    desc: "Organiza tus insumos por categorías.",
+  },
+  supplies: {
+    title: "Gestión de Insumos",
+    icon: "📦",
+    desc: "Controla tu inventario de insumos.",
+  },
+  "product-categories": {
+    title: "Categorías de Productos",
+    icon: "🍕",
+    desc: "Organiza tu menú por categorías.",
+  },
+  suppliers: {
+    title: "Proveedores",
+    icon: "🚛",
+    desc: "Gestiona tu red de proveedores confiables.",
+  },
+  "production-orders": {
+    title: "Órdenes de Producción",
+    icon: "👨‍🍳",
+    desc: "Administra las órdenes de tu cocina.",
+  },
+  "finished-products": {
+    title: "Producto Terminado",
+    icon: "✅",
+    desc: "Controla los productos listos para entregar.",
+  },
+  sales: {
+    title: "Gestión de Ventas",
+    icon: "💰",
+    desc: "Revisa y administra todas tus ventas.",
+  },
+  profile: {
+    title: "Mi Perfil",
+    icon: "👤",
+    desc: "Administra tu información personal.",
+  },
+};
