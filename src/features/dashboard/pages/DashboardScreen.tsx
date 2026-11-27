@@ -11,24 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  AlertTriangle,
-  Archive,
-  BarChart3,
-  ClipboardList,
-  DollarSign,
-  FileText,
-  IdCard,
-  Layers,
-  Lock,
-  Package,
-  RefreshCw,
-  RotateCcw,
-  Settings,
-  ShoppingBag,
-  Truck,
-  Users,
-} from "lucide-react";
+import { AlertTriangle, Archive, ClipboardList, DollarSign, FileText, IdCard, Layers, Lock, Package, RefreshCw, RotateCcw, Settings, ShoppingBag, Truck, Users } from "lucide-react";
 
 import { KEY, type AccesosMap } from "@/features/roles/utils/roles";
 import type { Venta } from "@/features/sales/utils/sales";
@@ -61,6 +44,11 @@ import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
+import { SelectorMes } from "@/features/dashboard/components/MonthSelector";
+import { GrafTooltip, SinDatos } from "@/features/dashboard/components/ChartHelpers";
+import { EstadoVentas } from "@/features/dashboard/components/SalesStatus";
+import { TarjetaIndicador } from "@/features/dashboard/components/MetricCard";
+import type { MesDisponible } from "@/features/dashboard/utils/dashboard";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -92,11 +80,6 @@ const MESES_ES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
-interface MesDisponible {
-  clave: string;
-  etiqueta: string;
-}
-
 function mesesDesdeFechas(fechas: string[], mesActual: string): MesDisponible[] {
   const fechasValidas = fechas.filter(
     (fecha) => esFechaISO(fecha) && fecha.slice(0, 7) <= mesActual,
@@ -125,132 +108,10 @@ function mesesDesdeFechas(fechas: string[], mesActual: string): MesDisponible[] 
   return meses;
 }
 
-function SelectorMes({
-  periodo,
-  mes,
-  meses,
-  onChange,
-}: {
-  periodo: Periodo;
-  mes: string;
-  meses: MesDisponible[];
-  onChange: (mes: string) => void;
-}) {
-  if (periodo !== "mes") return null;
-  const indiceEncontrado = meses.findIndex((opcion) => opcion.clave === mes);
-  const indice = indiceEncontrado < 0 ? meses.length - 1 : indiceEncontrado;
-  const seleccionado = meses[indice];
-  const mesAnterior = meses[indice - 1];
-  const mesSiguiente = meses[indice + 1];
-  if (!seleccionado) return null;
-
-  return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Seleccionar mes">
-      <button
-        type="button"
-        onClick={() => {
-          if (mesAnterior) onChange(mesAnterior.clave);
-        }}
-        disabled={indice === 0}
-        className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        ‹ Mes anterior
-      </button>
-      <span className="min-w-[8rem] text-center text-[17px] font-semibold text-foreground" aria-live="polite">
-        {seleccionado.etiqueta}
-      </span>
-      <button
-        type="button"
-        onClick={() => {
-          if (mesSiguiente) onChange(mesSiguiente.clave);
-        }}
-        disabled={indice === meses.length - 1}
-        className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        Mes siguiente ›
-      </button>
-    </div>
-  );
-}
-
 /** Rango real de atención (utils/hora.ts): 4 p. m. a 10 p. m. */
 const HORAS_HOY = [16, 17, 18, 19, 20, 21, 22];
 
 const DOW_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-// ── Tooltip único de todas las gráficas: valores exactos (COP, unidades o
-// conteos) según la función `formatear` que recibe cada una ───────────
-function GrafTooltip({
-  active,
-  payload,
-  label,
-  formatear,
-}: {
-  active?: boolean;
-  payload?: Array<{ dataKey?: string; name?: string; value?: number | null }>;
-  label?: string;
-  formatear?: (serie: string, valor: number) => string;
-}) {
-  // Los días que todavía no llegan vienen vacíos (null): no se muestran.
-  const visibles = (payload ?? []).filter((p) => p.value !== null && p.value !== undefined);
-  if (!active || !visibles.length) return null;
-  return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3 shadow-lg text-base">
-      <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      {visibles.map((p, i) => (
-        <p key={i} className="font-bold text-foreground">
-          {p.name ?? p.dataKey}:{" "}
-          {formatear
-            ? formatear(String(p.dataKey ?? ""), Number(p.value ?? 0))
-            : String(p.value ?? 0)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-/** Estado vacío de cada gráfica cuando no hay datos en el periodo. */
-function SinDatos({ texto = "Todavía no hay datos en este periodo" }: { texto?: string }) {
-  return (
-    <VacioEstado icono={BarChart3} titulo={texto}>
-      Cuando haya movimiento, la gráfica aparecerá aquí.
-    </VacioEstado>
-  );
-}
-
-function EstadoVentas({
-  estado,
-  error,
-  textoCargando = "Cargando ventas…",
-  textoError = "No fue posible cargar las ventas.",
-}: {
-  estado: "cargando" | "error" | "permiso";
-  error?: string | null;
-  textoCargando?: string;
-  textoError?: string;
-}) {
-  const Icon = estado === "cargando" ? RefreshCw : estado === "permiso" ? Lock : AlertTriangle;
-  const texto =
-    estado === "cargando"
-      ? textoCargando
-      : estado === "permiso"
-        ? "No tienes permiso para ver ventas. Solicita al administrador el permiso Ventas > Ver."
-        : `${textoError}${error ? ` ${error}` : " Intenta de nuevo más tarde."}`;
-
-  return (
-    <div
-      role={estado === "error" ? "alert" : "status"}
-      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
-        estado === "error"
-          ? "bg-destructive/10 text-destructive"
-          : "bg-muted/30 text-muted-foreground"
-      }`}
-    >
-      <Icon className={`h-5 w-5 shrink-0 ${estado === "cargando" ? "animate-spin" : ""}`} />
-      <span>{texto}</span>
-    </div>
-  );
-}
 
 /**
  * Tarjeta de indicador: ícono en su cuadrito de color, número grande, nombre
@@ -268,45 +129,6 @@ const ENLACE_POR_PANTALLA: Partial<Record<Screen, string>> = {
   supplies: "Ver los insumos",
   clientes: "Ver los clientes",
 };
-
-function TarjetaIndicador({
-  label,
-  value,
-  sub,
-  Icon,
-  onClick,
-  enlace,
-  alerta,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  Icon: typeof Package;
-  /** Ya no se usan (la tarjeta nueva usa los colores del panel); se aceptan por compatibilidad. */
-  bg?: string;
-  ic?: string;
-  onClick?: () => void;
-  /** Texto del botón-enlace («Ver las ventas»). */
-  enlace?: string;
-  /** Tarjeta en ámbar (hay algo que atender). */
-  alerta?: boolean;
-}) {
-  return (
-    <article className={`pn-kpi${alerta ? " pn-kpi--alerta" : ""}`}>
-      <p className="pn-kpi__valor">{value}</p>
-      <p className="pn-kpi__etiqueta">
-        <Icon size={22} aria-hidden="true" className="shrink-0" />
-        <span>{label}</span>
-      </p>
-      <p className="pn-kpi__sub">{sub}</p>
-      {onClick && enlace && (
-        <BotonAccion variante="normal" onClick={onClick}>
-          {enlace} ›
-        </BotonAccion>
-      )}
-    </article>
-  );
-}
 
 export function DashboardScreen({
   navigate,

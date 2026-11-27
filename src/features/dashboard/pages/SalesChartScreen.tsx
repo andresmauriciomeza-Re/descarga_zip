@@ -1,9 +1,5 @@
 import { useState } from "react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-} from "recharts";
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 import type { Venta } from "@/features/sales/utils/sales";
@@ -12,42 +8,20 @@ import {
   esFechaISO,
   hoyISO,
 } from "@/shared/utils/dates";
+import { WeekCard } from "@/features/dashboard/components/WeekCard";
+import { VentasDetail } from "@/features/dashboard/components/SalesDetail";
+import { ComprasDetail } from "@/features/dashboard/components/PurchasesDetail";
+import { SERIF, fmtCOP, type DayEntry, type WeekEntry } from "@/features/dashboard/utils/dashboard";
 
-const SERIF = "var(--font-titulo)";
 const DOW_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MON_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-// ── helpers ──────────────────────────────────────────────────────────
-function fmtCOP(n: number) { return "$" + Math.round(n).toLocaleString("es-CO"); }
 function getDow(y: number, m: number, d: number) { return new Date(y, m - 1, d).getDay(); }
 function futureDay(y: number, m: number, d: number, hoy: Date) {
   return new Date(y, m - 1, d) > hoy;
 }
 function todayDay(y: number, m: number, d: number, hoy: Date) {
   return y === hoy.getFullYear() && m === hoy.getMonth() + 1 && d === hoy.getDate();
-}
-
-// ── Build week structure dynamically (datos reales) ──────────────────
-interface DayEntry {
-  day: number;
-  label: string;
-  unidades: number;
-  porciones: number;
-  revenue: number;
-  isToday: boolean;
-  isFuture: boolean;
-}
-interface WeekEntry {
-  idx: number;
-  label: string;
-  range: string;
-  days: DayEntry[];
-  totalVentas: number;
-  totalUnidades: number;
-  totalPorciones: number;
-  totalRevenue: number;
-  /** true = todos los días de la semana ya pasaron (solo entonces se muestra %). */
-  terminada: boolean;
 }
 
 function buildWeeks(
@@ -94,263 +68,6 @@ function buildWeeks(
     });
   }
   return weeks;
-}
-
-// ── Shared tooltip ───────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, isCOP }: { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string; isCOP?: boolean }) {
-  if (!active || !payload?.length || payload.every((dato) => !dato.value)) return null;
-  return (
-    <div className="bg-card border border-border rounded-xl px-3 py-2 shadow-lg text-xs">
-      <p className="font-semibold text-muted-foreground mb-0.5">{label}</p>
-      {payload.map((dato, index) => (
-        <p key={index} className="font-bold text-foreground">
-          {dato.name ?? dato.dataKey}: {isCOP ? fmtCOP(dato.value) : dato.dataKey === "porciones" ? `${dato.value} porciones` : `${dato.value} unidades`}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-// ── Custom XAxis tick (hoy en rojo) ──────────────────────────────────
-function WeekTick({ x, y, payload, days }: { x?: number; y?: number; payload?: { index: number; value: string }; days: DayEntry[] }) {
-  if (x === undefined || y === undefined || !payload) return null;
-  const entry = days[payload?.index ?? 0];
-  return (
-    <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={14} textAnchor="middle" fill={entry?.isToday ? "#C62828" : "var(--foreground)"} fontSize={10} fontWeight={entry?.isToday ? "bold" : "normal"}>
-        {payload.value}
-      </text>
-    </g>
-  );
-}
-
-// ── Bar color helper ─────────────────────────────────────────────────
-function barFill(d: DayEntry) {
-  if (d.isFuture) return "var(--border)";
-  if (d.isToday)  return "#ef5350";
-  return "#C62828";
-}
-
-// ── Week card (shown in month grid) ─────────────────────────────────
-function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras }: {
-  week: WeekEntry; comprasTotal: number;
-  onVentas: () => void; onCompras: () => void;
-  prevWeek?: WeekEntry; isCompras: boolean;
-}) {
-  // Sin % si la semana no terminó o si no hay semana previa con ventas:
-  // así nunca aparece un "-100%" de una semana a medio camino.
-  const delta = prevWeek && prevWeek.totalVentas > 0 && week.terminada
-    ? Math.round(((week.totalVentas - prevWeek.totalVentas) / prevWeek.totalVentas) * 100)
-    : null;
-  const noData = week.days.every(d => d.isFuture) && comprasTotal === 0;
-  const hasCom = comprasTotal > 0;
-
-  return (
-    <div className="bg-card border border-border rounded-2xl p-4 hover:shadow-md hover:border-primary/30 transition-all flex flex-col gap-3">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{week.label}</p>
-          <p className="text-sm font-semibold text-foreground mt-0.5">{week.range}</p>
-        </div>
-        <div className="text-right">
-          {noData && !hasCom ? (
-            <span className="text-xs text-muted-foreground font-medium">Pendiente</span>
-          ) : (
-            <>
-              <p className="text-xl font-bold text-foreground">
-                {isCompras ? fmtCOP(comprasTotal) : `${week.totalUnidades} und · ${week.totalPorciones} porc.`}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {isCompras ? "en insumos" : "unidades y porciones"}
-              </p>
-              {!isCompras && week.totalRevenue > 0 && (
-                <p className="text-[10px] text-emerald-600 font-semibold">{fmtCOP(week.totalRevenue)}</p>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Mini chart */}
-      <div className="h-12 -mx-1">
-        <ResponsiveContainer width="100%" height="100%">
-          {isCompras ? (
-            <BarChart data={[{ v: comprasTotal }]} barSize={28} margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
-              <Bar key="bar" dataKey="v" radius={[3,3,0,0]} fill={hasCom ? "#1565c0" : "transparent"} isAnimationActive={false} />
-            </BarChart>
-          ) : (
-            <BarChart data={week.days} barSize={9} margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
-              <Bar
-                key="bar"
-                dataKey="ventas"
-                radius={[3,3,0,0]}
-                isAnimationActive={false}
-                shape={(props) => {
-                  const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
-                  const fill = barFill(week.days[index ?? 0]);
-                  return <rect x={x} y={y} width={width} height={height} fill={fill} rx={3} ry={3} />;
-                }}
-              />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-
-      <div className="flex items-center justify-between">
-        {!isCompras && delta !== null ? (
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${delta > 0 ? "bg-emerald-100 text-emerald-700" : delta < 0 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
-            {delta > 0 ? <TrendingUp className="w-3 h-3"/> : delta < 0 ? <TrendingDown className="w-3 h-3"/> : <Minus className="w-3 h-3"/>}
-            {delta > 0 ? "+" : ""}{delta}%
-          </span>
-        ) : <span />}
-        <div className="flex gap-3">
-          {!noData && <button onClick={onVentas} className="text-xs font-semibold text-primary hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver ventas →</button>}
-          {hasCom && <button onClick={onCompras} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver compras →</button>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Week detail: Ventas ───────────────────────────────────────────────
-function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => void }) {
-  const maxV = Math.max(...week.days.map(d => d.unidades + d.porciones), 1);
-  return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <button onClick={onBack} className="p-2 max-md:p-3 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ventas · {week.range}</p>
-          <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
-        </div>
-        <div className="text-right max-md:basis-full max-md:text-left">
-          <p className="text-2xl font-bold text-foreground">{week.totalUnidades} <span className="text-sm font-normal text-muted-foreground">unidades</span> · {week.totalPorciones} <span className="text-sm font-normal text-muted-foreground">porciones</span></p>
-          <p className="text-sm font-semibold text-emerald-600">{fmtCOP(week.totalRevenue)} COP</p>
-        </div>
-      </div>
-
-      <div className="bg-card border border-border rounded-2xl p-5 mb-5">
-        <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Unidades y porciones vendidas por día</p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={week.days} barSize={32} margin={{ top: 8, bottom: 8, left: -16, right: 8 }}>
-            <CartesianGrid key="grid" vertical={false} stroke="var(--border)" />
-            <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...(props as { x?: number; y?: number; payload?: { index: number; value: string } })} days={week.days} />} axisLine={false} tickLine={false} height={40} />
-            <YAxis key="y" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
-            <Bar
-              key="unidades"
-              dataKey="unidades"
-              name="Unidades"
-              stackId="cantidades"
-              radius={[4,4,0,0]}
-              isAnimationActive={false}
-              shape={(props) => {
-                const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
-                const fill = barFill(week.days[index ?? 0]);
-                return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />;
-              }}
-            />
-            <Bar key="porciones" dataKey="porciones" name="Porciones" stackId="cantidades" fill="#F97316" radius={[4,4,0,0]} isAnimationActive={false} />
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border flex-wrap">
-          {[["#C62828","Días pasados"],["#ef5350","Hoy"],["var(--border)","Días futuros"]].map(([c, l]) => (
-            <div key={l} className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: c }} />
-              <span className="text-xs text-muted-foreground">{l}</span>
-            </div>
-          ))}
-          <span className="text-xs text-muted-foreground">Naranja: porciones · Rojo: unidades</span>
-        </div>
-      </div>
-
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-border">
-          <p className="text-sm font-semibold text-foreground">Detalle por día</p>
-        </div>
-        {week.days.map((d, i) => (
-          <div key={i} className="flex items-center gap-4 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1 px-5 py-3 border-b border-border last:border-0">
-            <span className={`w-16 shrink-0 text-sm font-semibold ${d.isToday ? "text-primary" : d.isFuture ? "text-muted-foreground/50" : "text-foreground"}`}>
-              {d.label}
-            </span>
-            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full rounded-full flex" style={{ width: `${Math.round(((d.unidades + d.porciones) / maxV) * 100)}%`, opacity: d.isFuture ? 0 : 1 }}>
-                <span className="h-full" style={{ width: `${d.unidades + d.porciones > 0 ? (d.unidades / (d.unidades + d.porciones)) * 100 : 0}%`, background: d.isToday ? "#ef5350" : "#C62828" }} />
-                <span className="h-full bg-orange-500" style={{ width: `${d.unidades + d.porciones > 0 ? (d.porciones / (d.unidades + d.porciones)) * 100 : 0}%` }} />
-              </div>
-            </div>
-            <span className="w-28 max-md:w-full max-md:pl-[4.75rem] max-md:text-left text-right text-sm shrink-0">
-              {d.isFuture ? <span className="text-muted-foreground/40">—</span> : (
-                <><span className="font-bold text-foreground">{d.unidades} und · {d.porciones} porc.</span> <span className="text-muted-foreground text-xs">· {fmtCOP(d.revenue)}</span></>
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Week detail: Compras ─────────────────────────────────────────────
-function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry; items: OrdenItem[]; total: number; onBack: () => void }) {
-  return (
-    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <button onClick={onBack} className="p-2 max-md:p-3 rounded-xl hover:bg-muted cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Compras · {week.range}</p>
-          <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{week.label}</h2>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-blue-700">{fmtCOP(total)}</p>
-          <p className="text-xs text-muted-foreground">total en insumos</p>
-        </div>
-      </div>
-
-      {items.length === 0 ? (
-        <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground">
-          <p className="text-4xl mb-3">📦</p>
-          <p className="font-semibold">Sin compras registradas esta semana</p>
-        </div>
-      ) : (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">Insumos comprados</p>
-            <p className="text-xs text-muted-foreground">{items.length} ítems</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px]">
-              <thead className="bg-muted/50">
-                <tr>{["Insumo","Cantidad","Precio unit.","Subtotal"].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {items.map((x, i) => (
-                  <tr key={i} className="hover:bg-muted/20">
-                    <td className="px-4 py-3 text-sm font-medium text-foreground">{x.nombre}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{x.cantidad} {x.unidad}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{fmtCOP(x.costoUnitario)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">{fmtCOP(x.cantidad * x.costoUnitario)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-muted/30 border-t border-border">
-                <tr>
-                  <td colSpan={3} className="px-4 py-3 text-sm font-bold text-foreground">Total</td>
-                  <td className="px-4 py-3 text-sm font-bold text-blue-700 tabular-nums">{fmtCOP(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
-    </motion.div>
-  );
 }
 
 // ── Main screen ───────────────────────────────────────────────────────
