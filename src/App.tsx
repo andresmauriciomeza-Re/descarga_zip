@@ -77,11 +77,13 @@ import { Sidebar } from "@/layout/components/Sidebar";
 import { AdminTopBar } from "@/layout/components/AdminTopBar";
 import { BottomNav } from "@/layout/components/BottomNav";
 import { Landing } from "@/layout/pages/Landing";
+import { AuthProvider, useAuth } from "@/shared/contexts/AuthContext";
+import { CartProvider, useCart } from "@/shared/contexts/CartContext";
 import { normalizarNombreRol } from "@/shared/utils/roleName";
 import { AVATAR_PALETTE } from "@/shared/utils/avatar";
 import { LoginScreen } from "@/features/auth/pages/LoginScreen";
 import { RegisterScreen } from "@/features/auth/pages/RegisterScreen";
-import { esRolCliente, armarRolesSesion, clavePersona, leerRolActivo, escribirRolActivo, SESION_STORAGE_KEY, INACTIVIDAD_MS, ACTIVIDAD_THROTTLE_MS, type SesionGuardada, leerSesionGuardada, escribirSesionGuardada, borrarSesionGuardada } from "@/features/auth/hooks/useSession";
+import { esRolCliente, armarRolesSesion, clavePersona, escribirRolActivo, SESION_STORAGE_KEY, INACTIVIDAD_MS, ACTIVIDAD_THROTTLE_MS, type SesionGuardada, leerSesionGuardada, escribirSesionGuardada, borrarSesionGuardada } from "@/features/auth/hooks/useSession";
 import { sizeDe, PRODUCTS } from "@/features/catalog/data/products";
 import { type LineaLimiteRef, type LimiteLinea, mensajeMaximoDe, ajustarCantidad } from "@/features/catalog/utils/lineLimits";
 import { CatalogScreen } from "@/features/catalog/pages/CatalogScreen";
@@ -162,20 +164,26 @@ class LandingErrorBoundary extends Component<
 }
 
 export default function App() {
+  // Antes de montar los providers: la copia de respaldo se hace antes de leer
+  // el estado guardado.
   respaldarDatosProductosFase1();
-  /** Snapshot de la sesión al cargar la página, leído UNA sola vez.
-      Permite que F5 no borre la sesión (se restaura usuario, rol y pantalla)
-      y detectar una sesión expirada por inactividad para avisar. */
-  const [sesionArranque] = useState(() => {
-    const s = leerSesionGuardada();
-    if (!s) return { estado: "ninguna" as const };
-    if (Date.now() - s.ultimaActividad >= INACTIVIDAD_MS) {
-      borrarSesionGuardada();
-      return { estado: "expirada" as const };
-    }
-    return { estado: "activa" as const, s };
-  });
-  const sesionActiva = sesionArranque.estado === "activa" ? sesionArranque.s : null;
+  return (
+    <AuthProvider>
+      <CartProvider>
+        <AppContent />
+      </CartProvider>
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  respaldarDatosProductosFase1();
+  const {
+    sesionArranque, sesionActiva, isLoggedIn, setIsLoggedIn,
+    restauracionSesionLista, setRestauracionSesionLista, userRole, setUserRole,
+    loggedInUserId, setLoggedInUserId, rolActivoId, setRolActivoId,
+  } = useAuth();
+  const { cart, setCart } = useCart();
   /** Pantalla que se restaura desde la sesión (si era válida) o "landing". */
   const [facturaPedidoId] = useState(() => {
     const id = new URLSearchParams(window.location.search).get("factura");
@@ -203,17 +211,6 @@ export default function App() {
   const [ordenAEditar, setOrdenAEditar] = useState<OrdenCompra | null>(null);
   const [ordenCompraItemsIniciales, setOrdenCompraItemsIniciales] = useState<OrdenItem[]>([]);
   const [ordenCompraPage, setOrdenCompraPage] = useState(1);
-  // El carrito arranca desde lo que quedó guardado: sin esto, recargar la
-  // página, cambiar de categoría o abrir el detalle de otro producto borraba
-  // lo que el cliente había agregado sin haber iniciado sesión. El catálogo y
-  // la compra no cambian: solo se recupera el estado que ya estaba en pantalla.
-  const [cart, setCart] = useState<CartItem[]>(() =>
-    sesionActiva ? leerCarritosDeUsuarios()[sesionActiva.userId] ?? [] : leerCarritoGuardado(),
-  );
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(sesionActiva !== null);
-  // La sesión persistida no se invalida hasta recibir /auth/me. Así el primer
-  // render con `usuarios` todavía vacío no se confunde con una sesión inválida.
-  const [restauracionSesionLista, setRestauracionSesionLista] = useState(!sesionActiva);
   // Sesión restaurándose (F5): hay sesión guardada y GET /auth/me todavía no
   // terminó, así que los roles de la sesión aún no llegan. Mientras dure NO se
   // pinta el inicio/dashboard (ni el chip "sin rol" ni el bloque "Sin rol
@@ -291,15 +288,6 @@ export default function App() {
   const productosMenu = useMemo(
     () => productos.map((p) => productoACatalogo(p, categoriasCatalogo)),
     [productos, categoriasCatalogo],
-  );
-  const [userRole, setUserRole] = useState("Administrador");
-  const [loggedInUserId, setLoggedInUserId] = useState<string | null>(sesionActiva?.userId ?? null);
-  // Id del rol ACTIVO de la sesión. Se inicializa en el login y lo cambia el
-  // menú "Cambiar de rol"; también se persiste en `sivpro.rolActivo.v1`.
-  const [rolActivoId, setRolActivoId] = useState<string | null>(() =>
-    sesionActiva
-      ? sesionActiva.rolActivo ?? leerRolActivo(sesionActiva.userId)
-      : null,
   );
   const recargarCatalogo = async ({ conservarCarrito = false } = {}) => {
     setCatalogoCargando(true);

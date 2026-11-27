@@ -41,6 +41,9 @@ Hecho: `App.tsx` conserva el estado y el armado de pantallas; las llamadas de re
 
 Pendiente:
 
-- `AuthContext` (6.2) y `CartContext` (6.4): mueven estado y efectos, no solo código. Necesarios antes o durante la Fase 7.
 - Probar a mano el cambio de rol, registro completo y checkout contra el backend real.
 - `leerListaPersistida`, `esOrdenProduccionValida`, `esInsumoValido` y `esFichasValidas` (`storage.ts`) no tienen usos; revisar si se eliminan.
+
+## Contextos
+
+`AuthContext` y `CartContext` guardan el estado de sesión y carrito. Los efectos, `handleLogin` y `logout` siguen en `App` porque cruzan sesión, carrito, roles y navegación, y moverlos cambiaría el orden en que se ejecutan.
