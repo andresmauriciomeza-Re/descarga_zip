@@ -39,14 +39,25 @@ src/
     hooks/               #   animaciones del landing
     pages/               #   Landing
   features/              # un módulo por dominio de negocio
-    auth/                #   login, registro y sesión
-    catalog/             #   menú y detalle de producto
-    cart/                #   carrito y pago
-    customers/           #   clientes y perfil del cliente
-    dashboard/  employees/  legal/  non-conforming-products/
-    product-categories/  production-orders/  products/
-    purchase-orders/  purchases/  returns/  roles/  sales/
-    suppliers/  supplies/  users/
+    auth/                #   components, hooks, pages               (login, registro, sesión)
+    cart/                #   components, pages, utils               (carrito y pago)
+    catalog/             #   components, data, hooks, pages, utils  (menú y detalle de producto)
+    customers/           #   hooks, pages, utils
+    dashboard/           #   components, pages, utils
+    employees/           #   components, hooks, pages, utils
+    legal/               #   components, data, pages, types, utils
+    non-conforming-products/  # components, hooks, pages, services, utils
+    product-categories/  #   components, hooks, pages, services, utils
+    production-orders/   #   components, hooks, pages, services, utils
+    products/            #   components, hooks, pages, services, utils
+    purchase-orders/     #   components, hooks, pages, services, utils
+    purchases/           #   components, hooks, pages, services, utils
+    returns/             #   hooks, pages, utils
+    roles/               #   components, hooks, pages, utils
+    sales/               #   components, hooks, pages, services, utils
+    suppliers/           #   components, hooks, pages, services, utils
+    supplies/            #   components, hooks, pages, services, utils
+    users/               #   components, hooks, pages, utils
   shared/
     components/          # reutilizables
       buttons/           #   botones
@@ -60,7 +71,7 @@ tests/                   # pruebas con node:test
 docs/                    # documentación
 ```
 
-Dentro de cada módulo: `pages/` (pantallas), `components/`, `hooks/` y, solo si hacen falta, `services/` (llamadas a la API y lógica de dominio), `utils/` o `data/`.
+Dentro de cada módulo: `pages/` (pantallas), `components/`, `hooks/`, `services/` (llamadas a la API y lógica de dominio), `utils/` (tipos, constantes y funciones) y `data/`. Cada carpeta existe solo si tiene archivos. Un componente que usa un solo módulo vive en ese módulo, no en `shared/`.
 
 ## Convenciones
 
