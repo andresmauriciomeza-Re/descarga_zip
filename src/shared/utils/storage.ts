@@ -2,7 +2,8 @@ import { INITIAL_ROLES, completarRolesSemilla } from "@/features/roles/pages/Rol
 import { SUBS_CON_EXCEL } from "@/features/roles/utils/roles";
 import { ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
 import { DASHBOARD_PERM_KEY } from "@/shared/utils/navigation";
-import { INITIAL_PRODUCTOS, type Producto } from "@/features/products/pages/ProductsScreen";
+import { INITIAL_PRODUCTOS } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 
 // ── Persistencia de roles (TEMPORAL) ──────────────────────────────────
 // Los roles viven hoy en memoria y se perdían con cada F5, lo que hacía

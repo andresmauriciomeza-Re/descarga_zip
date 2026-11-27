@@ -1,6 +1,6 @@
 import { type OrdenCompra, type ProveedorRef, type OrdenFormData, type OrdenItem, type EstadoOrden, iPaginaCls, iCls, FORM_MAXW_PAGINA, FORM_MAXW, SERIF, opcionesEstado, fmtCOP } from "@/features/purchase-orders/utils/purchase-orders";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
 import { useState, useRef, useMemo, useEffect } from "react";

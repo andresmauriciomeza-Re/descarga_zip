@@ -47,7 +47,7 @@ import { mismoNombre } from "@/shared/utils/names";
 import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/units";
 import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.
 import { CrearProductoModal } from "@/features/products/components/CreateProductModal";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";

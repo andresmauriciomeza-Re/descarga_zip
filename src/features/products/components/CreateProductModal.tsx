@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { configDeCategoria } from "@/shared/utils/categoryConfig";
 import { mismoNombre, nombreLimpio } from "@/shared/utils/names";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import { mensajeErrorProductos } from "@/features/products/services/productsApi";
 
 const SERIF = "var(--font-titulo)";

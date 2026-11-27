@@ -34,7 +34,8 @@ import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
 } from "@/features/supplies/pages/SuppliesScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, imagenesDe, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/ProductsScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, tipoDe, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/ProductsScreen";
+import { imagenesDe, TIPOS_PRODUCTO, type Producto } from "@/features/products/utils/products";
 import { migrarFichasLegacy } from "@/shared/utils/technicalSheets";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/products/services/productsApi";
 import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/supplies/services/suppliesApi";

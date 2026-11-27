@@ -29,7 +29,7 @@ import * as XLSX from "xlsx";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
 import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";

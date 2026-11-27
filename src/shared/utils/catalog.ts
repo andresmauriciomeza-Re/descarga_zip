@@ -1,4 +1,4 @@
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { EstadoProducto } from "@/shared/components/ProductStatus";
 import { mapearProductoApi, type ProductoApi } from "@/features/products/services/productsApi";

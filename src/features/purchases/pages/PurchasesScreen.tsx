@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/styledExcelExport";
 import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";

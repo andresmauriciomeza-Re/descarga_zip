@@ -1,5 +1,5 @@
 import type { PorcionesTamano } from "@/shared/utils/technicalSheets";
-import type { TipoProducto } from "@/features/products/pages/ProductsScreen";
+import type { TipoProducto } from "@/features/products/utils/products";
 
 /** Lo que la CATEGORÍA define del producto (sección 3): su tipo y los
     tamaños de su ficha técnica. Una categoría SIN entrada aquí es "sin

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 // obligatorias (A5.1) que usa Gestión de Insumos.
 import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 // Bloque 2: "+ Crear producto" con el mismo modal que Nueva Compra y
 // Recepción (reemplaza al NuevoProductoModal local, que se eliminó).
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";

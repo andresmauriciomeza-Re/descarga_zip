@@ -32,7 +32,8 @@ import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/TechnicalSheetEditor";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Venta } from "@/features/sales/utils/sales";
-import { tipoDe, type Producto, type FichasPorProducto } from "@/features/products/pages/ProductsScreen";
+import { tipoDe, type FichasPorProducto } from "@/features/products/pages/ProductsScreen";
+import type { Producto } from "@/features/products/utils/products";
 import { porcionesReferencia, esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/technicalSheets";
 import {
   convertirUnidad,
