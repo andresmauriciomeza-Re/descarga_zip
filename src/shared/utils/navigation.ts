@@ -229,3 +229,66 @@ export const SCREEN_META: Partial<
     desc: "Administra tu información personal.",
   },
 };
+
+export const ADMIN_SCREENS: Screen[] = [
+  "dashboard",
+  "inicio",
+  "manage-products",
+  "clients",
+  "profile",
+  "reports",
+  "roles",
+  "permissions",
+  "users",
+  "access",
+  "supply-categories",
+  "supplies",
+  "product-categories",
+  "suppliers",
+  "production-orders",
+  "finished-products",
+  "sales",
+  // custom screens
+  "gestion-roles",
+  "ventas-pedidos",
+  "gestion-productos",
+  "cat-producto",
+  "clientes",
+  "sales-chart",
+  "perecederos",
+  "orden-compra",
+  "nueva-orden-compra",
+  "recepcion-compra",
+  "gestion-compra",
+  "nueva-compra",
+  "orden-detalle",
+  "devoluciones",
+  "empleados",
+];
+
+// Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
+export const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
+  "gestion-roles": KEY("Configuración", "Roles"),
+  "users": KEY("Configuración", "Usuarios"),
+  "empleados": KEY("Producción", "Empleados"),
+  "supplies": KEY("Compras", "Insumos"),
+  "suppliers": KEY("Compras", "Proveedores"),
+  "orden-compra": KEY("Compras", "Orden de Compra"),
+  "nueva-orden-compra": KEY("Compras", "Orden de Compra"),
+  "gestion-compra": KEY("Compras", "Compra"),
+  "nueva-compra": KEY("Compras", "Compra"),
+  "cat-producto": KEY("Producción", "Categoría de Producto"),
+  "gestion-productos": KEY("Producción", "Productos"),
+  "production-orders": KEY("Producción", "Orden de Producción"),
+  "perecederos": KEY("Producción", "Producto No Conforme"),
+  "clientes": KEY("Ventas", "Clientes"),
+  "ventas-pedidos": KEY("Ventas", "Ventas"),
+  "devoluciones": KEY("Ventas", "Devoluciones"),
+};
+
+// Pantallas del panel que dependen de un permiso (todas las de la barra
+// lateral menos "Inicio", que es universal dentro del panel). Se usan para
+// decidir si un rol "tiene pantallas" y para calcular a cuál entrar primero.
+export const PANTALLAS_CON_PERMISO = NAV_SECTIONS.flatMap(s => s.items)
+  .filter(i => typeof (i as { permKey?: string }).permKey === "string")
+  .map(i => ({ screen: i.screen, permKey: (i as { permKey?: string }).permKey as string }));

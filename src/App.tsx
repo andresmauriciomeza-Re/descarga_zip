@@ -71,7 +71,7 @@ import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-c
 import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriesApi";
 import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/sales/pages/SalesScreen";
 import type { CartItem } from "@/types/cart";
-import { DASHBOARD_PERM_KEY, NAV_SECTIONS, canViewPermission } from "@/shared/utils/navigation";
+import { DASHBOARD_PERM_KEY, canViewPermission } from "@/shared/utils/navigation";
 import { PublicNav } from "@/layout/components/Header";
 import { Sidebar } from "@/layout/components/Sidebar";
 import { AdminTopBar } from "@/layout/components/AdminTopBar";
@@ -94,6 +94,7 @@ import { SCREEN_META } from "@/shared/utils/navigation";
 import { ManageProductsScreen } from "@/features/products/pages/ManageProductsScreen";
 import { GenericAdmin } from "@/features/products/components/GenericAdmin";
 import { ROLES_STORAGE_KEY, leerRolesPersistidos, respaldarEmpleadosLocales, respaldarCategoriasLocales, respaldarDatosComprasFase3, respaldarDatosProduccionFase2, respaldarNoConformidadesLocales, MIGRACION_FICHAS_FASE1_KEY, leerProductosParaMigracion, respaldarDatosProductosFase1, AUTH_STORAGE_KEYS } from "@/shared/utils/storage";
+import { ADMIN_SCREENS, SCREEN_PERM_KEY } from "@/shared/utils/navigation";
 
 // ─── Code splitting (React.lazy) ───
 // Estas pantallas se importan SOLO como componente (no comparten constants ni
@@ -116,71 +117,8 @@ const GestionClientesScreen = lazy(() => import("@/features/customers/pages/Cust
 
 // ─────────────────────────── CONSTANTS ───────────────────────────
 
-const ADMIN_SCREENS: Screen[] = [
-  "dashboard",
-  "inicio",
-  "manage-products",
-  "clients",
-  "profile",
-  "reports",
-  "roles",
-  "permissions",
-  "users",
-  "access",
-  "supply-categories",
-  "supplies",
-  "product-categories",
-  "suppliers",
-  "production-orders",
-  "finished-products",
-  "sales",
-  // custom screens
-  "gestion-roles",
-  "ventas-pedidos",
-  "gestion-productos",
-  "cat-producto",
-  "clientes",
-  "sales-chart",
-  "perecederos",
-  "orden-compra",
-  "nueva-orden-compra",
-  "recepcion-compra",
-  "gestion-compra",
-  "nueva-compra",
-  "orden-detalle",
-  "devoluciones",
-  "empleados",
-];
-
 // ─────────────────────────── SESIÓN PERSISTENTE ───────────────────────────
 // ─────────────────────────── SIDEBAR NAV ───────────────────────────
-
-// Maps each sidebar Screen to its MENU_TREE permission key ("Modulo::Sub")
-const SCREEN_PERM_KEY: Partial<Record<Screen, string>> = {
-  "gestion-roles": KEY("Configuración", "Roles"),
-  "users": KEY("Configuración", "Usuarios"),
-  "empleados": KEY("Producción", "Empleados"),
-  "supplies": KEY("Compras", "Insumos"),
-  "suppliers": KEY("Compras", "Proveedores"),
-  "orden-compra": KEY("Compras", "Orden de Compra"),
-  "nueva-orden-compra": KEY("Compras", "Orden de Compra"),
-  "gestion-compra": KEY("Compras", "Compra"),
-  "nueva-compra": KEY("Compras", "Compra"),
-  "cat-producto": KEY("Producción", "Categoría de Producto"),
-  "gestion-productos": KEY("Producción", "Productos"),
-  "production-orders": KEY("Producción", "Orden de Producción"),
-  "perecederos": KEY("Producción", "Producto No Conforme"),
-  "clientes": KEY("Ventas", "Clientes"),
-  "ventas-pedidos": KEY("Ventas", "Ventas"),
-  "devoluciones": KEY("Ventas", "Devoluciones"),
-};
-
-// Pantallas del panel que dependen de un permiso (todas las de la barra
-// lateral menos "Inicio", que es universal dentro del panel). Se usan para
-// decidir si un rol "tiene pantallas" y para calcular a cuál entrar primero.
-const PANTALLAS_CON_PERMISO = NAV_SECTIONS.flatMap(s => s.items)
-  .filter(i => typeof (i as { permKey?: string }).permKey === "string")
-  .map(i => ({ screen: i.screen, permKey: (i as { permKey?: string }).permKey as string }));
 
 // ─────────────────────────── TINY SHARED COMPONENTS ───────────────────────────
 
