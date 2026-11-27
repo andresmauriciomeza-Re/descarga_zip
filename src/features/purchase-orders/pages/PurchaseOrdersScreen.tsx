@@ -45,7 +45,6 @@ import {
   AlertTriangle, CheckCircle2, Lock, Download,
 } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { exportarMultiExcelEstilizado, exportarOrdenesConInsumosExcel, type OrdenConInsumos } from "@/shared/utils/styledExcelExport";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
 import { aplicarStockCompra, historialCompraDe, type SetCatalogo } from "@/features/purchases/services/inventory";
@@ -82,6 +81,7 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
+import { usePurchaseOrders } from "@/features/purchase-orders/hooks/usePurchaseOrders";
 
 const SERIF = "var(--font-titulo)";
 
@@ -263,7 +263,7 @@ const ESTADO_CONFIG: Record<EstadoOrden, string> = {
  * Así "Bórrador", " BORRADOR " y "borrador" se comparan igual (los datos
  * pueden llegar así desde la base).
  */
-const claveEstado = (estado?: string) =>
+export const claveEstado = (estado?: string) =>
   (estado ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -2102,7 +2102,7 @@ export function OrdenCompraScreen({
   canCreate = true, canEdit = true,
   canExportExcel = true,
 }: Props) {
-  const [search, setSearch] = useState("");
+  const { search, setSearch, chipEstado, setChipEstado, getFacturas, filtered, PER_PAGE, pageActual, paged } = usePurchaseOrders(gestiones, ordenes, proveedores, page, setPage);
   const [modal, setModal] = useState<{ mode: "create" | "edit" | "view"; orden?: OrdenCompra } | null>(null);
   const [recepcionOrden, setRecepcionOrden] = useState<OrdenCompra | null>(null);
   const [sendConfirm, setSendConfirm] = useState<OrdenCompra | null>(null);
@@ -2111,41 +2111,11 @@ export function OrdenCompraScreen({
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
   const [anulandoOrden, setAnulandoOrden] = useState(false);
   const [estadoConfirm, setEstadoConfirm] = useState<{ id: string; from: EstadoOrden; next: EstadoOrden } | null>(null);
-  /** Botones de filtro de la lista: todas, por llegar (Enviado), sin enviar (Borrador)… */
-  const [chipEstado, setChipEstado] = useState("todas");
 
-  const getFacturas = (oid: string) => gestiones.filter((g) => g.ordenId === oid && (g.numeroFactura ?? "") !== "");
 
-  const filtered = useMemo(() =>
-    ordenarPorIdDescendente(ordenes.filter(o => {
-      if (chipEstado !== "todas" && claveEstado(o.estado) !== chipEstado) return false;
-      const q = search.toLowerCase().trim();
-      if (!q) return true;
-      const facturas = getFacturas(o.id);
-      const facturasTexto = [...(o.facturas ?? []), ...facturas.map(f => f.numeroFactura ?? "")].join(" ");
-      // Find provider NIT
-      const prov = proveedores.find(p => p.nombre === o.proveedor);
-      const nit = o.proveedorNit || prov?.nit || "";
-      return (o.proveedor ?? "").toLowerCase().includes(q)
-        || (o.id ?? "").toLowerCase().includes(q)
-        || nit.toLowerCase().includes(q)
-        || facturasTexto.toLowerCase().includes(q)
-        || (o.estado ?? "").toLowerCase().includes(q)
-        || (o.fecha ?? "").toLowerCase().includes(q);
-    }), (orden) => orden.id),
-    [ordenes, search, gestiones, proveedores, chipEstado]);
 
-  // Filas por página según el alto disponible (ResizeObserver): la tabla nunca
-  // hace scroll vertical, se pagina. Con la tabla oculta (<768px) queda en 5.
-  const PER_PAGE = 10;
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
 
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, totalPages)));
-  }, [setPage, totalPages]);
 
   /** Facturas (compras) registradas para una orden. */
   const facturasDeOrden = (oid: string) => gestiones.filter((g) => g.ordenId === oid);
