@@ -1,5 +1,7 @@
 import type { ModoIva } from "@/features/purchases/services/vat";
 import type { TipoPersona } from "@/features/suppliers/hooks/useSupplierForm";
+import type { EstadoOption } from "@/shared/components/StatusSelect";
+import { calcularLineaIva, sumarTotales } from "@/features/purchases/services/vat";
 
 // ��������� TYPES ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -178,3 +180,99 @@ export const claveEstado = (estado?: string) =>
     .trim()
     .replace(/\s+/g, "")
     .toLowerCase();
+
+export const SERIF = "var(--font-titulo)";
+
+export const ESTADO_CONFIG: Record<EstadoOrden, string> = {
+  Borrador: "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300",
+  Enviado: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300",
+  Completado: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+  Anulado: "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300",
+};
+
+/**
+ * La Orden de Compra solo avanza: desde cada estado se ofrecen los siguientes.
+ * Los estados finales (Completado/Anulado) quedan con una única opción y el
+ * selector deshabilitado.
+ */
+export const ESTADOS_ADELANTE: Record<EstadoOrden, EstadoOrden[]> = {
+  Borrador: ["Borrador", "Enviado", "Anulado"],
+  // Enviado puede pasar a Completado A MANO (con confirmación); el cambio
+  // automático por recepción completa se mantiene igual.
+  Enviado: ["Enviado", "Completado", "Anulado"],
+  Completado: ["Completado"],
+  Anulado: ["Anulado"],
+};
+
+/** Opciones del selector de estado de una orden, con el color de su badge. */
+export const opcionesEstado = (estado: EstadoOrden): EstadoOption<EstadoOrden>[] =>
+  ESTADOS_ADELANTE[estado].map((e) => ({ value: e, label: e, color: ESTADO_CONFIG[e] }));
+
+/**
+ * Ancho compartido por los formularios de Orden de Compra y de Gestión de Compras,
+ * para que ambos módulos se vean igual de compactos.
+ */
+export const FORM_MAXW = "max-w-4xl";
+
+/** Ancho del contenido cuando el formulario va a pantalla completa (no modal):
+ *  ocupa casi todo el panel para que las dos columnas (40 % / 60 %) quepan en
+ *  1366×768 sin scroll. */
+export const FORM_MAXW_PAGINA = "max-w-[1200px]";
+
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
+ *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */
+export const iPaginaCls =
+  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+// ��������� HELPERS ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
+
+export function fmtCOP(n: number) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+export function calcularIvaLineaOrden(item: OrdenItem) {
+  return calcularLineaIva({
+    cantidad: item.cantidad,
+    montoUnitario: item.precioUnitario ?? item.costoUnitario,
+    porcentajeIva: item.iva ?? 0,
+    modoIva: item.modoIva ?? "incluido",
+  });
+}
+
+export function totalLineaOrden(item: OrdenItem) {
+  return calcularIvaLineaOrden(item).subtotalConIva;
+}
+
+export function calcTotal(items: OrdenItem[]) {
+  return sumarTotales(items.map(calcularIvaLineaOrden)).totalPagado;
+}
+
+export const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+
+// ��������� ORDEN MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
+
+export interface OrdenFormData {
+  proveedor: string;
+  fecha: string;
+  estado: EstadoOrden | EstadoGestion;
+  items: OrdenItem[];
+  numeroFactura?: string;
+}
+
+/**
+ * Payload que emite `NuevoInsumoModal` al guardar: el insumo nace con tipo
+ * "Insumo" en el catálogo y se selecciona en "Agregar insumo".
+ */
+export type NuevoInsumoCreado = {
+  id: string;
+  nombre: string;
+  unidadMedida: string;
+  precioUnitario: number;
+  iva: number;
+  /** Bloque 3: categoría obligatoria del catálogo de insumos (A5.1). */
+  categoriaId: string;
+};

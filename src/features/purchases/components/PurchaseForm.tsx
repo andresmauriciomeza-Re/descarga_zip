@@ -12,7 +12,8 @@ import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm 
 import { toast } from "sonner";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import { motion, AnimatePresence } from "motion/react";
-import { FORM_MAXW, NuevoProveedorModal } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { FORM_MAXW } from "@/features/purchase-orders/utils/purchase-orders";
+import { NuevoProveedorModal } from "@/features/purchase-orders/components/NewSupplierModal";
 import { ArrowLeft, X, Ban, Search, Plus, Check } from "lucide-react";
 import { EstadoBadge } from "@/features/purchases/components/StatusBadge";
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";

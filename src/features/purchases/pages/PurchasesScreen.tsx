@@ -23,7 +23,7 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import { ConfirmModal } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { ConfirmModal } from "@/features/purchase-orders/components/ConfirmModal";
 import type { GestionCompra, OrdenItem, OrdenCompra, EstadoGestion, EstadoOrden, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 import { esLineaProducto, textoStockActualizado, type SetCatalogo } from "@/features/purchases/services/inventory";
 import {

@@ -56,7 +56,9 @@ import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons"
 import { CalendarDropdown } from "@/shared/components/CalendarDropdown";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numberInput";
-import { ConfirmModal, NuevoInsumoModal, insumoDeAlta } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { insumoDeAlta } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { ConfirmModal } from "@/features/purchase-orders/components/ConfirmModal";
+import { NuevoInsumoModal } from "@/features/purchase-orders/components/NewSupplyModal";
 import type { OrdenCompra, Recepcion, ItemRecibido, GestionCompra, OrdenItem, EstadoOrden, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
 
 const SERIF = "var(--font-titulo)";
