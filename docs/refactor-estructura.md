@@ -30,5 +30,7 @@ En Windows, `npm run build` falla si la terminal está en `d:\…` (letra minús
 
 ## Avance
 
-Fases 0 a 4 completadas (un commit por fase, 1 a 4). Siguiente: Fase 5 (`layout/`).
+Fases 0 a 5 completadas (un commit por fase, 1 a 5). Siguiente: Fase 6 (vaciar `App.tsx`).
+
+Fase 5: `Header` (`PublicNav`) se sigue montando desde `App.tsx` porque lo comparten otras pantallas públicas; `Landing` arma `Content` y `Footer`.
 Falta la revisión manual de las pantallas del panel con sesión iniciada.
