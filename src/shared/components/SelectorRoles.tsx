@@ -1,5 +1,5 @@
 ﻿import { Check, Lock } from "lucide-react";
-import { type Rol } from "@/features/roles/pages/GestionConfigScreen";
+import { type Rol } from "@/features/roles/pages/RolesScreen";
 
 function esRolBase(nombre: string) {
   const normalizado = nombre.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");

@@ -17,9 +17,9 @@
 import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import type { Insumo } from "@/features/supplies/pages/GestionInsumosScreen";
-import { InsumoSearchField, resolverInsumo } from "@/features/products/components/InsumoSearchField";
-import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnidadSelect";
+import type { Insumo } from "@/features/supplies/pages/SuppliesScreen";
+import { InsumoSearchField, resolverInsumo } from "@/features/products/components/SupplySearchField";
+import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
 import { PRESENTACIONES_INSUMO, UNIDADES_INSUMO } from "@/shared/utils/unidades";
 import { unidadesCompatibles } from "@/shared/utils/disponibilidad";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";

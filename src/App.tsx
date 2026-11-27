@@ -112,12 +112,12 @@ import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { ResumenTotales } from "@/shared/components/ResumenTotales";
 import { BloqueQrPago, CargaComprobanteCheckout, PAYMENT_INFO, useQrPago } from "@/shared/components/PasoPagoTransferencia";
 import { TERMINOS_CONDICIONES, TITULO_TERMINOS } from "@/shared/utils/terminosCondiciones";
-import { RUTA_LICENCIAS, esRutaLicencias, useRutaLicencias } from "@/features/legal/navegacion";
+import { RUTA_LICENCIAS, esRutaLicencias, useRutaLicencias } from "@/features/legal/navigation";
 import { VolverArriba } from "@/shared/components/VolverArriba";
 import { HORA_APERTURA, HORA_CIERRE, HORA_ULTIMA_RECOGIDA, MINUTOS_RECOGIDA, formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import { agregarDias, fechaISO, type Periodo } from "@/shared/utils/fechas";
 import { limpiarNumeroInput, numeroDeInput } from "@/shared/utils/numeroInput";
-import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/sales/services/ventasApi";
+import { crearVentaCliente, obtenerVentasPanel, verificarVentaApi, ventaApiAVenta } from "@/features/sales/services/salesApi";
 import type { Screen } from "@/shared/utils/screen";
 import { esPantalla, ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
 import { SECCIONES_MENU, productoACatalogo, productoApiAProducto, limiteStockDe, categoriaApiACategoria, verImagenCompleta, estadoDeProducto, productoDisponible, etiquetaEstadoMenu, type Product } from "@/shared/utils/catalogo";
@@ -129,26 +129,26 @@ import { useValidacionFormulario } from "@/shared/hooks/useValidacionFormulario"
 import { actualizarPerfil, borrarToken, login as loginApi, obtenerPerfil, obtenerToken, registrarCliente, restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import { crearError401Checkout, es401GenericoCheckout, registrarManejadorCierreSesion } from "@/shared/services/api";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
-import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/product-categories/pages/CategoriaProductoScreen";
-import type { Cliente } from "@/features/customers/pages/GestionClientesScreen";
-import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/GestionCompraScreen";
-import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/GestionConfigScreen";
-import { GestionEmpleadosScreen, type Contratacion } from "@/features/employees/pages/GestionEmpleadosScreen";
+import { CategoriaProductoScreen, estadoDe, type CategoriaProducto, type CategoriaGuardar, type EstadoCategoria } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { Cliente } from "@/features/customers/pages/CustomersScreen";
+import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/PurchasesScreen";
+import { GestionConfigScreen, INITIAL_ROLES, completarRolesSemilla, KEY, ACCION_EXCEL, SUBS_CON_EXCEL, fullAccesos, type AccesosMap, type Accion, type Rol } from "@/features/roles/pages/RolesScreen";
+import { GestionEmpleadosScreen, type Contratacion } from "@/features/employees/pages/EmployeesScreen";
 import { obtenerMiContratacion } from "@/shared/services/empleadosService";
-import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/GestionInsumosScreen";
+import type { CategoriaInsumo, Insumo } from "@/features/supplies/pages/SuppliesScreen";
 import {
   GestionInsumosScreen,
   INITIAL_INSUMOS,
-} from "@/features/supplies/pages/GestionInsumosScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, imagenesDe, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/GestionProductosScreen";
+} from "@/features/supplies/pages/SuppliesScreen";
+import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, imagenesDe, normalizarIdsFicha, TIPOS_PRODUCTO, tipoDe, type Producto, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/ProductsScreen";
 import { migrarFichasLegacy } from "@/shared/utils/fichas";
-import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/products/services/productosApi";
-import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/supplies/services/insumosApi";
-import { mapearFichasApi, obtenerFichasVigentes } from "@/features/products/services/fichasApi";
-import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/production-orders/services/ordenesProduccionApi";
-import { listarProveedores, mensajeErrorProveedores } from "@/features/suppliers/services/proveedoresApi";
-import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/purchase-orders/services/ordenesCompraApi";
-import { listarCompras, mensajeErrorCompras } from "@/features/purchases/services/comprasApi";
+import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/products/services/productsApi";
+import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/supplies/services/suppliesApi";
+import { mapearFichasApi, obtenerFichasVigentes } from "@/features/products/services/technicalSheetsApi";
+import { listarOrdenesProduccion, mensajeErrorOrdenes } from "@/features/production-orders/services/productionOrdersApi";
+import { listarProveedores, mensajeErrorProveedores } from "@/features/suppliers/services/suppliersApi";
+import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/purchase-orders/services/purchaseOrdersApi";
+import { listarCompras, mensajeErrorCompras } from "@/features/purchases/services/purchasesApi";
 import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/configCategoria";
 import { mismoNombre } from "@/shared/utils/nombres";
 import { OPCIONES_TIPO_DOCUMENTO, etiquetaTipoDocumento } from "@/shared/utils/tiposDocumento";
@@ -158,7 +158,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginador";
 import { ActionIcons } from "@/shared/components/ActionIcons";
 import { CambiarRolMenu } from "@/shared/components/CambiarRolMenu";
-import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/GestionUsuariosScreen";
+import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/UsersScreen";
 import { CambiarContrasenaModal } from "@/shared/components/CambiarContrasenaModal";
 import { ActivarCuentaModal } from "@/shared/components/ActivarCuentaModal";
 import { reenviarVerificacion, verificarCorreo, type RegistroConVerificacion } from "@/shared/services/verificacionService";
@@ -169,7 +169,7 @@ import type {
   OrdenCompra,
   OrdenItem,
   ProveedorRef,
-} from "@/features/purchase-orders/pages/OrdenCompraScreen";
+} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 import {
   INITIAL_GESTIONES,
   INITIAL_ORDENES,
@@ -177,7 +177,7 @@ import {
   OrdenCompraScreen,
   OrdenDetallePage,
   PROVEEDORES_INIT,
-} from "@/features/purchase-orders/pages/OrdenCompraScreen";
+} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 import {
   OrdenProduccionScreen,
   INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION,
@@ -188,26 +188,26 @@ import {
   normalizarNombre,
   type Faltante,
   type OrdenProduccion,
-} from "@/features/production-orders/pages/OrdenProduccionScreen";
-import { ProductosPerecederosScreen, type NoConformidad } from "@/features/non-conforming-products/pages/ProductosPerecederosScreen";
-import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-conforming-products/services/noConformesApi";
-import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriasApi";
-import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/sales/pages/VentasScreen";
+} from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { ProductosPerecederosScreen, type NoConformidad } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
+import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-conforming-products/services/nonConformingApi";
+import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriesApi";
+import { PagoPill, VentasScreen, type DevolucionTipo, type Venta } from "@/features/sales/pages/SalesScreen";
 
 // ─── Code splitting (React.lazy) ───
 // Estas pantallas se importan SOLO como componente (no comparten constants ni
 // funciones con App), así que se cargan bajo demanda para reducir el bundle
 // inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
-const ProductoTerminadoScreen = lazy(() => import("@/features/products/pages/ProductoTerminadoScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
-const RecepcionCompraScreen = lazy(() => import("@/features/purchase-orders/pages/RecepcionCompraScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
+const ProductoTerminadoScreen = lazy(() => import("@/features/products/pages/FinishedProductScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
+const RecepcionCompraScreen = lazy(() => import("@/features/purchase-orders/pages/PurchaseReceptionScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
 const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
 const DashboardScreen = lazy(() => import("@/features/dashboard/pages/DashboardScreen").then((m) => ({ default: m.DashboardScreen })));
 const SuppliersScreen = lazy(() => import("@/features/suppliers/pages/SuppliersScreen").then((m) => ({ default: m.SuppliersScreen })));
-const DevolucionesScreen = lazy(() => import("@/features/returns/pages/DevolucionesScreen").then((m) => ({ default: m.DevolucionesScreen })));
-const MisPedidosScreen = lazy(() => import("@/features/sales/pages/MisPedidosScreen").then((m) => ({ default: m.MisPedidosScreen })));
-const LicenciasScreen = lazy(() => import("@/features/legal/pages/LicenciasScreen").then((m) => ({ default: m.LicenciasScreen })));
-const MiPerfilScreen = lazy(() => import("@/features/users/pages/MiPerfilScreen").then((m) => ({ default: m.MiPerfilScreen })));
-const GestionClientesScreen = lazy(() => import("@/features/customers/pages/GestionClientesScreen").then((m) => ({ default: m.GestionClientesScreen })));
+const DevolucionesScreen = lazy(() => import("@/features/returns/pages/ReturnsScreen").then((m) => ({ default: m.DevolucionesScreen })));
+const MisPedidosScreen = lazy(() => import("@/features/sales/pages/MyOrdersScreen").then((m) => ({ default: m.MisPedidosScreen })));
+const LicenciasScreen = lazy(() => import("@/features/legal/pages/LicensesScreen").then((m) => ({ default: m.LicenciasScreen })));
+const MiPerfilScreen = lazy(() => import("@/features/users/pages/MyProfileScreen").then((m) => ({ default: m.MiPerfilScreen })));
+const GestionClientesScreen = lazy(() => import("@/features/customers/pages/CustomersScreen").then((m) => ({ default: m.GestionClientesScreen })));
 
 // ─────────────────────────── TYPES ───────────────────────────
 

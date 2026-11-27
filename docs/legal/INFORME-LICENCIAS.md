@@ -18,9 +18,9 @@ advierte que hay paquetes pendientes de verificación.
 
 Creados:
 
-- `src/features/legal/pages/LicenciasScreen.tsx`
-- `src/features/legal/components/TablaLicencias.tsx`, `IndiceLicencias.tsx`
-- `src/features/legal/data/licencias.ts`, `types/licencias.types.ts`, `navegacion.ts`
+- `src/features/legal/pages/LicensesScreen.tsx`
+- `src/features/legal/components/LicenseTable.tsx`, `IndiceLicencias.tsx`
+- `src/features/legal/data/licenses.ts`, `types/licencias.types.ts`, `navegacion.ts`
 - `scripts/legal/generar-avisos.mjs` y `scripts/legal/upstream/*.txt`
 - `public/legal/THIRD-PARTY-NOTICES.txt`
 - `docs/legal/inventario-dependencias.csv` y este informe
@@ -135,7 +135,7 @@ Firefox, Safari, dispositivos físicos, lector de pantalla ni la actualización 
 ## 8. Mantenimiento
 
 Tras cambiar dependencias, ejecutar `npm ci` en ambos repositorios, actualizar
-`src/features/legal/data/licencias.ts` y regenerar:
+`src/features/legal/data/licenses.ts` y regenerar:
 
 ```bash
 node scripts/legal/generar-avisos.mjs ../sivpro-backend

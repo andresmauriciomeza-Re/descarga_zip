@@ -1,7 +1,7 @@
-import type { Producto } from "@/features/products/pages/GestionProductosScreen";
-import type { CategoriaProducto } from "@/features/product-categories/pages/CategoriaProductoScreen";
+import type { Producto } from "@/features/products/pages/ProductsScreen";
+import type { CategoriaProducto } from "@/features/product-categories/pages/ProductCategoriesScreen";
 import type { EstadoProducto } from "@/shared/components/EstadoProducto";
-import { mapearProductoApi, type ProductoApi } from "@/features/products/services/productosApi";
+import { mapearProductoApi, type ProductoApi } from "@/features/products/services/productsApi";
 
 import { getImageUrl, IMAGEN_DEFAULT, imagenEnApi } from "@/shared/utils/getImageUrl";
 

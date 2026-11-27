@@ -6,8 +6,8 @@ import {
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
-import type { Venta } from "@/features/sales/pages/VentasScreen";
-import type { GestionCompra, OrdenCompra, OrdenItem } from "@/features/purchase-orders/pages/OrdenCompraScreen";
+import type { Venta } from "@/features/sales/pages/SalesScreen";
+import type { GestionCompra, OrdenCompra, OrdenItem } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 import {
   esFechaISO,
   hoyISO,

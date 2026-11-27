@@ -6,24 +6,24 @@ import { ordenarPorIdDescendente } from "@/shared/utils/ordenarPorId";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
-import { useProveedorForm, formatoNit, siguienteProveedorId, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type TipoDocumento, type TipoSociedad, type ProveedorFormValues } from "@/features/purchases/hooks/useProveedorForm";
-import { ProveedorFormCampos } from "@/features/purchases/components/ProveedorForm";
-import { TipoPersonaSelector } from "@/features/purchases/components/TipoPersonaSelector";
+import { useProveedorForm, formatoNit, siguienteProveedorId, nombreGuardado, datosNuevosProveedor, contactoGuardado, type TipoPersona, type TipoDocumento, type TipoSociedad, type ProveedorFormValues } from "@/features/suppliers/hooks/useSupplierForm";
+import { ProveedorFormCampos } from "@/features/suppliers/components/SupplierForm";
+import { TipoPersonaSelector } from "@/features/suppliers/components/PersonTypeSelector";
 import {
   EstadoSelect,
   ESTADO_ACTIVO_COLOR,
   ESTADO_INACTIVO_COLOR,
   type EstadoOption,
 } from "@/shared/components/EstadoSelect";
-import { EstadoHistorialTooltip } from "@/features/purchases/components/EstadoHistorialTooltip";
-import type { ProveedorRef } from "@/features/purchase-orders/pages/OrdenCompraScreen";
+import { EstadoHistorialTooltip } from "@/features/purchases/components/StatusHistoryTooltip";
+import type { ProveedorRef } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 import {
   actualizarProveedor,
   cambiarEstadoProveedor,
   crearProveedor,
   eliminarProveedor,
   mensajeErrorProveedores,
-} from "@/features/suppliers/services/proveedoresApi";
+} from "@/features/suppliers/services/suppliersApi";
 import { AvisoBanner } from "@/shared/components/panel/AvisoBanner";
 import { BotonAccion } from "@/shared/components/panel/BotonAccion";
 import { BotonRuta } from "@/shared/components/panel/BotonRuta";
@@ -299,7 +299,7 @@ function Modal({
   );
 }
 
-import type { OrdenCompra, GestionCompra } from "@/features/purchase-orders/pages/OrdenCompraScreen";
+import type { OrdenCompra, GestionCompra } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
 
 /** 409/400 del servidor: NIT, documento y correo repetidos se pintan bajo su
     campo; el resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
