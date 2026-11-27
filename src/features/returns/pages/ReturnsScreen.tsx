@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "motion/react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Banknote, Check, CircleCheck, Eye, FileText, Minus, PackageCheck, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { compararIdsDesc } from "@/shared/utils/sortById";
 
 import { SearchInput } from "@/shared/components/SearchInput";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
@@ -24,6 +23,7 @@ import type { FichasPorProducto, Producto } from "@/features/products/pages/Prod
 import { normalizarNombre, type OrdenProduccion } from "@/features/production-orders/pages/ProductionOrdersScreen";
 import { METODO_PAGO_ADMIN, type DevolucionTipo, type MetodoPago, PagoPill, type Venta, type VentaStatus } from "@/features/sales/pages/SalesScreen";
 import { marcarDevolucionApi, obtenerVentasPanel, resolverDevolucionApi } from "@/features/sales/services/salesApi";
+import { useReturnsFilter } from "@/features/returns/hooks/useReturnsFilter";
 
 // ─────────────────────────── DEVOLUCIONES SCREEN ───────────────────────────
 
@@ -36,7 +36,7 @@ const nowHoraDev = () =>
 
 /** Etiqueta del estado que se ve en la fila — y con la que también busca el
     buscador: "Pendiente" o "Resuelta · <tipo de la devolución>". */
-const etiquetaEstadoDev = (dev: Venta): string =>
+export const etiquetaEstadoDev = (dev: Venta): string =>
   !dev.devolucionResuelta
     ? "Pendiente"
     : dev.devolucionTipo === "dinero"
@@ -166,39 +166,8 @@ export function DevolucionesScreen({
   // tiempo real por nombre de producto, sin distinguir mayúsculas ni tildes.
   const [buscaCanje, setBuscaCanje] = useState("");
 
-  // Buscador del listado (mismo SearchInput que Ventas, Proveedores, etc.).
-  // Filtra en tiempo real sobre los campos que se ven en la fila (número de
-  // venta, cliente, fecha, productos, pago y estado), sin distinguir mayúsculas
-  // ni tildes. El contador del header sigue contando el total, no el filtrado.
-  const [search, setSearch] = useState("");
-  /** Botones de la lista: sin resolver, resueltas o todas. */
-  const [chipDev, setChipDev] = useState("pendientes");
-  const busqueda = normalizarTexto(search);
-  const visibles = (() => {
-    const ordenadas = chipDev === "pendientes" ? pendientes : chipDev === "resueltas" ? resueltas : [...pendientes, ...resueltas];
-    if (!busqueda) return ordenadas;
-    return ordenadas.filter((dev) =>
-      normalizarTexto(
-        [
-          `#${dev.id}`,
-          dev.id,
-          dev.usuario,
-          dev.fecha,
-          dev.productos,
-          dev.metodoPago ?? "",
-          dev.metodoReembolso ?? "",
-          etiquetaEstadoDev(dev),
-        ].join(" "),
-      ).includes(busqueda),
-    );
-  })().sort((a, b) => {
-    if (a.idDevolucion != null && b.idDevolucion != null) {
-      return compararIdsDesc(a.idDevolucion, b.idDevolucion);
-    }
-    const porFecha = (b.devolucionFecha ?? b.fecha).localeCompare(a.devolucionFecha ?? a.fecha);
-    return porFecha || compararIdsDesc(a.idDevolucion ?? 0, b.idDevolucion ?? 0);
-  });
 
+  const { search, setSearch, chipDev, setChipDev, visibles } = useReturnsFilter(pendientes, resueltas);
   // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
   // devolución indicada: el modal de gestión si sigue pendiente, o la vista de
   // solo lectura si ya se resolvió. Se limpia el id para no reabrirla al
