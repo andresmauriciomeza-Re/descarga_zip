@@ -31,17 +31,17 @@ import {
 } from "lucide-react";
 
 import { KEY, type AccesosMap } from "@/features/roles/pages/GestionConfigScreen";
-import type { Venta } from "@/features/ventas/pages/VentasScreen";
+import type { Venta } from "@/features/sales/pages/VentasScreen";
 import type {
   GestionCompra,
   OrdenCompra,
   ProveedorRef,
-} from "@/features/orden-compra/pages/OrdenCompraScreen";
-import type { NoConformidad } from "@/features/cpn/pages/ProductosPerecederosScreen";
-import type { Producto } from "@/features/productos/pages/GestionProductosScreen";
-import type { Insumo } from "@/features/insumos/pages/GestionInsumosScreen";
-import type { Cliente } from "@/features/clientes/pages/GestionClientesScreen";
-import type { OrdenProduccion } from "@/features/orden-produccion/pages/OrdenProduccionScreen";
+} from "@/features/purchase-orders/pages/OrdenCompraScreen";
+import type { NoConformidad } from "@/features/non-conforming-products/pages/ProductosPerecederosScreen";
+import type { Producto } from "@/features/products/pages/GestionProductosScreen";
+import type { Insumo } from "@/features/supplies/pages/GestionInsumosScreen";
+import type { Cliente } from "@/features/customers/pages/GestionClientesScreen";
+import type { OrdenProduccion } from "@/features/production-orders/pages/OrdenProduccionScreen";
 import { listarClientes } from "@/shared/services/authService";
 import { formatearHora, minutosDeHora } from "@/shared/utils/hora";
 import {

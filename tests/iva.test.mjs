@@ -33,9 +33,9 @@ const {
   redondearDosDecimales,
   resolverModoIva,
   sumarTotales,
-} = await compilar("../src/features/compras/services/iva.ts");
+} = await compilar("../src/features/purchases/services/iva.ts");
 const { UNIDADES, etiquetaPresentacion } = await compilar("../src/shared/utils/unidades.ts");
-const { InsumosSolicitadosTable } = await compilar("../src/features/compras/components/InsumosSolicitadosTable.tsx");
+const { InsumosSolicitadosTable } = await compilar("../src/features/purchases/components/InsumosSolicitadosTable.tsx");
 
 // ---------------------------------------------------------------------------
 // Catálogos (deben coincidir con el backend)
