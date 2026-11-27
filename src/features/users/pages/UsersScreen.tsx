@@ -8,7 +8,6 @@ import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
 import { DatosDetalle } from "@/shared/components/panel/DetailData";
 import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
 import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
-import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
 import { FiltrosChips } from "@/shared/components/panel/FilterChips";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
@@ -17,7 +16,8 @@ import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import type { Rol } from "@/features/roles/utils/roles";
 import { cambiarEstadoUsuario, eliminarUsuario } from "@/shared/services/authService";
 import { useUsers } from "@/features/users/hooks/useUsers";
-import { type UsuarioGestion, normalizar } from "@/features/users/utils/users";
+import type { UsuarioGestion } from "@/features/users/utils/users";
+import { Avatar, RolesPills, EstadoEntrada } from "@/features/users/components/UserCells";
 
 const SERIF = "var(--font-titulo)";
 export const DOC_TIPOS = [
@@ -54,69 +54,9 @@ export interface Usuario {
 }
 
 
-const esAdministrador = (u: UsuarioGestion) =>
-  u.esSuperAdmin || normalizar(u.rol || "") === "administrador" || (u.rolesExtra ?? []).some(r => normalizar(r) === "administrador");
-
-/** Nombres visibles de TODOS los roles del usuario, sin repetir: primero los
- * roles base (Administrador, Empleado, Cliente) y luego los roles extra. */
-const rolesDeUsuario = (u: UsuarioGestion): string[] => {
-  const nombres: string[] = [];
-  const claves = new Set<string>();
-  const agregar = (nombre?: string | null) => {
-    const n = (nombre ?? "").trim();
-    if (!n) return;
-    // "Super Administrador" y "Administrador" cuentan como un solo rol.
-    const clave = normalizar(n).replace(/^super\s+/, "");
-    if (claves.has(clave)) return;
-    claves.add(clave);
-    nombres.push(n);
-  };
-  if (esAdministrador(u)) agregar(u.esSuperAdmin ? "Super Administrador" : "Administrador");
-  if (u.esEmpleado) agregar("Empleado");
-  if (u.esCliente) agregar("Cliente");
-  [u.rol, ...(u.rolesExtra ?? [])].forEach(agregar);
-  return nombres;
-};
-
-/** Roles: Administrador rojo suave, Empleado verde, Cliente y roles extra grises. */
-const tonoRol = (rol: string): TonoPill => {
-  const n = normalizar(rol);
-  if (n.includes("administrador")) return "rojo";
-  if (n === "empleado") return "verde";
-  return "gris";
-};
-
 /** "1036554120" → "1.036.554.120" (si no es solo números, se deja igual). */
 const documentoLegible = (tipo: string, numero: string) =>
   `${tipo ? `${tipo} ` : ""}${/^\d+$/.test(numero) ? Number(numero).toLocaleString("es-CO") : numero}`;
-
-function Avatar({ u, tam }: { u: UsuarioGestion; tam: number }) {
-  return (
-    <div
-      className={`${u.avatarColor} text-white font-bold shrink-0 flex items-center justify-center rounded-full`}
-      style={{ width: tam, height: tam, fontSize: tam * 0.36 }}
-      aria-hidden="true"
-    >
-      {u.iniciales}
-    </div>
-  );
-}
-
-function RolesPills({ usuario }: { usuario: UsuarioGestion }) {
-  const roles = rolesDeUsuario(usuario);
-  if (roles.length === 0) return <EstadoPill tono="gris">Sin cargo</EstadoPill>;
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {roles.map(r => <EstadoPill key={r} tono={tonoRol(r)}>{r}</EstadoPill>)}
-    </div>
-  );
-}
-
-const EstadoEntrada = ({ activo }: { activo: boolean }) => (
-  <EstadoPill tono={activo ? "verde" : "gris"}>
-    {activo ? "Activo · puede entrar" : "Inactivo · no puede entrar"}
-  </EstadoPill>
-);
 
 export function GestionUsuariosScreen({
   canVer = true,
