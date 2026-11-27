@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FiltroPeriodo } from "@/shared/components/PeriodFilter";
+import { FiltroPeriodo } from "@/features/dashboard/components/PeriodFilter";
 import type { Periodo } from "@/shared/utils/dates";
 
 const SERIF = "var(--font-titulo)";

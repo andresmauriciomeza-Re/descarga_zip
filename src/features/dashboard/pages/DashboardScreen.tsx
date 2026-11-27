@@ -36,8 +36,8 @@ import {
   type Periodo,
 } from "@/shared/utils/dates";
 import type { Screen } from "@/shared/utils/screen";
-import { ChartCard } from "@/shared/components/ChartCard";
-import { FiltroPeriodo } from "@/shared/components/PeriodFilter";
+import { ChartCard } from "@/features/dashboard/components/ChartCard";
+import { FiltroPeriodo } from "@/features/dashboard/components/PeriodFilter";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";

@@ -22,7 +22,7 @@ import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloDigitos, validarCorreo, validarDocumento, validarTelefonoOpcional } from "@/shared/components/FormInputs";
 import { hoyISO } from "@/shared/utils/dates";
-import { SelectorRoles } from "@/shared/components/RoleSelector";
+import { SelectorRoles } from "@/features/employees/components/RoleSelector";
 import type { Rol } from "@/features/roles/utils/roles";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
 import type { Cliente } from "@/features/customers/utils/customers";

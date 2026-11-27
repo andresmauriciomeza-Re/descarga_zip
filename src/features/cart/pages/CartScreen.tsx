@@ -16,7 +16,7 @@ import { DIRECCION_LOCAL, aperturaRecogidaTexto, cierreRecogidaTexto } from "@/s
 import { SERIF, MONO } from "@/shared/utils/fonts";
 import { ArrowLeft, ArrowRight, CheckCircle, CreditCard, MapPin, Minus, Phone, Plus, RefreshCw, ShoppingBag, Trash2, X } from "lucide-react";
 import { fmt } from "@/shared/utils/currency";
-import { ResumenTotales } from "@/shared/components/TotalsSummary";
+import { ResumenTotales } from "@/features/cart/components/TotalsSummary";
 import { PrimaryBtn } from "@/shared/components/buttons/PrimaryButton";
 import { GhostBtn } from "@/shared/components/buttons/GhostButton";
 import { getImageUrl, onErrorImagen } from "@/shared/utils/getImageUrl";
@@ -26,7 +26,7 @@ import { AvisoStockBajo } from "@/features/catalog/components/LowStockNotice";
 import { AnimatePresence, motion } from "motion/react";
 import { type PedidoResumen } from "@/types/cart";
 import { WHATSAPP_LOCAL_URL, WHATSAPP_LOCAL_VISIBLE, ultimaRecogidaTexto } from "@/shared/utils/storeInfo";
-import { WhatsAppIcon } from "@/shared/components/WhatsAppIcon";
+import { WhatsAppIcon } from "@/features/cart/components/WhatsAppIcon";
 
 // Los datos de las cuentas de pago (PAYMENT_INFO) viven ahora en el componente
 // compartido PasoPagoTransferencia, usado por el checkout y por el modal
