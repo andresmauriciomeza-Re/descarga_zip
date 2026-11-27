@@ -48,3 +48,7 @@ Thumbs.db
 coverage/
 dev-dist
 opencode.json
+# Salidas de trabajo locales
+artifacts/
+mis_cambios.diff
+.opencode/
