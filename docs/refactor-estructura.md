@@ -27,3 +27,8 @@ En Windows, `npm run build` falla si la terminal está en `d:\…` (letra minús
 - Las pantallas de detalle dependen de estado además del nombre de pantalla; conservar scroll y sesión.
 - No agregar el footer del landing a otras rutas.
 - Revisar las pantallas que no están en la tabla de rutas (p. ej. `manage-products`).
+
+## Avance
+
+Fases 0 a 4 completadas (un commit por fase, 1 a 4). Siguiente: Fase 5 (`layout/`).
+Falta la revisión manual de las pantallas del panel con sesión iniciada.

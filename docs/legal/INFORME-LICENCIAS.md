@@ -19,8 +19,8 @@ advierte que hay paquetes pendientes de verificación.
 Creados:
 
 - `src/features/legal/pages/LicensesScreen.tsx`
-- `src/features/legal/components/LicenseTable.tsx`, `IndiceLicencias.tsx`
-- `src/features/legal/data/licenses.ts`, `types/licencias.types.ts`, `navegacion.ts`
+- `src/features/legal/components/LicenseTable.tsx`, `LicenseIndex.tsx`
+- `src/features/legal/data/licenses.ts`, `types/licenses.types.ts`, `navigation.ts`
 - `scripts/legal/generar-avisos.mjs` y `scripts/legal/upstream/*.txt`
 - `public/legal/THIRD-PARTY-NOTICES.txt`
 - `docs/legal/inventario-dependencias.csv` y este informe
