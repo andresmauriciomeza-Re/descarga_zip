@@ -60,6 +60,7 @@ import {
   ESTADOS_ANULABLES,
   type EstadoVenta,
 } from "@/features/sales/services/saleStatuses";
+import { useSales } from "@/features/sales/hooks/useSales";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
@@ -1567,8 +1568,7 @@ export function VentasScreen({
   canEdit?: boolean;
   canExportExcel?: boolean;
 }) {
-  const [search, setSearch] = useState("");
-  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const { search, setSearch, estadoFiltro, setEstadoFiltro, page, setPage, PER_PAGE, filtered, paged } = useSales(pedidos);
   const [showCreate, setShowCreate] = useState(false);
   const [detailItem, setDetailItem] = useState<Venta | null>(
     null,
@@ -1979,31 +1979,9 @@ export function VentasScreen({
     toast.success("Excel descargado");
   };
 
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 10;
 
-  const filtered = useMemo(() => {
-    const termino = search.toLowerCase();
-    return pedidos.filter((p) =>
-      (!estadoFiltro || p.estado === estadoFiltro) &&
-      [p.id, p.usuario, p.productos, etiquetaEstadoVenta(p)].some(
-        (valor) => valor.toLowerCase().includes(termino),
-      ),
-    );
-  }, [pedidos, search, estadoFiltro]);
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paged = filtered.slice(
-    (page - 1) * PER_PAGE,
-    page * PER_PAGE,
-  );
 
-  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
-  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
-  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, totalPages)));
-  }, [totalPages]);
 
 
   // Piezas de una fila de venta. Las usan la tabla (desde 768 px) y las tarjetas
