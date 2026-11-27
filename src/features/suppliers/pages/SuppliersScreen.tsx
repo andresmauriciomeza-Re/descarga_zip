@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, X, AlertCircle, ArrowLeft, Truck } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarPorIdDescendente } from "@/shared/utils/sortById";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 // Los filtros y validadores de escritura viven en `useProveedorForm` (los usa
 // también el formulario compartido de Orden de Compra y Compra).
@@ -300,6 +299,7 @@ function Modal({
 }
 
 import type { OrdenCompra, GestionCompra } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
 /** 409/400 del servidor: NIT, documento y correo repetidos se pintan bajo su
     campo; el resto va en un toast (p. ej. "…tiene historial. Desactívalo." al borrar). */
@@ -358,13 +358,9 @@ export function SuppliersScreen({
   errorCarga,
   onReintentar,
 }: SuppliersScreenProps) {
-  // Usar el estado global de proveedores si está disponible, si no, usar datos locales
-  const [suppliersLocal, setSuppliersLocal] = useState<Supplier[]>(INITIAL_SUPPLIERS);
-  const suppliers = proveedoresProp ?? suppliersLocal;
-  const setSuppliers = setProveedoresProp ?? setSuppliersLocal;
+  const { suppliers, setSuppliers, search, setSearch, setPage, PER_PAGE, filtered, pageActual, paged } = useSuppliers(proveedoresProp, setProveedoresProp);
   /** "Guardando…" mientras habla la API: bloquea el doble clic. */
   const [guardando, setGuardando] = useState(false);
-  const [search,    setSearch]    = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editItem,   setEditItem]   = useState<Supplier | null>(null);
   const [detailItem, setDetailItem] = useState<Supplier | null>(null);
@@ -380,42 +376,9 @@ export function SuppliersScreen({
   const [confirmToggleId, setConfirmToggleId] = useState<string | null>(null);
   const [form, setForm] = useState(emptySupplier());
 
-  const [page, setPage] = useState(1);
-  // 5 proveedores por página (unificado con el resto de listados).
-  const PER_PAGE = 10;
 
-  // Nota: La lógica anterior que consultaba si el proveedor tenía compras u
-  // órdenes asociadas para decidir si se podían editar el NIT y el nombre fue
-  // eliminada. Ahora el NIT y el nombre NUNCA se pueden editar después de creado
-  // el proveedor, tenga o no compras u órdenes asociadas.
 
-  const filtered = useMemo(
-    () => ordenarPorIdDescendente(suppliers.filter(s =>
-      s.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      s.nit.toLowerCase().includes(search.toLowerCase()) ||
-      // Los campos de contacto son opcionales en el modelo (Persona Natural no
-      // los pide): se buscan sobre "" para no romper con un registro sin ellos.
-      (s.telefono ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (s.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (s.asesorComercial ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      s.estado.toLowerCase().includes(search.toLowerCase())
-    ), (supplier) => supplier.id),
-    [suppliers, search],
-  );
 
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  // Página efectiva recortada al rango: si el total baja (borrado o filtro),
-  // `page` puede quedar fuera de rango durante un render y la tabla saldría
-  // vacía. Así nunca se pinta una página inexistente.
-  const pageActual = Math.min(Math.max(page, 1), Math.max(1, totalPages));
-  const paged = filtered.slice((pageActual - 1) * PER_PAGE, pageActual * PER_PAGE);
-
-  // Si el buscador o un borrado reducen el total, `page` puede quedar apuntando
-  // más allá de la última página: la tabla salía vacía sin mensaje de "sin
-  // resultados" y "Siguiente" ya no avanzaba (hacía `min(totalPages, p + 1)`).
-  useEffect(() => {
-    setPage((p) => Math.min(p, Math.max(1, totalPages)));
-  }, [totalPages]);
 
   const disabledCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted/40 rounded-xl border border-border text-sm text-muted-foreground cursor-not-allowed select-none";
 
