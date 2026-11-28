@@ -1,7 +1,6 @@
 import type { Screen } from "@/shared/utils/screen";
 import { useEffect, useState } from "react";
-import logoBlanco from "@/assets/img/logo-blanco.webp";
-import logoClaro from "@/assets/img/logoclaro2.webp";
+import { Logo } from "@/shared/components/Logo";
 import { Moon, ShoppingCart, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import type { CartItem } from "@/types/cart";
@@ -55,7 +54,7 @@ export function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer group min-w-0"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
+          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
           {/* Punto 1.1: `min-w-0` + `truncate` — a 375 px el texto cede y se
               corta con puntos en vez de empujar el botón de tema fuera de la
               pantalla. */}

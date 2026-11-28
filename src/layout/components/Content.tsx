@@ -434,6 +434,8 @@ export function Content({
                           src={getImageUrl(favorita.image)}
                           alt={favorita.name}
                           onError={onErrorImagen}
+                          width={800}
+                          height={600}
                           loading="lazy"
                           decoding="async"
                           variants={{
@@ -542,6 +544,8 @@ export function Content({
                 <motion.img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
+                  width={1200}
+                  height={675}
                   loading="lazy"
                   decoding="async"
                   style={profundidadActiva ? { y: historiaFotoY, scale: historiaFotoEscala } : undefined}

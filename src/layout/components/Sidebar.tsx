@@ -3,7 +3,7 @@ import type { Screen } from "@/shared/utils/screen";
 import type { AccesosMap } from "@/features/roles/utils/roles";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, Home, Menu, Search, X } from "lucide-react";
-import logoClaro from "@/assets/img/logoclaro2.webp";
+import { Logo } from "@/shared/components/Logo";
 import { canViewPermission, NAV_SECTIONS } from "@/shared/utils/navigation";
 import { SERIF } from "@/shared/utils/fonts";
 
@@ -134,7 +134,7 @@ export function Sidebar({
       {esMovil && (
         <div className="pn-tira">
           <div className="pn-tira__logo">
-            <img src={logoClaro} alt="S.I.V.PRO" />
+            <Logo variante="claro" alt="S.I.V.PRO" />
           </div>
           <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21 }}>La Sirena</span>
           <button
@@ -162,7 +162,7 @@ export function Sidebar({
         {!esMovil && (
           <div className="flex items-center gap-3 px-4 py-5 shrink-0">
             <div className="pn-sidebar__logo">
-              <img src={logoClaro} alt="S.I.V.PRO Logo" />
+              <Logo variante="claro" alt="S.I.V.PRO Logo" />
             </div>
             <div className="min-w-0">
               <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21, lineHeight: 1.2 }}>La Sirena</p>

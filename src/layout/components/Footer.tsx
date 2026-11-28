@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import logoBlanco from "@/assets/img/logo-blanco.webp";
+import { Logo } from "@/shared/components/Logo";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { RUTA_LICENCIAS } from "@/features/legal/navigation";
 import type { Screen } from "@/shared/utils/screen";
@@ -18,8 +18,8 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
           {/* Brand */}
           <motion.div {...reveal(0, 12, 0.15)} className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
-              <img
-                src={logoBlanco}
+              <Logo
+                variante="blanco"
                 alt="Logo"
                 className="w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-full object-contain shrink-0"
               />
