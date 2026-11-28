@@ -46,7 +46,8 @@ import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/purch
 import { listarCompras, mensajeErrorCompras } from "@/features/purchases/services/purchasesApi";
 import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/categoryConfig";
 import { mismoNombre } from "@/shared/utils/names";
-import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/UsersScreen";
+import { GestionUsuariosScreen } from "@/features/users/pages/UsersScreen";
+import { claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/utils/users";
 import { ActivarCuentaModal } from "@/shared/components/ActivateAccountModal";
 import { verificarCorreo } from "@/shared/services/verificationService";
 import type { GestionCompra, OrdenCompra, OrdenItem, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";

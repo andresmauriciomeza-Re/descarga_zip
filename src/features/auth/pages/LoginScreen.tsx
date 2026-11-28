@@ -1,4 +1,4 @@
-import { type Usuario } from "@/features/users/pages/UsersScreen";
+import type { Usuario } from "@/features/users/utils/users";
 import type { ApiErrorConEstado, UsuarioApi } from "@/types/api";
 import type { Rol } from "@/features/roles/utils/roles";
 import type { Screen } from "@/shared/utils/screen";

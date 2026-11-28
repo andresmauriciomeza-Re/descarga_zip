@@ -24,7 +24,7 @@ import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre, soloD
 import { hoyISO } from "@/shared/utils/dates";
 import { SelectorRoles } from "@/features/employees/components/RoleSelector";
 import type { Rol } from "@/features/roles/utils/roles";
-import { DOC_TIPOS, fmtDoc } from "@/features/users/pages/UsersScreen";
+import { DOC_TIPOS, fmtDoc } from "@/features/users/utils/users";
 import type { Cliente } from "@/features/customers/utils/customers";
 import { useEmployees } from "@/features/employees/hooks/useEmployees";
 import { type Empleado, mensajeError, type Contratacion } from "@/features/employees/utils/employees";

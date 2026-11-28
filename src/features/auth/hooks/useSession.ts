@@ -1,6 +1,6 @@
 import { KEY, type AccesosMap, type Accion, type Rol } from "@/features/roles/utils/roles";
 import { normalizarNombreRol } from "@/shared/utils/roleName";
-import { claveDoc, docValida, type Usuario } from "@/features/users/pages/UsersScreen";
+import { claveDoc, docValida, type Usuario } from "@/features/users/utils/users";
 import { AVATAR_PALETTE } from "@/shared/utils/avatar";
 
 // Named roles that belong to the public catalog (not the admin panel)
