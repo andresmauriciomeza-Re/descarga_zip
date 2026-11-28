@@ -75,21 +75,21 @@ export function PublicNav({
         <nav className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
           <button
             onClick={() => navigate("landing")}
-            className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
+            className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
             Inicio
           </button>
           <button
             onClick={() => navigate("catalog")}
             {...precargar("catalog")}
-            className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
+            className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
             Ver Menú
           </button>
           {isLoggedIn && (
             <button
               onClick={() => navigate("mis-pedidos")}
-              className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
+              className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
             >
               Pedidos
             </button>
@@ -102,7 +102,7 @@ export function PublicNav({
           <button
             onClick={() => navigate("cart")}
             {...precargar("cart")}
-            className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
+            className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[var(--rojo)] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
             aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
@@ -113,7 +113,7 @@ export function PublicNav({
                 initial={{ scale: 0.5 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[0.625rem] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[var(--rojo)] text-[0.625rem] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
               >
                 {count}
               </m.span>
@@ -144,7 +144,7 @@ export function PublicNav({
             <button
               onClick={onLogin}
               {...precargar("login")}
-              className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
+              className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[var(--rojo)] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
               Iniciar sesión
             </button>

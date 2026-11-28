@@ -497,7 +497,7 @@ export function OrdenCompraScreen({
         
         // Header - La Sirena
         doc.setFontSize(20);
-        doc.setTextColor(220, 38, 38); // Red color
+        doc.setTextColor(153, 27, 27); // #991B1B
         doc.text("La Sirena Pizza", 14, 20);
         doc.setFontSize(10);
         doc.setTextColor(100);
@@ -536,7 +536,7 @@ export function OrdenCompraScreen({
           head: [["Insumo", "Cantidad", "Unidad", "Monto unit.", "IVA %", "Subtotal"]],
           body: tableData,
           theme: 'striped',
-          headStyles: { fillColor: [220, 38, 38], textColor: 255 },
+          headStyles: { fillColor: [153, 27, 27], textColor: 255 },
           styles: { fontSize: 9 },
         });
         

@@ -21,7 +21,7 @@ export function WeekTick({ x, y, payload, days }: { x?: number; y?: number; payl
   const entry = days[payload?.index ?? 0];
   return (
     <g transform={`translate(${x},${y})`}>
-      <text x={0} y={0} dy={14} textAnchor="middle" fill={entry?.isToday ? "#C62828" : "var(--foreground)"} fontSize={12} fontWeight={entry?.isToday ? "bold" : "normal"}>
+      <text x={0} y={0} dy={14} textAnchor="middle" fill={entry?.isToday ? "#991B1B" : "var(--foreground)"} fontSize={12} fontWeight={entry?.isToday ? "bold" : "normal"}>
         {payload.value}
       </text>
     </g>

@@ -50,7 +50,7 @@ export function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => 
           </ResponsiveContainer>
         </div>
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border flex-wrap">
-          {[["#C62828","Días pasados"],["#ef5350","Hoy"],["var(--border)","Días futuros"]].map(([c, l]) => (
+          {[["var(--rojo)","Días pasados"],["#ef5350","Hoy"],["var(--border)","Días futuros"]].map(([c, l]) => (
             <div key={l} className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: c }} />
               <span className="text-xs text-muted-foreground">{l}</span>
@@ -71,7 +71,7 @@ export function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => 
             </span>
             <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
               <div className="h-full rounded-full flex" style={{ width: `${Math.round(((d.unidades + d.porciones) / maxV) * 100)}%`, opacity: d.isFuture ? 0 : 1 }}>
-                <span className="h-full" style={{ width: `${d.unidades + d.porciones > 0 ? (d.unidades / (d.unidades + d.porciones)) * 100 : 0}%`, background: d.isToday ? "#ef5350" : "#C62828" }} />
+                <span className="h-full" style={{ width: `${d.unidades + d.porciones > 0 ? (d.unidades / (d.unidades + d.porciones)) * 100 : 0}%`, background: d.isToday ? "#ef5350" : "var(--rojo)" }} />
                 <span className="h-full bg-orange-500" style={{ width: `${d.unidades + d.porciones > 0 ? (d.porciones / (d.unidades + d.porciones)) * 100 : 0}%` }} />
               </div>
             </div>

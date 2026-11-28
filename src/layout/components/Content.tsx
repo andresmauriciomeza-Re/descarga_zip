@@ -82,27 +82,28 @@ export function Content({
   return (
     <>
       {/* Hero – full width con imagen de fondo */}
-      <section ref={heroRef} className="relative w-full min-h-screen overflow-hidden">
+      <section ref={heroRef} className="relative w-full min-h-screen">
         {/* Imagen de fondo full-bleed. Es el LCP de la página: por eso lleva
             fetchpriority="high", dimensiones explícitas (anticlásico) y NO lazy.
             La escala y el desplazamiento están compensados (la imagen crece lo
             mismo que se desplaza) para que nunca se vean bordes vacíos. El
             movimiento va en el contenedor para no interferir con la carga. */}
-        <m.div
-          aria-hidden="true"
-          style={profundidadActiva ? { y: heroFotoY, scale: heroFotoEscala } : undefined}
-          className="absolute inset-0"
-        >
-          <img
-            src={pizzaHero}
-            alt="Pizza pepperoni artesanal La Sirena recién horneada"
-            width={1536}
-            height={1024}
-            {...{ fetchpriority: "high" }}
-            decoding="async"
-            className="w-full h-full object-cover object-center"
-          />
-        </m.div>
+        <div aria-hidden="true" className="absolute inset-0 overflow-hidden">
+          <m.div
+            style={profundidadActiva ? { y: heroFotoY, scale: heroFotoEscala } : undefined}
+            className="absolute inset-0"
+          >
+            <img
+              src={pizzaHero}
+              alt="Pizza pepperoni artesanal La Sirena recién horneada"
+              width={1536}
+              height={1024}
+              {...{ fetchpriority: "high" }}
+              decoding="async"
+              className="w-full h-full object-cover object-center"
+            />
+          </m.div>
+        </div>
 
         {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
             garantizar el contraste del texto blanco sobre la foto, sin tocar
@@ -120,15 +121,15 @@ export function Content({
                 ? { y: heroContenidoY, opacity: heroContenidoOpacidad }
                 : undefined
             }
-            className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 max-w-xl"
+            className="px-5 sm:px-10 md:px-16 lg:px-20 pt-24 pb-16 w-full max-w-xl"
           >
-            <div>
+            <div className="[container-type:inline-size]">
               {/* Badge */}
               <m.div
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.45, delay: 0.06, ease: REVEAL_EASE }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#DC2626] text-white text-sm font-bold rounded-full mb-8 shadow-lg shadow-red-900/30"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--rojo)] text-white text-sm font-bold rounded-full mb-8 shadow-lg shadow-red-900/30"
               >
                 ⭐ Artesanal · Medellín · Desde 1994
               </m.div>
@@ -138,20 +139,20 @@ export function Content({
                 initial={{ y: 28 }}
                 animate={{ y: 0 }}
                 transition={{ duration: 0.75, delay: 0.14, ease: REVEAL_EASE }}
-                className="text-[clamp(3rem,8vw,5.5rem)] font-bold text-white leading-[1.0] mb-6"
+                className="text-[min(clamp(3rem,8vw,5.5rem),18.5cqi)] font-bold text-white leading-[1.0] mb-6"
                 style={{ fontFamily: SERIF }}
               >
-                <span className="block overflow-hidden">
+                <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
                   <m.span {...revealHeroLine(0.2)} className="block">
                     La Sirena
                   </m.span>
                 </span>
-                <span className="block overflow-hidden">
-                  <m.span {...revealHeroLine(0.3)} className="block text-[#DC2626]">
+                <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
+                  <m.span {...revealHeroLine(0.3)} className="block text-[var(--rojo)]">
                     El sabor que
                   </m.span>
                 </span>
-                <span className="block overflow-hidden">
+                <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
                   <m.span {...revealHeroLine(0.4)} className="block">
                     conquista
                   </m.span>
@@ -186,7 +187,7 @@ export function Content({
                 <button
                   onClick={() => navigate("catalog")}
                   {...precargar("catalog")}
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DC2626] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[var(--rojo)] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
                 >
                   <ShoppingCart className="w-5 h-5" />
                   Ordenar ahora
@@ -255,7 +256,7 @@ export function Content({
       </section>
 
       {/* ── SECCIÓN 1: Estadísticas ── */}
-      <section className="bg-[#DC2626] py-12 md:py-14">
+      <section className="bg-[var(--rojo)] py-12 md:py-14">
         <StatsMarquee />
       </section>
 
@@ -331,7 +332,7 @@ export function Content({
             <button
               onClick={() => navigate("catalog")}
               {...precargar("catalog")}
-              className="text-[#DC2626] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0 max-md:min-h-11"
+              className="text-[var(--rojo)] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0 max-md:min-h-11"
             >
               Ver todas <ArrowRight className="w-4 h-4" />
             </button>
@@ -462,7 +463,7 @@ export function Content({
                           {etiqueta === "agotado" && (
                             <AgotadoMenuBadge />
                           )}
-                          <div className="flex items-center gap-1 bg-[#DC2626] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
+                          <div className="flex items-center gap-1 bg-[var(--rojo)] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
                             <Star className="w-3 h-3 fill-white text-white" />
                             Favorita
                           </div>
@@ -492,7 +493,7 @@ export function Content({
                               return (
                                 <p
                                   key={size.label}
-                                  className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-[#DC2626]"}
+                                  className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-[var(--rojo)]"}
                                 >
                                   {size.label} $ {size.price.toLocaleString("es-CO")} / porción
                                   {stockTamano !== undefined && (agotadoTamano ? " · Agotado" : ` · Quedan ${stockTamano} porciones`)}
@@ -566,14 +567,14 @@ export function Content({
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full bg-[#DC2626] flex items-center justify-center text-white font-bold text-sm shrink-0"
+                    className="w-10 h-10 rounded-full bg-[var(--rojo)] flex items-center justify-center text-white font-bold text-sm shrink-0"
                     style={{ fontFamily: SERIF }}
                   >
                     G
                   </div>
                   <div>
                     <p
-                      className="text-[#DC2626] font-bold text-sm leading-tight"
+                      className="text-[var(--rojo)] font-bold text-sm leading-tight"
                       style={{ fontFamily: SERIF }}
                     >
                       Gloria Inés Vargas
@@ -593,7 +594,7 @@ export function Content({
             >
               {/* Badge */}
               <m.div {...reveal(0.06, 14)} className="inline-flex">
-                <span className="px-4 py-1.5 bg-red-50 text-[#DC2626] text-sm font-semibold rounded-full border border-red-100">
+                <span className="px-4 py-1.5 bg-red-50 text-[var(--rojo)] text-sm font-semibold rounded-full border border-red-100">
                   Nuestra historia
                 </span>
               </m.div>
@@ -632,7 +633,7 @@ export function Content({
                 <button
                   onClick={() => navigate("catalog")}
                   {...precargar("catalog")}
-                  className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#DC2626] text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-md shadow-red-900/20 cursor-pointer text-sm"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 bg-[var(--rojo)] text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-md shadow-red-900/20 cursor-pointer text-sm"
                 >
                   🍕 Pedir ahora
                 </button>

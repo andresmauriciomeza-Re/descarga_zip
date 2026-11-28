@@ -12,7 +12,7 @@
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
-  --primary: #dc0000;
+  --primary: #991B1B;
   --primary-foreground: #ffffff;
   --secondary: #fff8f0;
   --secondary-foreground: #e65100;
@@ -20,7 +20,7 @@
   --muted-foreground: #757575;
   --accent: #e65100;
   --accent-foreground: #ffffff;
-  --destructive: #dc0000;
+  --destructive: #991B1B;
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.08);
   --input: transparent;
@@ -28,8 +28,8 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #dc0000;
-  --chart-1: #dc0000;
+  --ring: #991B1B;
+  --chart-1: #991B1B;
   --chart-2: #2e7d32;
   --chart-3: #e65100;
   --chart-4: #1565c0;
@@ -37,15 +37,15 @@
   --radius: 0.875rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #1a1a1a;
-  --sidebar-primary: #dc0000;
+  --sidebar-primary: #991B1B;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f5f5f5;
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: rgba(0,0,0,0.08);
-  --sidebar-ring: #dc0000;
+  --sidebar-ring: #991B1B;
   /* Variables del panel de administración */
-  --rojo: #DC0000;
-  --rojo-texto: #8E1414;
+  --rojo: #991B1B;
+  --rojo-texto: #7F1D1D;
   --rojo-suave: #FDE7E7;
   --verde: #2E7D32;
   --verde-texto: #1B5E20;
@@ -105,6 +105,10 @@
 }
 
 @theme inline {
+  /* Rojos de marca para las clases de Tailwind. 50–400 y 800–950 quedan como vienen. */
+  --color-red-500: #B91C1C;
+  --color-red-600: #991B1B;
+  --color-red-700: #7F1D1D;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

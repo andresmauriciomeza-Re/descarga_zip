@@ -36,5 +36,5 @@ export interface WeekEntry {
 export function barFill(d: DayEntry) {
   if (d.isFuture) return "var(--border)";
   if (d.isToday)  return "#ef5350";
-  return "#C62828";
+  return "#991B1B";
 }

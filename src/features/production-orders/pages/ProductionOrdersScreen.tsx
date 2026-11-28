@@ -344,7 +344,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
       "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
       Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
-      Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
+      Cancelada: { texto: "FF991B1B", fondo: "FFFEE2E2" },
     },
     columnas: [
       { header: "ID Orden", valor: (o) => o.id },
