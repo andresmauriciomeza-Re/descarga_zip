@@ -148,8 +148,8 @@ export function ManageProductsScreen() {
 
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div>
+          <table className="pn-tabla-adapta w-full break-words">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {[

@@ -74,6 +74,7 @@ import { guardarRetornoCheckout, consumirRetornoCheckout, borrarRetornoCheckout,
 import { SCREEN_META } from "@/shared/utils/navigation";
 import { ROLES_STORAGE_KEY, leerRolesPersistidos, respaldarEmpleadosLocales, respaldarCategoriasLocales, respaldarDatosComprasFase3, respaldarDatosProduccionFase2, respaldarNoConformidadesLocales, MIGRACION_FICHAS_FASE1_KEY, leerProductosParaMigracion, respaldarDatosProductosFase1, AUTH_STORAGE_KEYS } from "@/shared/utils/storage";
 import { ADMIN_SCREENS, SCREEN_PERM_KEY } from "@/shared/utils/navigation";
+import { useIdioma } from "@/shared/i18n";
 
 // ─── Code splitting (React.lazy) ───
 // Estas pantallas se importan SOLO como componente (no comparten constants ni
@@ -187,6 +188,7 @@ export default function App() {
 
 function AppContent() {
   respaldarDatosProductosFase1();
+  const { tf } = useIdioma();
   const {
     sesionArranque, sesionActiva, isLoggedIn, setIsLoggedIn,
     restauracionSesionLista, setRestauracionSesionLista, userRole, setUserRole,
@@ -918,8 +920,8 @@ function AppContent() {
     };
   };
 
-  // Un solo estado para escritorio: true = menú completo visible,
-  // false = menú totalmente oculto (sin franja de íconos). Se persiste en
+  // Un solo estado para escritorio: true = menú completo,
+  // false = franja angosta de iconos. Se persiste en
   // localStorage; en celular no se guarda (el drawer siempre arranca cerrado).
   const [menuAbierto, setMenuAbierto] = useState(() => {
     try {
@@ -1012,7 +1014,6 @@ function AppContent() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isAdmin, esMovil, sidebarMovilAbierto]);
-  const [darkMode, setDarkMode] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
   const [catalogCat, setCatalogCat] = useState<string | null>(null);
@@ -1052,9 +1053,10 @@ function AppContent() {
   const [proveedoresCargando, setProveedoresCargando] = useState(false);
   const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
 
+  // La app queda siempre en claro: se quita la clase si algo la hubiera dejado.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
+    document.documentElement.classList.remove("dark");
+  }, []);
 
   // Cada cambio del carrito se guarda donde corresponde: en la clave de
   // invitado mientras no hay sesión, y en el registro del usuario en cuanto la
@@ -1297,7 +1299,7 @@ function AppContent() {
       .then(({ correo }) => {
         setLoginEmailPre(correo ?? "");
         setLoginMensajeExito("Correo verificado. Ya puedes iniciar sesión");
-        toast.success("Correo verificado. Ya puedes iniciar sesión");
+        toast.success(tf("Correo verificado. Ya puedes iniciar sesión"));
       })
       .catch((error) => {
         toast.error(
@@ -1364,10 +1366,11 @@ function AppContent() {
     const aviso = correoEnviado
       ? "Te enviamos un correo para confirmar tu cuenta"
       : "Tu cuenta quedó creada, pero no pudimos enviar el correo. Inicia sesión y usa «Reenviar correo de confirmación»";
+    // `aviso` se guarda en español; el login lo traduce al pintarlo.
     setLoginEmailPre(correo);
     setLoginMensajeExito(aviso);
-    if (correoEnviado) toast.success(aviso);
-    else toast.warning(aviso);
+    if (correoEnviado) toast.success(tf(aviso));
+    else toast.warning(tf(aviso));
     navigate("login");
   };
 
@@ -1376,7 +1379,7 @@ function AppContent() {
     setActivacionToken(null);
     setLoginEmailPre(correo);
     setLoginMensajeExito("Contraseña creada. Ya puedes iniciar sesión");
-    toast.success("Contraseña creada. Ya puedes iniciar sesión");
+    toast.success(tf("Contraseña creada. Ya puedes iniciar sesión"));
     navigate("login");
   };
 
@@ -2235,11 +2238,10 @@ function AppContent() {
       } else {
         setSidebarMovilAbierto(false);
       }
-    } else if (!menuAbierto) {
-      setMenuAbierto(true);
-      requestAnimationFrame(() => firstNavRef.current?.focus());
     } else {
-      setMenuAbierto(false);
+      // El foco sigue en la flecha, que cambia de lugar al contraer o expandir.
+      setMenuAbierto((v) => !v);
+      requestAnimationFrame(() => menuButtonRef.current?.focus());
     }
   };
 
@@ -2247,20 +2249,9 @@ function AppContent() {
     ? esMovil
       ? ""
       : menuAbierto
-        ? "ml-[280px]"
-        : "ml-0"
+        ? "ml-[var(--ancho-menu)]"
+        : "ml-[var(--ancho-menu-contraido)]"
     : "";
-
-  const isLockedScreen = isAdmin && (
-    screen === "clientes" || screen === "users" || screen === "empleados" ||
-    // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
-    screen === "orden-compra" || screen === "nueva-orden-compra" ||
-    screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra" || screen === "orden-detalle" ||
-    // Proveedores: ocupa el viewport y sin scroll de página (la tabla se
-    // pagina en bloques de 5 en vez de crecer hasta hacer scroll).
-    screen === "suppliers"
-  );
 
   return (
     <div
@@ -2276,10 +2267,10 @@ function AppContent() {
           // Todas las alertas del sistema (landing y panel) duran 2 segundos.
           duration: 2000,
           // En celular el botón de acción del toast ("Ver carrito") llega a 44 px.
-          classNames: { actionButton: "max-md:!h-11 max-md:!px-4 max-md:!text-sm" },
+          classNames: { actionButton: `max-md:!h-11 max-md:!px-4 ${isAdmin ? "max-md:!text-base" : "max-md:!text-sm"}` },
           style: {
             fontFamily: "var(--font-texto)",
-            fontSize: isAdmin ? "16px" : "15px",
+            fontSize: isAdmin ? "1rem" : "15px",
           },
         }}
       />
@@ -2306,6 +2297,7 @@ function AppContent() {
               userName={sesionRestaurandose ? "" : loggedInUserName}
               menuButtonRef={menuButtonRef}
               onToggleMenu={alternarMenu}
+              onExpandir={() => setMenuAbierto(true)}
               accesos={loggedInAccesos}
               esSuperAdminSesion={esSuperAdminSesion}
               hasDashboardAccess={hasDashboardAccess}
@@ -2321,7 +2313,7 @@ function AppContent() {
       )}
 
       <div
-        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden max-[820px]:h-[calc(100dvh-4rem)] max-[820px]:min-h-0" : ""}`}
+        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen`}
       >
         {/* Public navbar */}
         {!isAdmin && !isAuth && (
@@ -2334,8 +2326,6 @@ function AppContent() {
             loggedInUser={avatarParaHeader}
             perfilPendiente={sesionRestaurandose && Boolean(sesionActiva?.userId)}
             onLogout={logout}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
           />
         )}
 
@@ -2345,13 +2335,8 @@ function AppContent() {
             <Suspense fallback={<header className="pn-header" aria-hidden="true" />}>
               <AdminTopBar
                 current={screen}
-                onToggleSidebar={alternarMenu}
-                esMovil={esMovil}
-                menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
-                menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
+                ordenAEditar={ordenAEditar}
                 navigate={navigate}
-                darkMode={darkMode}
-                setDarkMode={setDarkMode}
                 userName={sesionRestaurandose ? "" : loggedInUserName}
                 roleName={sesionRestaurandose ? "" : loggedInRoleName}
                 homeScreen={adminHomeScreen}
@@ -2369,8 +2354,6 @@ function AppContent() {
             !isAdmin && !isAuth && screen !== "landing"
               ? "pt-20"
               : "",
-            isLockedScreen ? " flex-1 min-h-0" : "",
-            isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
           {/* Aviso fijo del catálogo público: solo aparece si la API no respondió.
@@ -2529,7 +2512,6 @@ function AppContent() {
                       usuarios={usuarios}
                       roles={roles}
                       onUsuarioNuevo={agregarUsuarioLocal}
-                      darkMode={darkMode}
                       loginNotice={loginNotice}
                       initialEmail={loginEmailPre}
                       mensajeExito={loginMensajeExito}
@@ -2543,7 +2525,6 @@ function AppContent() {
                       setUsuarios={setUsuarios}
                       clientes={clientes}
                       setClientes={setClientes}
-                      darkMode={darkMode}
                       onRegistrado={trasRegistrarse}
                     />
                   )}
@@ -3165,8 +3146,7 @@ function AppContent() {
 
         {/* P12: se eliminó el footer de administración ("S.I.V.PRO — Panel
             Administrativo") para que no se muestre en ningún módulo del panel.
-            El footer público del landing no se toca. `isLockedScreen` sigue
-            vivo porque lo usa el contenedor de arriba (alto fijo del viewport). */}
+            El footer público del landing no se toca. */}
 
         {/* Mobile bottom nav */}
         {!isAdmin && !isAuth && (

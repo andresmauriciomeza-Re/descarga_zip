@@ -2,6 +2,9 @@
 
 :root {
   --font-size: 16px;
+  /* Ancho del menú lateral del panel (lo usan el aside y el margen del contenido). */
+  --ancho-menu: 17.5rem;
+  --ancho-menu-contraido: 4.5rem;
   --font-titulo: 'Montserrat', sans-serif;
   --font-texto: 'Poppins', sans-serif;
   --background: #ffffff;
@@ -10,7 +13,7 @@
   --card-foreground: #1a1a1a;
   --popover: #ffffff;
   --popover-foreground: #1a1a1a;
-  --primary: #dc0000;
+  --primary: #991B1B;
   --primary-foreground: #ffffff;
   --secondary: #fff8f0;
   --secondary-foreground: #e65100;
@@ -18,7 +21,7 @@
   --muted-foreground: #757575;
   --accent: #e65100;
   --accent-foreground: #ffffff;
-  --destructive: #dc0000;
+  --destructive: #991B1B;
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.08);
   --input: transparent;
@@ -26,8 +29,8 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #dc0000;
-  --chart-1: #dc0000;
+  --ring: #991B1B;
+  --chart-1: #991B1B;
   --chart-2: #2e7d32;
   --chart-3: #e65100;
   --chart-4: #1565c0;
@@ -35,15 +38,15 @@
   --radius: 0.875rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #1a1a1a;
-  --sidebar-primary: #dc0000;
+  --sidebar-primary: #991B1B;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f5f5f5;
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: rgba(0,0,0,0.08);
-  --sidebar-ring: #dc0000;
+  --sidebar-ring: #991B1B;
   /* Variables del panel de administración */
-  --rojo: #DC0000;
-  --rojo-texto: #8E1414;
+  --rojo: #991B1B;
+  --rojo-texto: #7F1D1D;
   --rojo-suave: #FDE7E7;
   --verde: #2E7D32;
   --verde-texto: #1B5E20;
@@ -103,6 +106,10 @@
 }
 
 @theme inline {
+  /* Rojos de marca para las clases de Tailwind. 50–400 y 800–950 quedan como vienen. */
+  --color-red-500: #B91C1C;
+  --color-red-600: #991B1B;
+  --color-red-700: #7F1D1D;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -262,5 +269,27 @@
   }
   .fixed.inset-0.flex.items-center > * {
     margin-block: auto;
+  }
+}
+
+/* Escala compacta: solo el panel y solo en pantallas grandes. En celular y
+   tableta (≤ 820px) y en la tienda pública la raíz sigue en 16px.
+   12px = 75 %. Si se quiere más compacto, 11px se acerca al 67 %. */
+@media (min-width: 821px) {
+  html:has(.panel-admin) { --font-size: 12px; }
+
+  @layer base {
+    /* body y controles están fijos en 14px: dentro del panel siguen la escala. */
+    html:has(.panel-admin) body,
+    html:has(.panel-admin) :is(label, input, button, select, textarea) { font-size: 1rem; }
+
+    /* Los iconos lucide con `size={n}` vienen en px: se llevan a rem.
+       :where() deja que cualquier clase de tamaño les gane. */
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="18"]) { width: 1.125rem; height: 1.125rem; }
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="20"]) { width: 1.25rem; height: 1.25rem; }
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="22"]) { width: 1.375rem; height: 1.375rem; }
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="24"]) { width: 1.5rem; height: 1.5rem; }
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="34"]) { width: 2.125rem; height: 2.125rem; }
+    :where(html:has(.panel-admin)) :where(svg.lucide[width="40"]) { width: 2.5rem; height: 2.5rem; }
   }
 }

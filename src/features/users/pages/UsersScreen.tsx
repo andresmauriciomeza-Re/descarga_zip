@@ -106,26 +106,26 @@ export function GestionUsuariosScreen({
         <div className="flex flex-wrap items-center gap-5 mb-6">
           <Avatar u={u} tam={80} />
           <div className="min-w-0">
-            <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{u.nombre}</h1>
+            <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{u.nombre}</h1>
             <div className="mt-2"><EstadoEntrada activo={u.estado} /></div>
           </div>
         </div>
 
-        <div className="grid gap-5" style={{ maxWidth: 900 }}>
+        <div className="grid gap-5" style={{ maxWidth: "56.25rem" }}>
           <SeccionFormulario titulo="Sus datos">
             <DatosDetalle datos={[
               { etiqueta: "Documento", valor: documentoLegible(u.tipo_documento, String(u.id_usuario)) },
               { etiqueta: "Correo", valor: u.correo || "—" },
               { etiqueta: "Teléfono", valor: u.telefono || "—" },
             ]} />
-            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+            <p className="pn-campo__ayuda" style={{ fontSize: "1.0625rem", marginTop: "1rem" }}>
               Los datos personales los cambia cada persona desde su perfil.
             </p>
           </SeccionFormulario>
 
           <SeccionFormulario titulo="Qué es en la pizzería">
             <RolesPills usuario={u} />
-            <p className="pn-seccion__ayuda" style={{ margin: "14px 0 12px" }}>
+            <p className="pn-seccion__ayuda" style={{ margin: "0.875rem 0 0.75rem" }}>
               Los cargos de un empleado se cambian en Empleados
             </p>
             {onIrAEmpleados && <BotonAccion onClick={onIrAEmpleados}>Ir a Empleados</BotonAccion>}
@@ -253,7 +253,7 @@ export function GestionUsuariosScreen({
 
       <PaginadorGrande pagina={paginaActual} total={filtrados.length} porPagina={porPagina} onCambiar={setPage} />
 
-      <section className="pn-aviso" style={{ marginTop: 28, background: "#fff", borderColor: "var(--borde-suave)", color: "var(--texto)" }}>
+      <section className="pn-aviso" style={{ marginTop: "1.75rem", background: "#fff", borderColor: "var(--borde-suave)", color: "var(--texto)" }}>
         <div className="pn-aviso__texto">
           <h2>¿Quieres agregar a alguien?</h2>
           <p>Los clientes se agregan en Clientes y los trabajadores en Empleados. Ahí mismo se les crea la cuenta.</p>

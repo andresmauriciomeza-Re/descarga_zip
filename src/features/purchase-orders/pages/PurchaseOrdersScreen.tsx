@@ -497,7 +497,7 @@ export function OrdenCompraScreen({
         
         // Header - La Sirena
         doc.setFontSize(20);
-        doc.setTextColor(220, 38, 38); // Red color
+        doc.setTextColor(153, 27, 27); // #991B1B
         doc.text("La Sirena Pizza", 14, 20);
         doc.setFontSize(10);
         doc.setTextColor(100);
@@ -536,7 +536,7 @@ export function OrdenCompraScreen({
           head: [["Insumo", "Cantidad", "Unidad", "Monto unit.", "IVA %", "Subtotal"]],
           body: tableData,
           theme: 'striped',
-          headStyles: { fillColor: [220, 38, 38], textColor: 255 },
+          headStyles: { fillColor: [153, 27, 27], textColor: 255 },
           styles: { fontSize: 9 },
         });
         
@@ -652,7 +652,7 @@ export function OrdenCompraScreen({
                   </>
                 }
                 datos={[
-                  { etiqueta: "Total", valor: <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(totalOrden)}</span> },
+                  { etiqueta: "Total", valor: <span style={{ font: "700 1.5rem var(--font-titulo)" }}>{fmtCOP(totalOrden)}</span> },
                   {
                     etiqueta: "Factura",
                     valor: numerosFactura.length > 0
@@ -663,9 +663,9 @@ export function OrdenCompraScreen({
                 estado={
                   <div className="grid gap-1 justify-items-start">
                     <EstadoPill tono={tonoEstado[o.estado]}>{o.estado}</EstadoPill>
-                    <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>{fechaUltimoCambio(o)}</span>
+                    <span style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>{fechaUltimoCambio(o)}</span>
                     <EstadoHistorialTooltip historial={o.historialEstados ?? []} estadoColors={ESTADO_CONFIG}>
-                      <button type="button" className="pn-boton pn-boton--normal" style={{ minHeight: 44, fontSize: 16 }}>Ver historial</button>
+                      <button type="button" className="pn-boton pn-boton--normal" style={{ minHeight: "2.75rem", fontSize: "1rem" }}>Ver historial</button>
                     </EstadoHistorialTooltip>
                   </div>
                 }

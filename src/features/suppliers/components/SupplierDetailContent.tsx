@@ -21,16 +21,16 @@ export function DetalleContenido({ s }: { s: Supplier }) {
     [tipo, numero].map(x => (x ?? "").trim()).filter(Boolean).join(" ") || "—";
 
   return (
-    <div className="grid gap-5">
+    <div className="grid">
       {esNatural && (
         <>
-          <SeccionFormulario titulo="Datos del proveedor">
+          <SeccionFormulario plano numero={1} titulo="Datos del proveedor">
             <DatosDetalle datos={[
               { etiqueta: "Nombre completo", valor: v(nombreCompleto) },
               { etiqueta: "Documento", valor: documento(s.tipoDocumento, s.numeroDocumento) },
             ]} />
           </SeccionFormulario>
-          <SeccionFormulario titulo="Con quién hablar para pedir">
+          <SeccionFormulario plano numero={2} titulo="Con quién hablar para pedir">
             <DatosDetalle datos={[
               { etiqueta: "Teléfono", valor: v(s.telefono) },
               { etiqueta: "Correo", valor: v(s.email) },
@@ -42,7 +42,7 @@ export function DetalleContenido({ s }: { s: Supplier }) {
 
       {esJuridica && (
         <>
-          <SeccionFormulario titulo="Datos de la empresa">
+          <SeccionFormulario plano numero={1} titulo="Datos de la empresa">
             <DatosDetalle datos={[
               /* En Jurídica el nombre guardado ES la razón social. */
               { etiqueta: "Razón social", valor: v(s.nombre) },
@@ -66,7 +66,7 @@ export function DetalleContenido({ s }: { s: Supplier }) {
               { etiqueta: "Fecha de la Cámara de Comercio", valor: v(s.fechaExpedicionCamara) },
             ]} />
           </SeccionFormulario>
-          <SeccionFormulario titulo="Representante legal">
+          <SeccionFormulario plano numero={2} titulo="Representante legal">
             <DatosDetalle datos={[
               {
                 etiqueta: "Nombre",
@@ -77,7 +77,7 @@ export function DetalleContenido({ s }: { s: Supplier }) {
               { etiqueta: "Correo", valor: v(s.repLegalEmail) },
             ]} />
           </SeccionFormulario>
-          <SeccionFormulario titulo="Con quién hablar para pedir">
+          <SeccionFormulario plano numero={3} titulo="Con quién hablar para pedir">
             <DatosDetalle datos={[
               { etiqueta: "Asesor", valor: v(s.contactoNombre || s.asesorComercial) },
               { etiqueta: "Teléfono", valor: v(s.contactoTelefono || s.telefono) },
@@ -91,7 +91,7 @@ export function DetalleContenido({ s }: { s: Supplier }) {
 
       {/* Proveedor antiguo sin tipo de persona registrado. */}
       {!esNatural && !esJuridica && (
-        <SeccionFormulario titulo="Datos del proveedor">
+        <SeccionFormulario plano numero={1} titulo="Datos del proveedor">
           <DatosDetalle datos={[
             { etiqueta: "Nombre", valor: v(s.nombre) },
             { etiqueta: "Asesor", valor: v(s.asesorComercial) },

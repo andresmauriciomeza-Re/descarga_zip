@@ -21,6 +21,7 @@ export function TablaItemsFactura({
   onEdit,
   onRemove,
   enPagina = false,
+  ocultarTotal = false,
   rowEditando = null,
   className = "",
   soloLectura = false,
@@ -31,6 +32,8 @@ export function TablaItemsFactura({
   onRemove: (rowId: string) => void;
   /** Misma estructura que la tabla compartida: sin card ni título. */
   enPagina?: boolean;
+  /** El total pagado ya se ve en otro sitio (barra fija). */
+  ocultarTotal?: boolean;
   /** Fila cargada en el formulario (se resalta suavemente). */
   rowEditando?: string | null;
   className?: string;
@@ -54,13 +57,13 @@ export function TablaItemsFactura({
   // CANTIDAD y MEDIDA se superponían en los anchos fijos) y el IVA se muestra
   // como chip con el modo de la línea.
   const headers = ["Nombre", "Cantidad + presentación", "Monto unitario", "IVA", "Subtotal"];
-  const ANCHOS: Record<string, number> = {
-    "Cantidad + presentación": 86,
-    "Monto unitario": 82,
-    IVA: 58,
-    Subtotal: 66,
+  const ANCHOS: Record<string, string> = {
+    "Cantidad + presentación": "5.375rem",
+    "Monto unitario": "5.125rem",
+    IVA: "3.625rem",
+    Subtotal: "4.125rem",
   };
-  const ANCHO_ACCIONES = 112;
+  const ANCHO_ACCIONES = "7rem";
   const columnCount = headers.length + 1;
   const td = "align-middle px-1 " + (enPagina ? "py-1.5" : "py-2.5");
   /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
@@ -71,7 +74,7 @@ export function TablaItemsFactura({
     <div
       className={
         (enPagina
-          ? "flex flex-col flex-1 min-h-0 "
+          ? "flex flex-col "
           : "rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col ") +
         className
       }
@@ -84,15 +87,7 @@ export function TablaItemsFactura({
         </div>
       )}
 
-      <div
-        className={
-          // Punto 2.8c: sin `flex items-center` cuando está vacío — centraba
-          // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
-          // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
-          // pegado a la cabecera.
-          "flex-1 min-h-0 overflow-auto"
-        }
-      >
+      <div>
         {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
             `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
@@ -108,7 +103,7 @@ export function TablaItemsFactura({
             className={
               "text-base uppercase tracking-wider " +
               (enPagina
-                ? "sticky top-0 z-10 border-b border-border bg-muted text-muted-foreground"
+                ? "border-b border-border bg-muted text-muted-foreground"
                 : "bg-muted/50 text-muted-foreground")
             }
           >
@@ -155,7 +150,7 @@ export function TablaItemsFactura({
                     }`}
                   >
                     <td className={td + " min-w-0 text-lg font-medium text-foreground"}>
-                      <div className="truncate" title={row.nombre}>
+                      <div className="break-words" title={row.nombre}>
                         {row.nombre}
                       </div>
                       <div className="text-base font-normal text-muted-foreground mt-0.5 break-words">
@@ -178,7 +173,7 @@ export function TablaItemsFactura({
                       >
                         {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                       </span>
-                      <p className="text-base text-muted-foreground mt-0.5 truncate">
+                      <p className="text-base text-muted-foreground mt-0.5 break-words">
                         {fmtCOP(l.montoIva)}
                       </p>
                     </td>
@@ -186,7 +181,7 @@ export function TablaItemsFactura({
                       {fmtCOP(l.subtotalConIva)}
                     </td>
                     {!soloLectura && (
-                    <td className={td + " whitespace-nowrap"}>
+                    <td className={td}>
                       {/* Mientras la fila está cargada en el formulario se
                           ocultan sus acciones (sin mover la columna). */}
                       <div
@@ -197,7 +192,7 @@ export function TablaItemsFactura({
                           type="button"
                           onClick={() => onEdit(row)}
                           title="Editar ítem"
-                          className="pn-boton pn-boton--normal"
+                          className="pn-boton pn-boton--normal !px-2"
                         >
                           Cambiar
                         </button>
@@ -205,7 +200,7 @@ export function TablaItemsFactura({
                           type="button"
                           onClick={() => onRemove(row.rowId)}
                           title="Eliminar ítem"
-                          className="pn-boton pn-boton--peligro"
+                          className="pn-boton pn-boton--peligro !px-2"
                         >
                           Quitar
                         </button>
@@ -240,10 +235,14 @@ export function TablaItemsFactura({
               IVA
             </span>
             <span className="text-lg font-semibold text-foreground">{fmtCOP(totales.totalIva)}</span>
-            <span className="text-base font-bold text-muted-foreground">
-              Total pagado
-            </span>
-            <span style={{ font: "700 28px var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
+            {!ocultarTotal && (
+              <>
+                <span className="text-base font-bold text-muted-foreground">
+                  Total pagado
+                </span>
+                <span style={{ font: "700 1.75rem var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
+              </>
+            )}
           </div>
         )}
       </div>

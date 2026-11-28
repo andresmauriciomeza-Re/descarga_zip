@@ -1,6 +1,7 @@
 import { type KeyboardEvent } from "react";
 import { authGlassOtpCls } from "@/shared/styles/authGlass";
 import { trampaTabOTP } from "@/shared/hooks/useFormValidation";
+import { useIdioma } from "@/shared/i18n";
 
 /**
  * Casillas del código de verificación de 6 dígitos (vidrio esmerilado).
@@ -35,6 +36,7 @@ export function CodigoVerificacionInput({
   /** Avisa cuando se intenta salir de la última casilla con el código incompleto. */
   onCodigoIncompleto?: () => void;
 }) {
+  const { t } = useIdioma();
   const enfocar = (i: number) => {
     document.getElementById(`${idPrefijo}-${i}`)?.focus();
   };
@@ -72,7 +74,7 @@ export function CodigoVerificacionInput({
           maxLength={1}
           inputMode="numeric"
           disabled={disabled}
-          aria-label={`Dígito ${i + 1} de 6 del código de verificación`}
+          aria-label={t("auth.digito", { n: i + 1 })}
           aria-invalid={tieneError ? true : undefined}
           aria-describedby={tieneError ? describedBy : undefined}
           className={authGlassOtpCls(tieneError)}

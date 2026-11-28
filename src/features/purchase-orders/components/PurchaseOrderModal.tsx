@@ -4,13 +4,13 @@ import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import { useState, useRef, useMemo, useEffect } from "react";
-import { UNIDADES, type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm } from "@/features/purchases/components/CompactSupplyForm";
+import { UNIDADES, type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm, irAlFormularioDeLinea } from "@/features/purchases/components/CompactSupplyForm";
 import type { ModoIva } from "@/features/purchases/services/vat";
 import { nombreBuscable, contenidoDe, presentacionCompra, empaqueDe, medidaCompra } from "@/shared/utils/presentation";
 import { historialCompraDe } from "@/features/purchases/services/inventory";
 import { toast } from "sonner";
 import { esEmpaque } from "@/shared/utils/units";
-import { type InsumoSolicitadoRow, InsumosSolicitadosTable } from "@/features/purchases/components/RequestedSuppliesTable";
+import { type InsumoSolicitadoRow, InsumosSolicitadosTable, totalDeLineas } from "@/features/purchases/components/RequestedSuppliesTable";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, X, CheckCircle2, AlertCircle, Ban, Search, Plus, Check, Send } from "lucide-react";
 import { EstadoBadge } from "@/features/purchase-orders/components/StatusBadge";
@@ -165,7 +165,7 @@ export function OrdenModal({
 
   /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
   const labelCls = isPage
-    ? "block text-[13px] leading-tight font-medium text-foreground/70 mb-1"
+    ? "block text-[0.8125rem] leading-tight font-medium text-foreground/70 mb-1"
     : "block text-xs font-semibold text-muted-foreground mb-1.5";
 
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
@@ -450,7 +450,8 @@ export function OrdenModal({
     setAModoIva(row.modoIva ?? "incluido");
     setAFromCat(false);
     setAShowSug(false);
-    nombreRef.current?.focus();
+    // El foco abre las sugerencias: se cierran enseguida.
+    setTimeout(() => { irAlFormularioDeLinea(sugRef.current); setAShowSug(false); }, 0);
   };
 
   /** Patch de la línea en edición: conserva TODOS los datos de la fila (id,
@@ -527,14 +528,14 @@ export function OrdenModal({
       <div
         className={
           isPage
-            ? `w-full p-4 ${FORM_MAXW_PAGINA} mx-auto h-full flex flex-col overflow-hidden`
+            ? `w-full px-4 pt-4 ${FORM_MAXW_PAGINA} mx-auto ${isView ? "pb-4" : "pn-pagina-con-barra"}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full h-full flex flex-col"
+              ? "w-full"
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -545,7 +546,7 @@ export function OrdenModal({
             transition={{ duration: 0.15 }}
             className={`flex flex-col w-full ${isPage ? FORM_MAXW_PAGINA : FORM_MAXW}${
               isPage
-                ? " h-full"
+                ? ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
@@ -589,7 +590,7 @@ export function OrdenModal({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden"
+                  ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
             >
@@ -598,7 +599,7 @@ export function OrdenModal({
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:overflow-y-auto"
+                    ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
               >
@@ -952,7 +953,7 @@ export function OrdenModal({
                       setShowNuevoProducto(true);
                     }}
                     compacto={isPage}
-                    buttonLabel={editando ? "Guardar cambios" : "+ Agregar otro insumo o producto"}
+                    buttonLabel={editando ? "Guardar cambios" : "Agregar otro insumo o producto"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Punto 3.3: el atajo "+ Crear insumo/producto" según tipo.
@@ -966,7 +967,7 @@ export function OrdenModal({
                     // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
                       isPage ? undefined : (
-                      <div className="min-w-[118px]">
+                      <div className="min-w-[7.375rem]">
                         <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>
@@ -1008,7 +1009,7 @@ export function OrdenModal({
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6"
+                    ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1035,7 +1036,7 @@ export function OrdenModal({
                       <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
                         <p className="text-base font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
                       </div>
-                      <table className="w-full text-base">
+                      <table className="pn-tabla-adapta w-full text-base break-words">
                         <thead className="text-base text-muted-foreground uppercase tracking-wider">
                           <tr>
                             {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
@@ -1054,11 +1055,11 @@ export function OrdenModal({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-muted-foreground text-base">{item.cantidadSolicitada || "—"}</td>
-                              <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
-                              <td className="px-3 py-2 text-base text-muted-foreground">{item.unidad}</td>
-                              <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
-                              <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
+                              <td data-etiqueta="Solicitado" className="px-3 py-2 text-muted-foreground text-base">{item.cantidadSolicitada || "—"}</td>
+                              <td data-etiqueta="Recibido" className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
+                              <td data-etiqueta="Unidad" className="px-3 py-2 text-base text-muted-foreground">{item.unidad}</td>
+                              <td data-etiqueta="P. real" className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
+                              <td data-etiqueta="Subtotal" className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1086,7 +1087,7 @@ export function OrdenModal({
                     }))}
                     showActions={false}
                     enPagina={isPage}
-                    className={isPage ? "flex-1 min-h-0" : ""}
+                    className=""
                   />
                 </div>
               ) : (
@@ -1107,38 +1108,41 @@ export function OrdenModal({
                     rowEditando={editando}
                     sinScrollX
                     totalLabel="Total estimado"
+                    mostrarTotal={!isPage}
                     enPagina={isPage}
-                    className={isPage ? "flex-1 min-h-0" : ""}
+                    className=""
                     // Usa las mismas columnas que Nueva Compra; la orden admite
                     // insumos y productos.
                     titulo="Lo que vamos a pedir"
                     textoVacioPagina="Aún no has agregado ítems"
                   />
-
-                  {/* Acciones: en pantalla completa van al final de ESTA columna
-                      (siempre visibles); en el modal siguen en el pie general. */}
-                  {isPage && (
-                    <div className="flex flex-wrap gap-3 shrink-0 pt-1">
-                      <button
-                        onClick={salir}
-                        className="pn-boton pn-boton--normal flex-1"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleGuardar}
-                        disabled={!formValido || guardando}
-                        className="pn-boton pn-boton--principal flex-1"
-                      >
-                        <Check className="w-4 h-4" />
-                        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
-                      </button>
-                    </div>
-                  )}
                 </>
               )}
               </div>
             </div>
+
+            {/* Pantalla completa: barra fija abajo con el total y las acciones. */}
+            {isPage && !isView && (
+              <div className="pn-barra-guardar">
+                <p className="pn-barra-guardar__total">
+                  <span>Total estimado</span>
+                  <strong>{fmtCOP(totalDeLineas(form.items))}</strong>
+                </p>
+                <div className="pn-barra-guardar__botones">
+                  <button onClick={salir} className="pn-boton pn-boton--normal">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleGuardar}
+                    disabled={!formValido || guardando}
+                    className="pn-boton pn-boton--principal"
+                  >
+                    <Check className="w-4 h-4" />
+                    {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer del modal — solo en creación; en detalle se cierra con
                 la X del encabezado. */}

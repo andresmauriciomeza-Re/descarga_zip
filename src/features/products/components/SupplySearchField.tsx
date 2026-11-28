@@ -31,7 +31,7 @@ export function resolverInsumo(insumos: Insumo[], texto: string): Insumo | null 
 // Estilo de los inputs de Ficha Técnica (rounded-xl / text-sm), que es el
 // lenguaje visual del formulario donde se inserta este buscador.
 const inputCls =
-  "w-full px-4 min-h-[56px] bg-white rounded-[14px] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-4 min-h-[3.5rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 export interface InsumoSearchFieldProps {
   insumos: Insumo[];
@@ -95,7 +95,7 @@ export function InsumoSearchField({
   };
 
   return (
-    <div ref={contenedorRef} className="relative flex-[2] min-w-[180px]">
+    <div ref={contenedorRef} className="relative flex-[2] min-w-[11.25rem]">
       <label className="pn-etiqueta">
         {label}
       </label>
@@ -168,7 +168,7 @@ export function InsumoSearchField({
                   e.preventDefault();
                   elegir(ins);
                 }}
-                className={`w-full text-left px-4 py-3 min-h-[48px] text-lg hover:bg-muted cursor-pointer border-b border-border last:border-0 ${
+                className={`w-full text-left px-4 py-3 min-h-[3rem] text-lg hover:bg-muted cursor-pointer border-b border-border last:border-0 ${
                   index === indiceActivo ? "bg-muted" : ""
                 }`}
               >

@@ -602,7 +602,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
           {f.evidencia ? (
             <div className="grid gap-3 justify-items-start">
-              <img src={f.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: 280, borderRadius: 16, border: "2px solid var(--borde-suave)" }} />
+              <img src={f.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: "17.5rem", borderRadius: "1rem", border: "2px solid var(--borde-suave)" }} />
               <BotonAccion variante="peligro" onClick={() => set({ evidencia: undefined })}>Quitar la foto</BotonAccion>
             </div>
           ) : (
@@ -833,7 +833,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                 estado={
                   <div className="grid gap-1 justify-items-start">
                     <EstadoPill tono={pendiente ? "ambar" : "verde"}>{pendiente ? "Falta completar" : "Cerrado"}</EstadoPill>
-                    <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>
+                    <span style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>
                       {pendiente ? "Escribe qué se hizo" : item.fechaCierre ? `Cerrado el ${fechaCorta(item.fechaCierre)}` : "Reporte cerrado"}
                     </span>
                   </div>
@@ -865,12 +865,12 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) setViewItem(null); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 900px)" }}>
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 56.25rem)" }} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">Reporte N.° {viewItem.id} · {viewItem.nombre}</Dialog.Title>
                 <EstadoPill tono={viewItem.estado === "Pendiente" ? "ambar" : "verde"}>{viewItem.estado === "Pendiente" ? "Falta completar" : "Cerrado"}</EstadoPill>
               </div>
-              <p className="pn-seccion__ayuda" style={{ marginTop: -8 }}>
+              <p className="pn-seccion__ayuda" style={{ marginTop: "-0.5rem" }}>
                 {ORIGEN_TXT[viewItem.tipo]} · {origenPill(viewItem)} · {fechaCorta(viewItem.fechaRegistro)}
               </p>
               <div className="grid gap-4">
@@ -884,7 +884,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                     { etiqueta: "Pedido u orden", valor: viewItem.ventaRef ? `Pedido #${viewItem.ventaRef}` : viewItem.ordenRef ?? "—" },
                     { etiqueta: "Responsable", valor: viewItem.responsable || "—" },
                   ]} />
-                  <div className="pn-dialogo__caja" style={{ marginTop: 16, marginBottom: 0 }}>
+                  <div className="pn-dialogo__caja" style={{ marginTop: "1rem", marginBottom: 0 }}>
                     <strong>Lo que se contó:</strong>
                     {viewItem.descripcionProblema || "Sin descripción"}
                   </div>
@@ -902,11 +902,11 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                 </SeccionFormulario>
                 <SeccionFormulario titulo="Foto">
                   {viewItem.evidencia
-                    ? <img src={viewItem.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 16, border: "2px solid var(--borde-suave)" }} />
+                    ? <img src={viewItem.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: "26.25rem", borderRadius: "1rem", border: "2px solid var(--borde-suave)" }} />
                     : <p className="pn-seccion__ayuda" style={{ margin: 0 }}>Sin foto</p>}
                 </SeccionFormulario>
               </div>
-              <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+              <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                 {canEdit && viewItem.estado === "Pendiente" && (
                   <BotonAccion variante="principal" onClick={() => { const it = viewItem; setViewItem(null); abrirCompletar(it); }}>Completar</BotonAccion>
                 )}
@@ -928,13 +928,13 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) { setShowCreate(false); setEditItem(null); } }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
+            <Dialog.Content className="pn-modal pn-modal--formulario" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">{editItem ? `Cambiar el reporte N.° ${editItem.id}` : "Reportar algo que salió mal"}</Dialog.Title>
               </div>
-              <div style={{ maxWidth: 900 }}>
+              <div>
                 {renderFormBody(false, editItem?.id, !!editItem)}
-                <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                   <BotonAccion variante="normal" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</BotonAccion>
                   <BotonAccion variante="principal" disabled={guardando || subiendo} onClick={() => void (editItem ? handleEdit() : handleCreate())}>
                     {guardando ? "Guardando…" : editItem ? "Guardar cambios" : "Guardar el reporte"}
@@ -951,7 +951,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) setCompletarItem(null); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 720px)" }}>
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 45rem)" }}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">Completar el reporte N.° {completarItem.id} · {completarItem.nombre}</Dialog.Title>
               </div>
@@ -968,7 +968,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
                       titulo: t === "Reembolso al cliente" && !completarItem.ventaRef ? "Solo si el reporte viene de un pedido" : undefined,
                     }))}
                   />
-                  <div style={{ marginTop: 18 }}>
+                  <div style={{ marginTop: "1.125rem" }}>
                     <CampoFormulario etiqueta="¿Qué se hizo?" ayuda="Cuéntalo con tus palabras. Al guardar, el reporte queda cerrado y ya no se puede cambiar.">
                       {(p) => (
                         <textarea

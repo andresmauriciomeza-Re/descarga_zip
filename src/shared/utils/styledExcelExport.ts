@@ -20,8 +20,8 @@ export interface OpcionesExcel<T> {
   fecha?: Date;
 }
 
-const ROJO_MARCA = "FFC62828";
-const ROJO_BORDE = "FF8E1B1B";
+const ROJO_MARCA = "FF991B1B";
+const ROJO_BORDE = "FF7F1D1D";
 const GRIS_ZEBRA = "FFF5F5F5";
 const GRIS_BORDE = "FFD9D9D9";
 const NEGRO_TEXTO = "FF1A1A1A";
@@ -191,8 +191,8 @@ export async function exportarGestionComprasConInsumosExcel({
     pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
 
-  const ROJO_MARCA = "FFC62828";
-  const ROJO_BORDE = "FF8E1B1B";
+  const ROJO_MARCA = "FF991B1B";
+  const ROJO_BORDE = "FF7F1D1D";
   const GRIS_CLARO = "FFF3F4F6";
   const GRIS_ZEBRA = "FFF5F5F5";
   const GRIS_BORDE = "FFD9D9D9";

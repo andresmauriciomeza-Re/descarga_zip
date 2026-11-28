@@ -25,13 +25,13 @@ import {
 } from "@/features/suppliers/services/suppliersApi";
 import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
-import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
 import { BuscadorGrande } from "@/shared/components/panel/LargeSearch";
 import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
 import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 
 // ─────────────────────────── SUPPLIERS ───────────────────────────
@@ -457,49 +457,54 @@ export function SuppliersScreen({
     // Formulario activo (alta o edición): el selector del paso 1 lee y escribe su tipo de persona.
     const formActivo = enAlta || !editItem ? proveedorForm : editForm;
     return (
-      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
-        <BotonRuta>
-          <BotonAccion icono={ArrowLeft} onClick={salirDePantalla}>Salir sin guardar</BotonAccion>
-        </BotonRuta>
-        <EncabezadoPagina
-          titulo={enAlta ? "Agregar un proveedor" : `Cambiar datos de ${editItem?.nombre ?? ""}`}
-          descripcion={enAlta
-            ? "Anota quién es, cómo se le llama y con quién se habla para pedirle."
-            : "Aquí cambias los datos del proveedor. El documento o NIT no se puede cambiar."}
-        />
-        <div className="grid gap-5">
-          <SeccionFormulario numero={1} titulo="¿Es empresa o persona?">
-            <TipoPersonaSelector
-              valor={formActivo.values.tipoPersona}
-              disabled={!enAlta}
-              onChange={(tipo) => {
-                formActivo.marcarTocado("tipoPersona");
-                formActivo.setCampo("tipoPersona", tipo);
-              }}
-              error={formActivo.obtenerError("tipoPersona")}
+      <div className="pn-contenido">
+        <div className="pn-recuadro-marco">
+          <div className="mb-3">
+            <BotonAccion icono={ArrowLeft} onClick={salirDePantalla}>Salir sin guardar</BotonAccion>
+          </div>
+          <div className="pn-recuadro">
+            <EncabezadoPagina
+              titulo={enAlta ? "Agregar un proveedor" : `Cambiar datos de ${editItem?.nombre ?? ""}`}
+              descripcion={enAlta
+                ? "Anota quién es, cómo se le llama y con quién se habla para pedirle."
+                : "Aquí cambias los datos del proveedor. El documento o NIT no se puede cambiar."}
             />
-          </SeccionFormulario>
+            <div className="grid">
+              <SeccionFormulario plano numero={1} titulo="¿Es empresa o persona?">
+                <TipoPersonaSelector
+                  valor={formActivo.values.tipoPersona}
+                  disabled={!enAlta}
+                  onChange={(tipo) => {
+                    formActivo.marcarTocado("tipoPersona");
+                    formActivo.setCampo("tipoPersona", tipo);
+                  }}
+                  error={formActivo.obtenerError("tipoPersona")}
+                />
+              </SeccionFormulario>
 
-          {enAlta || !editItem ? (
-            <ProveedorFormCampos form={proveedorForm} />
-          ) : (
-            <ProveedorFormCampos
-              form={editForm}
-              autoFocusNombre={false}
-              // El NIT queda congelado: es la regla del módulo.
-              nitLectura={editItem.nit}
-            />
-          )}
+              {enAlta || !editItem ? (
+                <ProveedorFormCampos plano form={proveedorForm} />
+              ) : (
+                <ProveedorFormCampos
+                  plano
+                  form={editForm}
+                  autoFocusNombre={false}
+                  // El NIT queda congelado: es la regla del módulo.
+                  nitLectura={editItem.nit}
+                />
+              )}
 
-          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
-            <BotonAccion variante="normal" onClick={salirDePantalla}>Cancelar</BotonAccion>
-            <BotonAccion
-              variante="principal"
-              disabled={guardando}
-              onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
-            >
-              {guardando ? "Guardando…" : enAlta ? "Agregar el proveedor" : "Guardar cambios"}
-            </BotonAccion>
+              <div className="pn-dialogo__botones pn-dialogo__botones--fin pn-seccion pn-seccion--plana">
+                <BotonAccion variante="normal" onClick={salirDePantalla}>Cancelar</BotonAccion>
+                <BotonAccion
+                  variante="principal"
+                  disabled={guardando}
+                  onClick={enAlta ? () => void handleCreate() : () => void handleEdit()}
+                >
+                  {guardando ? "Guardando…" : enAlta ? "Agregar el proveedor" : "Guardar cambios"}
+                </BotonAccion>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -515,49 +520,51 @@ export function SuppliersScreen({
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .slice(0, 5);
     return (
-      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
-        <BotonRuta>
-          <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
-        </BotonRuta>
-
-        <div className="flex flex-wrap items-center gap-3 mb-6">
-          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{s.nombre}</h1>
-          <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
-          <TipoPersonaSelector comoEtiqueta valor={s.tipoPersona ?? ""} />
-        </div>
-
-        <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
-          {canEdit && (
-            <BotonAccion variante="principal" onClick={() => setEditItem({ ...s })}>Cambiar datos</BotonAccion>
-          )}
-          {canEdit && (
-            <BotonAccion variante={apagado ? "bien" : "normal"} onClick={() => setConfirmToggleId(s.id)}>
-              {apagado ? "Activar" : "Desactivar"}
-            </BotonAccion>
-          )}
-          {canDelete && (
-            <BotonAccion variante="peligro" onClick={() => alPedirEliminar(s)}>Borrar</BotonAccion>
-          )}
-        </div>
-
-        <DetalleContenido s={s} />
-
-        {pedidos.length > 0 && (
-          <div style={{ marginTop: 20 }}>
-            <SeccionFormulario titulo="Últimos pedidos">
-              <div className="pn-permisos">
-                {pedidos.map(o => (
-                  <div key={o.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(120px,1fr) minmax(0,1fr) auto auto" }}>
-                    <strong>Orden #{o.id.replace(/^\D+-?/, "") || o.id}</strong>
-                    <span>{o.fecha}</span>
-                    <span>{o.total != null ? `$${o.total.toLocaleString("es-CO")}` : ""}</span>
-                    <EstadoPill tono={tonoOrden[o.estado] ?? "gris"}>{o.estado}</EstadoPill>
-                  </div>
-                ))}
-              </div>
-            </SeccionFormulario>
+      <div className="pn-contenido">
+        <div className="pn-recuadro-marco">
+          <div className="mb-3">
+            <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
           </div>
-        )}
+          <div className="pn-recuadro">
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{s.nombre}</h1>
+              <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
+              <TipoPersonaSelector comoEtiqueta valor={s.tipoPersona ?? ""} />
+            </div>
+
+            <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: "1.25rem" }}>
+              {canEdit && (
+                <BotonAccion variante="principal" onClick={() => setEditItem({ ...s })}>Cambiar datos</BotonAccion>
+              )}
+              {canEdit && (
+                <BotonAccion variante={apagado ? "bien" : "normal"} onClick={() => setConfirmToggleId(s.id)}>
+                  {apagado ? "Activar" : "Desactivar"}
+                </BotonAccion>
+              )}
+              {canDelete && (
+                <BotonAccion variante="peligro" onClick={() => alPedirEliminar(s)}>Borrar</BotonAccion>
+              )}
+            </div>
+
+            <DetalleContenido s={s} />
+
+            {pedidos.length > 0 && (
+                <SeccionFormulario plano numero={s.tipoPersona === "Persona Jurídica" ? 4 : s.tipoPersona === "Persona Natural" ? 3 : 2} titulo="Últimos pedidos">
+                  <div className="pn-permisos">
+                    {pedidos.map(o => (
+                      <div key={o.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(7.5rem,1fr) minmax(0,1fr) auto auto" }}>
+                        <strong>Orden #{o.id.replace(/^\D+-?/, "") || o.id}</strong>
+                        <span>{o.fecha}</span>
+                        <span>{o.total != null ? `$${o.total.toLocaleString("es-CO")}` : ""}</span>
+                        <EstadoPill tono={tonoOrden[o.estado] ?? "gris"}>{o.estado}</EstadoPill>
+                      </div>
+                    ))}
+                  </div>
+                </SeccionFormulario>
+            )}
+          </div>
+        </div>
         {dialogos}
       </div>
     );
@@ -576,7 +583,7 @@ export function SuppliersScreen({
         )}
       />
 
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: "1.5rem" }}>
         <BuscadorGrande
           etiqueta="Buscar un proveedor"
           value={search}
@@ -599,29 +606,22 @@ export function SuppliersScreen({
           Revisa cómo lo escribiste o agrega uno nuevo con «Agregar un proveedor».
         </VacioEstado>
       ) : (
-        <div className="pn-prov-grid">
+        <div className="pn-lista">
           {paged.map(s => {
             const apagado = s.estado === "inactivo";
             return (
-              <article key={s.id} className="pn-tarjeta">
-                <div>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <h2 className="pn-tarjeta__nombre">{s.nombre}</h2>
-                    <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
-                  </div>
-                  <p className="pn-tarjeta__sub">
-                    {s.tipoPersona === "Persona Jurídica" ? "Empresa" : s.tipoPersona === "Persona Natural" ? "Persona" : "Proveedor"} · NIT {formatoNit(s.nit)}
-                  </p>
-                </div>
-                <dl className="pn-tarjeta__datos">
-                  <div><dt>Correo</dt><dd>{s.email || (s as Supplier).contactoEmail || "—"}</dd></div>
-                  <div><dt>Hablar con</dt><dd>{s.asesorComercial || (s as Supplier).contactoNombre || "—"}</dd></div>
-                  <div><dt>Teléfono</dt><dd>{s.telefono || (s as Supplier).contactoTelefono || "—"}</dd></div>
-                </dl>
-                <div className="pn-tarjeta__botones">
-                  <BotonAccion variante="normal" onClick={() => setDetailItem(s)}>Ver todos los datos</BotonAccion>
-                </div>
-              </article>
+              <TarjetaFila
+                key={s.id}
+                nombre={s.nombre}
+                detalle={`${s.tipoPersona === "Persona Jurídica" ? "Empresa" : s.tipoPersona === "Persona Natural" ? "Persona" : "Proveedor"} · NIT ${formatoNit(s.nit)}`}
+                datos={[
+                  { etiqueta: "Correo", valor: s.email || (s as Supplier).contactoEmail || "—" },
+                  { etiqueta: "Hablar con", valor: s.asesorComercial || (s as Supplier).contactoNombre || "—" },
+                  { etiqueta: "Teléfono", valor: s.telefono || (s as Supplier).contactoTelefono || "—" },
+                ]}
+                estado={<EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>}
+                acciones={<BotonAccion variante="normal" onClick={() => setDetailItem(s)}>Ver todos los datos</BotonAccion>}
+              />
             );
           })}
         </div>

@@ -5,6 +5,18 @@ import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 // Mismo estilo que la columna Acciones de ActionIcons: el lápiz y el basurero
 // de esta tabla deben verse grises y con hover neutro, nunca azules ni rojos.
 
+/** El mismo total que suma la tabla, para mostrarlo fuera de ella. */
+export const totalDeLineas = (items: InsumoSolicitadoRow[]) =>
+  items.reduce(
+    (suma, row) => suma + calcularLineaIva({
+      cantidad: row.cantidad,
+      montoUnitario: row.precioUnitario,
+      porcentajeIva: row.iva ?? 0,
+      modoIva: row.modoIva ?? "incluido",
+    }).subtotalConIva,
+    0,
+  );
+
 export interface InsumoSolicitadoRow {
   rowId: string;
   idInsumo: string;
@@ -138,20 +150,16 @@ export function InsumosSolicitadosTable({
   /**
    * Anchos fijos de columna para `table-layout: fixed`. Sólo "Nombre" queda
    * sin ancho para que se lleve todo el espacio que sobra; los demás son
-   * valores fijos en px calculados para que la tabla quepa en los ~502 px de
-   * la columna derecha a 1366×768 SIN scroll horizontal y con la columna de
-   * Acciones (lápiz + basurero) siempre visible. Si la pantalla es más
-   * angosta, `min-w` conserva el ancho mínimo y el scroll queda dentro del
-   * contenedor de la tabla (salvo con `sinScrollX`, que lo desactiva).
+   * valores fijos. La tabla va a todo el ancho, debajo del formulario, sin
+   * ancho mínimo ni scroll horizontal.
    */
-  const ANCHOS: Record<string, number | undefined> = {
-    "Cantidad + presentación": sinScrollX ? 96 : 104,
-    "Monto unitario": sinScrollX ? 82 : 90,
-    IVA: sinScrollX ? 68 : 82,
-    Subtotal: sinScrollX ? 78 : 88,
+  const ANCHOS: Record<string, string | undefined> = {
+    "Cantidad + presentación": sinScrollX ? "6rem" : "6.5rem",
+    "Monto unitario": sinScrollX ? "5.125rem" : "5.625rem",
+    IVA: sinScrollX ? "4.25rem" : "5.125rem",
+    Subtotal: sinScrollX ? "4.875rem" : "5.5rem",
   };
-  const ANCHO_ACCIONES = 112;
-  const ANCHO_MINIMO = 500;
+  const ANCHO_ACCIONES = "7rem";
   const colgroup = (
     <colgroup>
       {headers.map((h) => (
@@ -192,7 +200,7 @@ export function InsumosSolicitadosTable({
             >
               <td className={tdBase + " text-lg font-medium text-foreground min-w-0"}>
                 <div
-                  className={sinScrollX ? "truncate" : "line-clamp-2 break-words"}
+                  className="break-words"
                   title={item.nombre}
                 >
                   {item.nombre}
@@ -218,7 +226,7 @@ export function InsumosSolicitadosTable({
                 </span>
               </td>
 
-              <td data-etiqueta="Monto unitario" className={tdBase + " text-lg"}>
+              <td data-etiqueta="Monto unitario" className={tdBase + " text-lg whitespace-nowrap"}>
                 {fmtCOP(item.precioUnitario)}
               </td>
 
@@ -236,13 +244,13 @@ export function InsumosSolicitadosTable({
               )}
 
               {mostrarSubtotal && (
-                <td data-etiqueta="Subtotal" className={tdBase + " text-lg font-semibold"}>
+                <td data-etiqueta="Subtotal" className={tdBase + " text-lg font-semibold whitespace-nowrap"}>
                   {fmtCOP(calcularLinea(item).subtotalConIva)}
                 </td>
               )}
 
               {showActions && (
-                <td className={tdBase + " whitespace-nowrap"}>
+                <td className={tdBase}>
                   {/* Mientras la fila está cargada en el formulario se
                       ocultan sus acciones (sin mover la columna). */}
                   <div
@@ -254,7 +262,7 @@ export function InsumosSolicitadosTable({
                         type="button"
                         onClick={() => onEdit(item)}
                         title="Editar ítem"
-                        className="pn-boton pn-boton--normal"
+                        className="pn-boton pn-boton--normal !px-2"
                       >
                         Cambiar
                       </button>
@@ -263,7 +271,7 @@ export function InsumosSolicitadosTable({
                       type="button"
                       onClick={() => onRemove?.(item.rowId)}
                       title="Eliminar insumo"
-                      className="pn-boton pn-boton--peligro"
+                      className="pn-boton pn-boton--peligro !px-2"
                     >
                       Quitar
                     </button>
@@ -332,7 +340,7 @@ export function InsumosSolicitadosTable({
 
   const renderTotalesExternos = () =>
     enPagina && items.length > 0 && (
-      <div className="flex items-baseline justify-end gap-5 shrink-0 px-3 py-1.5 border-t border-border">
+      <div className="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 shrink-0 px-3 py-1.5 border-t border-border">
         <span className="text-base font-bold uppercase tracking-wider text-muted-foreground">
           {labelSubtotal}
         </span>
@@ -364,20 +372,14 @@ export function InsumosSolicitadosTable({
 
   if (enPagina) {
     return (
-      <div className={"flex flex-col flex-1 min-h-0 " + className}>
-        <div
-          className={
-            "flex-1 min-h-0 " +
-            "overflow-auto"
-          }
-        >
+      <div className={"flex flex-col " + className}>
+        <div>
           <table
             className="pn-tabla-compra w-full [&_td]:py-2"
-            style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
           >
             {colgroup}
             <thead
-              className={"text-base uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
+              className={"text-base uppercase tracking-wider border-b border-border " +
                 (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground")}
             >
               <tr>
@@ -427,16 +429,9 @@ export function InsumosSolicitadosTable({
           </p>
         </div>
       )}
-      <div
-        className={
-          "flex-1 min-h-0 " +
-          "overflow-auto" +
-          (enPagina && items.length === 0 ? " flex items-center" : "")
-        }
-      >
+      <div className={enPagina && items.length === 0 ? "flex items-center" : undefined}>
         <table
           className={"pn-tabla-compra w-full " + (enPagina ? "[&_td]:py-2" : "")}
-          style={sinScrollX ? undefined : { minWidth: ANCHO_MINIMO }}
         >
           {colgroup}
           <thead
@@ -449,7 +444,7 @@ export function InsumosSolicitadosTable({
                   key={h}
                   className={(sinScrollX ? "px-1 " : "px-1.5 ") + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold leading-tight whitespace-normal " +
                     (enPagina
-                      ? "sticky top-0 z-10 border-b border-border " +
+                      ? "border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
                       : "")}
                 >
@@ -464,7 +459,7 @@ export function InsumosSolicitadosTable({
                 <th
                   className={(sinScrollX ? "px-1 py-2.5 " : "px-1.5 py-2.5 ") +
                     (enPagina
-                      ? "sticky top-0 z-10 border-b border-border " +
+                      ? "border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
                       : "")}
                 />

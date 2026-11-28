@@ -112,16 +112,19 @@ function Bloque({
   titulo,
   children,
   className = "",
+  plano = false,
 }: {
   titulo: ReactNode;
+  /** Sin tarjeta propia: subtítulo + línea divisoria. */
+  plano?: boolean;
   /** Ya no se usa (las secciones llevan número, no ícono); se acepta por compatibilidad. */
   icono?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`pn-seccion ${className}`}>
-      <h2 style={{ marginBottom: 16 }}>{titulo}</h2>
+    <section className={`pn-seccion ${plano ? "pn-seccion--plana" : ""} ${className}`}>
+      <h2 style={{ marginBottom: "1rem" }}>{titulo}</h2>
       {children}
     </section>
   );
@@ -229,8 +232,12 @@ export function ProveedorFormCampos({
   form,
   autoFocusNombre = true,
   nitLectura,
+  plano = false,
 }: {
   form: ProveedorFormApi;
+  /** Dentro del recuadro único del módulo Proveedores: secciones sin tarjeta
+   *  y grilla fija de 2 columnas. */
+  plano?: boolean;
   autoFocusNombre?: boolean;
   /**
    * Modo edición del módulo Proveedores: si se pasa, el NIT se pinta como
@@ -300,6 +307,7 @@ export function ProveedorFormCampos({
   // En edición no hay input de NIT (queda congelado): el módulo no permite
   // modificarlo después de creado el proveedor.
   const pideNit = nitLectura === undefined;
+  const grilla = plano ? `${gridCls} pn-grilla--dos` : gridCls;
 
   return (
     // CONTENEDOR CENTRADO (max-w-4xl, mx-auto): secciones apiladas con barra de
@@ -308,7 +316,7 @@ export function ProveedorFormCampos({
     //
     // El selector "Tipo de persona" vive en el ENCABEZADO de cada pantalla/modal
     // con `TipoPersonaSelector` (misma fila del título).
-    <div className="grid gap-5 mx-auto max-w-4xl">
+    <div className={plano ? "grid" : "grid gap-5 mx-auto max-w-4xl"}>
       {!hayTipo && (
         <p className={avisoCls}>
           Escoge arriba si es empresa o persona natural para ver las preguntas.
@@ -321,8 +329,8 @@ export function ProveedorFormCampos({
               el mismo ancho que los demás (así lo pinta el grid). ─────────── */}
           {esNatural && (
             <>
-            <Bloque titulo="2 · Datos de la persona">
-              <div className={gridCls}>
+            <Bloque plano={plano} titulo="2 · Datos de la persona">
+              <div className={grilla}>
                 {pideNit ? (
                   <>
                     {/* 1. Tipo de documento */}
@@ -395,8 +403,8 @@ export function ProveedorFormCampos({
                 )}
               </div>
             </Bloque>
-            <Bloque titulo="3 · ¿Con quién hablamos para pedir?">
-              <div className={gridCls}>
+            <Bloque plano={plano} titulo="3 · ¿Con quién hablamos para pedir?">
+              <div className={grilla}>
                 {/* 4. Teléfono */}
                 <Campo form={form} label={<>Teléfono {req}</>} campo="telefono">
                   <input
@@ -453,8 +461,8 @@ export function ProveedorFormCampos({
           {esJuridica && (
             <>
                 {/* Sección 2 — Razón social */}
-                <Bloque titulo="2 · Datos de la empresa">
-                  <div className={gridCls}>
+                <Bloque plano={plano} titulo="2 · Datos de la empresa">
+                  <div className={grilla}>
                     {pideNit ? (
                       <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
                         <input
@@ -525,8 +533,8 @@ export function ProveedorFormCampos({
                 </Bloque>
 
                 {/* Sección 1 — Representante legal */}
-                <Bloque titulo="3 · Representante legal">
-                  <div className={gridCls}>
+                <Bloque plano={plano} titulo="3 · Representante legal">
+                  <div className={grilla}>
                     <SelectCampo
                       form={form}
                       label={<>Tipo de documento {req}</>}
@@ -586,18 +594,8 @@ export function ProveedorFormCampos({
                 </Bloque>
 
                 {/* Sección 3 — Contacto comercial */}
-                <Bloque titulo="4 · ¿Con quién hablamos para pedir?">
-                  <div className={gridCls}>
-                    <Campo form={form} label={<>Email {req}</>} campo="contactoEmail">
-                      <input
-                        type="email"
-                        value={v.contactoEmail ?? ""}
-                        onChange={alEscribir("contactoEmail", (x) => x)}
-                        onBlur={alTocar("contactoEmail")}
-                        placeholder="ventas@proveedor.co"
-                        className={`${inputCls} transition-colors ${form.campoCls("contactoEmail")}`}
-                      />
-                    </Campo>
+                <Bloque plano={plano} titulo="4 · ¿Con quién hablamos para pedir?">
+                  <div className={grilla}>
                     <Campo form={form} label={<>Teléfono celular {req}</>} campo="contactoTelefono">
                       <input
                         type="tel"
@@ -622,13 +620,14 @@ export function ProveedorFormCampos({
                         className={`${inputCls} transition-colors ${form.campoCls("contactoTelefonoFijo")}`}
                       />
                     </Campo>
-                    <Campo form={form} label={<>Dirección comercial {req}</>} campo="direccion">
+                    <Campo form={form} label={<>Email {req}</>} campo="contactoEmail">
                       <input
-                        value={v.direccion ?? ""}
-                        onChange={alEscribir("direccion", soloDireccion)}
-                        onBlur={alTocar("direccion")}
-                        placeholder="Cra 50 #30-10"
-                        className={`${inputCls} transition-colors ${form.campoCls("direccion")}`}
+                        type="email"
+                        value={v.contactoEmail ?? ""}
+                        onChange={alEscribir("contactoEmail", (x) => x)}
+                        onBlur={alTocar("contactoEmail")}
+                        placeholder="ventas@proveedor.co"
+                        className={`${inputCls} transition-colors ${form.campoCls("contactoEmail")}`}
                       />
                     </Campo>
                     <Campo form={form} label={<>Nombre del contacto {req}</>} campo="contactoNombre">
@@ -640,12 +639,21 @@ export function ProveedorFormCampos({
                         className={`${inputCls} transition-colors ${form.campoCls("contactoNombre")}`}
                       />
                     </Campo>
+                    <Campo form={form} label={<>Dirección comercial {req}</>} campo="direccion">
+                      <input
+                        value={v.direccion ?? ""}
+                        onChange={alEscribir("direccion", soloDireccion)}
+                        onBlur={alTocar("direccion")}
+                        placeholder="Cra 50 #30-10"
+                        className={`${inputCls} transition-colors ${form.campoCls("direccion")}`}
+                      />
+                    </Campo>
                   </div>
                 </Bloque>
 
               {/* Sección 4 — Cámara de Comercio */}
-              <Bloque titulo="5 · Cámara de Comercio">
-                <div className={gridCls}>
+              <Bloque plano={plano} titulo="5 · Cámara de Comercio">
+                <div className={grilla}>
                   <Campo
                     form={form}
                     label={<>Archivo de la Cámara de Comercio <span className="font-normal">(opcional)</span></>}
@@ -667,7 +675,7 @@ export function ProveedorFormCampos({
                           type="button"
                           onClick={quitarAdjunto}
                           className="pn-boton pn-boton--peligro shrink-0"
-                          style={{ minHeight: 46 }}
+                          style={{ minHeight: "2.875rem" }}
                         >
                           Quitar el archivo
                         </button>
@@ -678,7 +686,7 @@ export function ProveedorFormCampos({
               </Bloque>
 
               {/* Estado: último elemento del formulario en fila propia sin barra de título */}
-              <div className={gridCls}>
+              <div className={plano ? `${grilla} pn-seccion--plana pn-seccion` : gridCls}>
                 <div>
                   <p className={labelCls}>¿El proveedor está activo?</p>
                   <OpcionesBotones

@@ -80,10 +80,10 @@ export function CrearInsumoCompraModal({
           : undefined,
       pesoMedida:
         pesoMedida < 0
-          ? "El peso de medida no puede ser negativo."
+          ? "El contenido por paquete no puede ser negativo."
           : pesoMedida > 0
             ? undefined
-            : "El peso de medida es obligatorio.",
+            : "El contenido por paquete es obligatorio.",
     };
   }, [nombre, categoriaId, unidad, contenidoPresentacion, stockMinimo, pesoMedida, insumosExistentes]);
 
@@ -198,7 +198,7 @@ export function CrearInsumoCompraModal({
 
               <div>
                 <label className="block text-base font-semibold text-muted-foreground mb-1.5">
-                  Unidad de Medida *
+                  Unidad de medida *
                 </label>
                 <div className="flex items-start gap-2">
                   <UnidadSelect
@@ -212,7 +212,7 @@ export function CrearInsumoCompraModal({
                     disabled={guardando}
                     unidades={UNIDADES_Y_PRESENTACIONES_INSUMO}
                     mostrarValorSeleccionadoCorto
-                    ariaLabel="Unidad de Medida"
+                    ariaLabel="Unidad de medida"
                     fieldClassName={ICLS_MODAL}
                   />
                   {esOtraPresentacion(unidad) && (
@@ -239,6 +239,9 @@ export function CrearInsumoCompraModal({
                     </div>
                   )}
                 </div>
+                <p className="mt-1 text-base text-muted-foreground">
+                  Cómo se cuenta este insumo: kilos, litros, unidades…
+                </p>
                 {errorDe("unidad", errores.unidad) && (
                   <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                     {errores.unidad}
@@ -256,7 +259,7 @@ export function CrearInsumoCompraModal({
                 (ej. 1200 g). Obligatorio al crear. */}
             <div>
               <label className="block text-base font-semibold text-muted-foreground mb-1.5">
-                Peso de medida *
+                Contenido por paquete *
               </label>
               <div className="relative">
                 <input
@@ -264,7 +267,7 @@ export function CrearInsumoCompraModal({
                   min={0.01}
                   step={0.01}
                   value={pesoMedida === 0 ? "" : pesoMedida}
-                  placeholder="Ej: 1200"
+                  placeholder="Ej: 500"
                   disabled={guardando}
                   onChange={(event) => {
                     setPesoMedida(numeroDeInput(limpiarNumeroInput(event.target.value)));
@@ -282,6 +285,13 @@ export function CrearInsumoCompraModal({
                       : unidad)}
                 </span>
               </div>
+              <p className="mt-1 text-base text-muted-foreground">
+                En {(() => {
+                  const u = presentacion?.unidadBase ??
+                    (esOtraPresentacion(unidad) ? (unidad === OTRA_PRESENTACION_G ? "g" : "ml") : unidad);
+                  return u === "g" ? "gramos" : u === "ml" ? "mililitros" : u;
+                })()}. Ej.: una bolsa de 500 g
+              </p>
               {errorDe("pesoMedida", errores.pesoMedida) && (
                 <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                   {errores.pesoMedida}
@@ -291,7 +301,7 @@ export function CrearInsumoCompraModal({
 
             <div>
               <label className="block text-base font-semibold text-muted-foreground mb-1.5">
-                Stock Mínimo{presentacion
+                Stock mínimo{presentacion
                   ? ` (× ${etiquetaContenido(unidad, presentacion.contenido, presentacion.unidadBase)})`
                   : esOtraPresentacion(unidad)
                     ? ` (× ${etiquetaContenido(unidad, contenidoPresentacion, unidadBaseDeSeleccion(unidad)!)})`
@@ -320,13 +330,16 @@ export function CrearInsumoCompraModal({
                   </span>
                 )}
               </div>
-              {presentacion && (
-                <p className="mt-1 text-base text-muted-foreground">
-                  {formatoCantidad.format(stockMinimo)} ×{" "}
-                  {etiquetaContenido(unidad, presentacion.contenido, presentacion.unidadBase)} ={" "}
-                  {formatoCantidad.format(stockMinimo * presentacion.contenido)} {presentacion.unidadBase}
-                </p>
-              )}
+              <p className="mt-1 text-base text-muted-foreground">
+                Cuando en bodega quede menos de esta cantidad, el sistema avisa que hay que comprar.
+                {presentacion && (
+                  <>
+                    {" "}{formatoCantidad.format(stockMinimo)} ×{" "}
+                    {etiquetaContenido(unidad, presentacion.contenido, presentacion.unidadBase)} ={" "}
+                    {formatoCantidad.format(stockMinimo * presentacion.contenido)} {presentacion.unidadBase}
+                  </>
+                )}
+              </p>
               {errorDe("stockMinimo", errores.stockMinimo) && (
                 <p className="text-base text-red-500 dark:text-red-400 mt-1 leading-tight">
                   {errores.stockMinimo}

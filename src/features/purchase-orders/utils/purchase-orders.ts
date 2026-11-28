@@ -217,7 +217,7 @@ export const FORM_MAXW = "max-w-4xl";
 /** Ancho del contenido cuando el formulario va a pantalla completa (no modal):
  *  ocupa casi todo el panel para que las dos columnas (40 % / 60 %) quepan en
  *  1366×768 sin scroll. */
-export const FORM_MAXW_PAGINA = "max-w-[1200px]";
+export const FORM_MAXW_PAGINA = "max-w-[75rem]";
 
 /** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
  *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */

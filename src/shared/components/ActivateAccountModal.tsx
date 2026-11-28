@@ -11,6 +11,7 @@ import {
   AUTH_GLASS_CARD,
 } from "@/shared/styles/authGlass";
 import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
+import { useIdioma } from "@/shared/i18n";
 
 const SERIF = "var(--font-titulo)";
 
@@ -40,6 +41,7 @@ export function ActivarCuentaModal({
   /** Salida explícita al inicio de sesión (enlace inválido o "Ir a iniciar sesión"). */
   onIrALogin: () => void;
 }) {
+  const { t, errorVisible } = useIdioma();
   const [datos, setDatos] = useState<ActivacionDatos | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -93,7 +95,7 @@ export function ActivarCuentaModal({
         <button
           type="button"
           onClick={onCerrar}
-          aria-label="Cerrar creación de contraseña"
+          aria-label={t("auth.cerrarCreacion")}
           className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
@@ -101,7 +103,7 @@ export function ActivarCuentaModal({
 
         {cargando && (
           <p className="text-center text-sm text-muted-foreground py-8">
-            Validando el enlace…
+            {t("auth.validandoEnlace")}
           </p>
         )}
 
@@ -115,15 +117,15 @@ export function ActivarCuentaModal({
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                No pudimos abrir el enlace
+                {t("auth.noPudimosAbrir")}
               </h2>
-              <p className="text-sm text-muted-foreground mt-1">{error}</p>
+              <p className="text-sm text-muted-foreground mt-1">{errorVisible(error)}</p>
             </div>
             <button
               onClick={onIrALogin}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
             >
-              Ir a iniciar sesión
+              {t("auth.irAIniciar")}
             </button>
           </>
         )}
@@ -138,10 +140,10 @@ export function ActivarCuentaModal({
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                Crea tu contraseña
+                {t("auth.creaTuContrasena")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Hola, <strong className="text-foreground">{datos.nombre}</strong>. Crea tu contraseña para activar tu cuenta
+                {t("auth.saludoActivar")} <strong className="text-foreground">{datos.nombre}</strong>. {t("auth.paraActivar")}
                 {datos.correoEnmascarado ? (
                   <>
                     {" "}(<strong className="text-foreground">{datos.correoEnmascarado}</strong>)

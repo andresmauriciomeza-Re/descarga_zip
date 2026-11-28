@@ -18,6 +18,7 @@ import { PrimaryBtn } from "@/shared/components/buttons/PrimaryButton";
 import { AVATAR_PALETTE } from "@/shared/utils/avatar";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
 import { AceptacionTerminos } from "@/features/auth/components/AcceptTerms";
+import { useIdioma } from "@/shared/i18n";
 
 export function RegisterScreen({
   navigate,
@@ -25,7 +26,6 @@ export function RegisterScreen({
   setUsuarios,
   clientes,
   setClientes,
-  darkMode,
   onRegistrado,
 }: {
   navigate: (s: Screen) => void;
@@ -33,11 +33,12 @@ export function RegisterScreen({
   setUsuarios: React.Dispatch<React.SetStateAction<Usuario[]>>;
   clientes: Cliente[];
   setClientes: React.Dispatch<React.SetStateAction<Cliente[]>>;
-  darkMode: boolean;
   /** Cuenta creada y pendiente de confirmar el correo: App lleva al login con
    *  el correo escrito y el aviso. `correoEnviado` = salió "Confirma tu correo". */
   onRegistrado: (correo: string, correoEnviado: boolean) => void;
 }) {
+  // `errores` guarda español (se compara abajo); MensajeError lo traduce al pintar.
+  const { t, tf, errorVisible } = useIdioma();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -329,7 +330,7 @@ export function RegisterScreen({
       } else {
         // 429, sin conexión, 500, 503 u otros: el texto ya viene del
         // interceptor y no se navega.
-        toast.error(mensaje);
+        toast.error(errorVisible(mensaje));
       }
     } finally {
       setLoading(false);
@@ -337,7 +338,7 @@ export function RegisterScreen({
   };
 
   return (
-    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12" darkMode={darkMode}>
+    <AuthLayout contentClassName="items-start justify-center sm:justify-end px-4 py-3 lg:px-8 lg:pr-16 xl:pr-12">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -345,18 +346,18 @@ export function RegisterScreen({
       >
         <button
           onClick={() => navigate("landing")}
-          title="Volver al inicio"
+          title={t("auth.volverInicio")}
           className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="text-center mb-2">
-          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-1" />
+          <Logo variante="claro" alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-1" />
           <h1
             className="text-xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
-            Crear cuenta
+            {t("auth.crearCuenta")}
           </h1>
         </div>
 
@@ -376,13 +377,13 @@ export function RegisterScreen({
           <div className="sm:col-span-6 grid gap-3 grid-cols-1 sm:grid-cols-[3fr_2fr]">
             <div className="min-w-0">
               <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white whitespace-nowrap">
-                Tipo doc.
+                {t("auth.tipoDocCorto")}
                 <MarcaObligatorio />
               </label>
               <select
                 value={form.docType}
                 ref={validacion.refCampo("docType")}
-                aria-label="Tipo de documento"
+                aria-label={t("auth.tipoDocumento")}
                 onChange={(e) => {
                   setForm((p) => ({ ...p, docType: e.target.value }));
                   if (form.docNum) {
@@ -396,7 +397,7 @@ export function RegisterScreen({
               >
                 {OPCIONES_TIPO_DOCUMENTO.map((opt) => (
                   <option key={opt.code} value={opt.code}>
-                    {opt.label}
+                    {tf(opt.label)}
                   </option>
                 ))}
               </select>
@@ -404,7 +405,7 @@ export function RegisterScreen({
             </div>
             <div className="min-w-0">
               <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white whitespace-nowrap">
-                Número de documento
+                {t("auth.numeroDocumento")}
                 <MarcaObligatorio />
               </label>
               <input
@@ -412,8 +413,8 @@ export function RegisterScreen({
                 onChange={(e) => setVal("docNum")(filtrarDocumento(e.target.value, form.docType))}
                 type="text"
                 inputMode="numeric"
-                placeholder="Ej: 12345678"
-                aria-label="Número de documento"
+                placeholder={t("auth.ejemploDocumento")}
+                aria-label={t("auth.numeroDocumento")}
                 ref={validacion.refCampo("docNum")}
                 onKeyDown={teclaEnRegistro("docNum")}
                 className={authInputCls(errores.docNum, "h-10")}
@@ -459,7 +460,7 @@ export function RegisterScreen({
           ].map(({ label, key, placeholder, type, numeric, full }) => (
             <div key={key} className={full ? "sm:col-span-6 min-w-0" : key === "email" ? "sm:col-span-4 min-w-0" : key === "phone" ? "sm:col-span-2 min-w-0" : "sm:col-span-3 min-w-0"}>
               <label className="block text-sm font-semibold mb-1 text-foreground dark:text-white">
-                {label}
+                {tf(label)}
                 <MarcaObligatorio />
               </label>
               {type === "password" ? (
@@ -467,9 +468,9 @@ export function RegisterScreen({
                   value={form[key]}
                   onChange={setVal(key)}
                   onKeyDown={teclaEnRegistro(key)}
-                  placeholder={placeholder}
+                  placeholder={tf(placeholder)}
                   autoComplete="new-password"
-                  ariaLabel={label}
+                  ariaLabel={tf(label)}
                   cls={authInputCls(errores[key], "h-10")}
                   pad="pr-9"
                   inputRef={validacion.refCampo(key)}
@@ -482,8 +483,8 @@ export function RegisterScreen({
                   onChange={numeric ? setDigitos(key) : set(key)}
                   type={type}
                   inputMode={numeric ? "numeric" : undefined}
-                  placeholder={placeholder}
-                  aria-label={label}
+                  placeholder={tf(placeholder)}
+                  aria-label={tf(label)}
                   ref={validacion.refCampo(key)}
                   onBlur={key === "name" ? () => setForm(p => ({ ...p, name: normalizarNombrePersona(p.name) })) : undefined}
                   onKeyDown={teclaEnRegistro(key)}
@@ -532,16 +533,16 @@ export function RegisterScreen({
           ) : (
             <CheckCircle className="w-4 h-4" />
           )}
-          {loading ? "Creando cuenta..." : "Crear cuenta"}
+          {loading ? t("auth.creandoCuenta") : t("auth.crearCuenta")}
         </PrimaryBtn>
 
         <p className="text-center text-sm text-foreground/75 mt-2 dark:text-white/75">
-          {"¿Ya tienes cuenta? "}
+          {t("auth.yaTienesCuenta")}
           <button
             onClick={() => navigate("login")}
             className="text-primary font-semibold hover:underline cursor-pointer max-md:inline-block max-md:py-3 max-md:-my-3"
           >
-            Ingresar
+            {t("auth.ingresar")}
           </button>
         </p>
       </motion.div>

@@ -70,14 +70,14 @@ export function CamposPedido({
                 <span className="text-sm font-semibold text-foreground">Venta {v.id}</span>
                 <span className="text-sm font-semibold text-foreground tabular-nums">${(v.total ?? 0).toLocaleString("es-CO")}</span>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[0.6875rem] text-muted-foreground">
                 {v.usuario} · {formatearFechaHora(v.fecha, v.horaRecogida)}
               </p>
             </button>
           ))}
         </div>
         {yaConOrden.length > 0 && (
-          <p className="text-[11px] text-muted-foreground mt-1.5">
+          <p className="text-[0.6875rem] text-muted-foreground mt-1.5">
             Las ventas {yaConOrden.map((v) => v).join(", ")} ya tienen orden de producción.
           </p>
         )}
@@ -86,7 +86,7 @@ export function CamposPedido({
       {venta && (
         <>
           <div className="rounded-xl border border-border overflow-hidden">
-            <div className="px-3 py-2 bg-muted/60 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="px-3 py-2 bg-muted/60 text-[0.625rem] font-bold uppercase tracking-wide text-muted-foreground">
               Detalle de la venta (solo lectura)
             </div>
             {elegidas.lineas.map((l, i) => {
@@ -94,7 +94,7 @@ export function CamposPedido({
               <div key={i} className="flex items-start justify-between gap-3 px-3 py-2 border-t border-border">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{l.nombre}</p>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[0.6875rem] text-muted-foreground">
                     {l.tamano ? `Tamaño ${l.tamano} · ` : ""}{l.cantidadEstimada} und
                     {l.porciones ? ` · ${l.porciones} porciones` : ""}
                   </p>
@@ -102,12 +102,12 @@ export function CamposPedido({
               </div>
               );
             })}
-            <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground">
+            <div className="px-3 py-2 border-t border-border bg-muted/40 text-[0.6875rem] text-muted-foreground">
               Fecha y hora solicitadas: <strong className="text-foreground">{formatearFechaHora(venta.fecha, venta.horaRecogida)}</strong> (recogida del cliente)
             </div>
             {/* Tiempo fijo del pedido: NO sale del tiempoPreparacion de la
                 ficha (eso es de "Preparación en lote"). */}
-            <div className="px-3 py-2 border-t border-border bg-muted/40 text-[11px] text-muted-foreground flex items-center gap-1.5">
+            <div className="px-3 py-2 border-t border-border bg-muted/40 text-[0.6875rem] text-muted-foreground flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
               Calentamiento: <strong className="text-foreground">{fmtMinutos(HORNEADO_MIN)}</strong>
             </div>

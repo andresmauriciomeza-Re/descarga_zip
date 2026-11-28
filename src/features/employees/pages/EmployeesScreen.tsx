@@ -661,23 +661,23 @@ export function GestionEmpleadosScreen({
                   <div className="pn-grilla">
                     <div>
                       <p className="pn-etiqueta">Documento</p>
-                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{documentoLegible(editItem.tipoDocumento, editItem.numeroDocumento)}</div>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: "0.625rem" }} />{documentoLegible(editItem.tipoDocumento, editItem.numeroDocumento)}</div>
                       <p className="pn-campo__ayuda">No se puede cambiar</p>
                     </div>
                     <div>
                       <p className="pn-etiqueta">Nombre</p>
-                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.nombre}</div>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: "0.625rem" }} />{editItem.nombre}</div>
                     </div>
                     <div>
                       <p className="pn-etiqueta">Correo</p>
-                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.correo}</div>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: "0.625rem" }} />{editItem.correo}</div>
                     </div>
                     <div>
                       <p className="pn-etiqueta">Celular</p>
-                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: 10 }} />{editItem.telefono || "—"}</div>
+                      <div className="pn-lectura"><Lock size={20} aria-hidden="true" style={{ marginRight: "0.625rem" }} />{editItem.telefono || "—"}</div>
                     </div>
                   </div>
-                  <p className="pn-campo__ayuda" style={{ marginTop: 14 }}>Estos datos los cambia cada persona desde su perfil.</p>
+                  <p className="pn-campo__ayuda" style={{ marginTop: "0.875rem" }}>Estos datos los cambia cada persona desde su perfil.</p>
                 </SeccionFormulario>
                 <SeccionFormulario titulo="Su trabajo">
                   <div className="pn-grilla">
@@ -796,7 +796,7 @@ export function GestionEmpleadosScreen({
     const d = detailItem;
     const anteriores = detalleHistorial.slice(1);
     return (
-      <div className="pn-contenido" style={{ maxWidth: 950 }}>
+      <div className="pn-contenido" style={{ maxWidth: "59.375rem" }}>
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
@@ -804,10 +804,10 @@ export function GestionEmpleadosScreen({
           <Avatar e={d} tam={80} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{d.nombre}</h1>
+              <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{d.nombre}</h1>
               <EstadoTrabajo activo={d.activo} />
             </div>
-            <p className="pn-seccion__ayuda" style={{ margin: "6px 0 0" }}>{cargoTexto(d.rolIds)} · {contratoTexto(d).toLowerCase()}</p>
+            <p className="pn-seccion__ayuda" style={{ margin: "0.375rem 0 0" }}>{cargoTexto(d.rolIds)} · {contratoTexto(d).toLowerCase()}</p>
           </div>
         </div>
         <div className="grid gap-5 mt-6">
@@ -818,7 +818,7 @@ export function GestionEmpleadosScreen({
               { etiqueta: "Celular", valor: d.telefono || "—" },
               { etiqueta: "Su cuenta", valor: d.invitacionPendiente ? "Todavía no abre la invitación" : "✓ Ya entró al sistema" },
             ]} />
-            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+            <p className="pn-campo__ayuda" style={{ fontSize: "1.0625rem", marginTop: "1rem" }}>
               Los cambia la misma persona en su perfil mientras trabaje aquí.
             </p>
           </SeccionFormulario>
@@ -928,7 +928,7 @@ export function GestionEmpleadosScreen({
                   <EstadoTrabajo activo={e.activo} />
                   {e.invitacionPendiente
                     ? <EstadoPill tono="ambar">No ha abierto el correo de invitación</EstadoPill>
-                    : <span style={{ fontSize: 17, color: "var(--verde-texto)", fontWeight: 600 }}>✓ Ya entró al sistema</span>}
+                    : <span style={{ fontSize: "1.0625rem", color: "var(--verde-texto)", fontWeight: 600 }}>✓ Ya entró al sistema</span>}
                 </div>
               }
               acciones={botonesEmpleado(e)}

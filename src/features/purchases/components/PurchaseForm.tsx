@@ -8,7 +8,7 @@ import type { CategoriaProducto } from "@/features/product-categories/utils/prod
 import { type NuevaCompraData, type ItemFactura, type TipoItem, labelPaginaCls, labelModalCls, iPaginaCls, iCls, SERIF, labelDatoCls, valorDatoCls, campoCortoCls, fmtCOP } from "@/features/purchases/utils/purchases";
 import { type ModoIva, calcularLineaIva, resolverModoIva, chipIvaSinPrefijo } from "@/features/purchases/services/vat";
 import { nombreBuscable, contenidoDe, presentacionCompra, empaqueDe, medidaCompra } from "@/shared/utils/presentation";
-import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm } from "@/features/purchases/components/CompactSupplyForm";
+import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm, irAlFormularioDeLinea } from "@/features/purchases/components/CompactSupplyForm";
 import { toast } from "sonner";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import { motion, AnimatePresence } from "motion/react";
@@ -603,7 +603,8 @@ export function CompraForm({
     setItemPrecioVenta(row.precioVenta ?? 0);
     setItemSugAbierto(false);
     setEditando(row.rowId);
-    nombreRef.current?.focus();
+    // El foco abre las sugerencias: se cierran enseguida.
+    setTimeout(() => { irAlFormularioDeLinea(itemRef.current); setItemSugAbierto(false); }, 0);
   };
 
   const eliminarItem = (rowId: string) => {
@@ -702,14 +703,14 @@ export function CompraForm({
       <div
         className={
           isPage
-            ? "w-full px-4 sm:px-6 py-4 h-full flex flex-col overflow-hidden"
+            ? `w-full px-4 sm:px-6 pt-4 ${isView ? "pb-4" : "pn-pagina-con-barra"}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full h-full flex flex-col"
+              ? "w-full"
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -718,9 +719,9 @@ export function CompraForm({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${isPage ? "max-w-[1200px]" : FORM_MAXW}${
+            className={`flex flex-col w-full ${isPage ? "max-w-[75rem]" : FORM_MAXW}${
               isPage
-                ? " h-full"
+                ? ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
@@ -765,7 +766,7 @@ export function CompraForm({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto overflow-x-clip"
+                  ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : isView
                     // Detalle: el modal se AJUSTA al contenido (sin
                     // `flex-1 min-h-0`, que lo estiraba hasta el tope y
@@ -786,7 +787,7 @@ export function CompraForm({
                <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:h-full"
+                    ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1176,7 +1177,7 @@ export function CompraForm({
                     compacto={isPage}
                     // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
                     // de una fila existente ocurre en línea, en la tabla.
-                    buttonLabel={editando ? "Guardar cambios" : "+ Agregar otra línea"}
+                    buttonLabel={editando ? "Guardar cambios" : "Agregar otra línea"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Fase 4: Presentación SIEMPRE visible. Para PRODUCTOS es
@@ -1206,7 +1207,7 @@ export function CompraForm({
                     // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
                       isPage ? undefined : (
-                      <div className="min-w-[118px]">
+                      <div className="min-w-[7.375rem]">
                         <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>
@@ -1248,7 +1249,7 @@ export function CompraForm({
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6 lg:h-full"
+                    ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1291,27 +1292,24 @@ export function CompraForm({
                     </span>
                   </div>
 
-                  {/* Con más de ~6 filas la tabla scrollea por dentro; el
+                  {/* La tabla crece con sus filas; el
                       modal se queda con su alto natural. Sin scroll
                       horizontal: por debajo de `md` se ocultan Tipo, Medida,
                       IVA % y Monto IVA (el Tipo baja junto al nombre). */}
                   <div
-                    className={
-                      "rounded-xl border border-border bg-muted/30 overflow-hidden " +
-                      (items.length > 6 ? "max-h-[340px] overflow-y-auto" : "")
-                    }
+                    className="rounded-xl border border-border bg-muted/30"
                   >
-                    <table className="table-fixed w-full text-base">
+                    <table className="table-fixed w-full text-base break-words">
                       <thead className="text-base uppercase tracking-wider bg-muted/50 text-muted-foreground">
                         <tr>
                           <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-16">Tipo</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[68px] whitespace-nowrap">CANTIDAD</th>
-                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[64px] whitespace-nowrap">MEDIDA</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[78px]">Monto unitario</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[4.25rem] whitespace-nowrap">CANTIDAD</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[4rem] whitespace-nowrap">MEDIDA</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[4.875rem]">Monto unitario</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-11">IVA %</th>
-                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[78px]">Monto IVA</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[86px]">Subtotal</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[4.875rem]">Monto IVA</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[5.375rem]">Subtotal</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -1431,33 +1429,32 @@ export function CompraForm({
                   onEdit={editarItem}
                   onRemove={eliminarItem}
                   enPagina={isPage}
+                  ocultarTotal={isPage}
                   rowEditando={editando}
-                  className={isPage ? "flex-1 min-h-0 flex flex-col" : ""}
+                  className=""
                 />
               )}
-
-                {/* Acciones: en pantalla completa van al final de ESTA columna
-                    (siempre visibles); en el modal siguen en el pie general. */}
-                {isPage && !isView && (
-                  <div className="flex flex-wrap gap-3 shrink-0 mt-auto pt-2">
-                    <button
-                      onClick={salir}
-                      className="pn-boton pn-boton--normal flex-1"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={guardar}
-                      disabled={!botonGuardarOk}
-                      className="pn-boton pn-boton--principal flex-1"
-                    >
-                      <Check className="w-4 h-4" />
-                      Guardar y sumar a la bodega
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Pantalla completa: barra fija abajo con el total y las acciones. */}
+            {isPage && !isView && (
+              <div className="pn-barra-guardar">
+                <p className="pn-barra-guardar__total">
+                  <span>Total pagado</span>
+                  <strong>{fmtCOP(totalPagado)}</strong>
+                </p>
+                <div className="pn-barra-guardar__botones">
+                  <button onClick={salir} className="pn-boton pn-boton--normal">
+                    Cancelar
+                  </button>
+                  <button onClick={guardar} disabled={!botonGuardarOk} className="pn-boton pn-boton--principal">
+                    <Check className="w-4 h-4" />
+                    Guardar y sumar a la bodega
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer del modal — solo en creación; en detalle se cierra con
                 la X del encabezado. */}

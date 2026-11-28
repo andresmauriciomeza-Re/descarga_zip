@@ -1,35 +1,24 @@
 import type { Screen } from "@/shared/utils/screen";
 import type { Rol } from "@/features/roles/utils/roles";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { Menu, Moon, Store, Sun } from "lucide-react";
+import { Store } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
+import { LanguageSelector } from "@/shared/components/LanguageSelector";
 import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";
 import { RutaPagina } from "@/shared/components/panel/PageBreadcrumb";
 import { NAV_SECTIONS } from "@/shared/utils/navigation";
 
 export function AdminTopBar({
   current,
-  onToggleSidebar,
-  menuVisible,
-  menuButtonRef,
   navigate,
-  darkMode,
-  setDarkMode,
   userName,
   roleName,
   homeScreen,
   rolesParaCambiar = [], ordenAEditar,
   onCambiarRol,
-  esMovil = false,
 }: {
   current: Screen;
-  onToggleSidebar: () => void;
-  /** true si el menú está visible (para aria-label / aria-expanded). */
-  menuVisible: boolean;
-  /** Ref del propio botón hamburguesa (el foco vuelve aquí al cerrar). */
-  menuButtonRef: { current: HTMLButtonElement | null };
   navigate: (s: Screen) => void;
-  darkMode: boolean;
-  setDarkMode: (v: boolean) => void;
   userName: string;
   roleName: string;
   homeScreen: Screen;
@@ -37,9 +26,8 @@ export function AdminTopBar({
    *  menú "Cambiar de rol" (los vacíos no se ofrecen). */
   rolesParaCambiar?: Rol[]; ordenAEditar?: unknown;
   onCambiarRol?: (rolId: string) => void;
-  /** ≤ 820px: el botón de menú vive en la franja roja del Sidebar. */
-  esMovil?: boolean;
 }) {
+  const { t } = useIdioma();
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
     inicio: ETIQUETA_INICIO_EMPLEADO,
@@ -91,18 +79,6 @@ export function AdminTopBar({
   return (
     <>
       <header className="pn-header">
-        {!esMovil && (
-          <button
-            ref={menuButtonRef}
-            type="button"
-            onClick={onToggleSidebar}
-            className="pn-header__btn pn-header__solo-escritorio"
-            aria-expanded={menuVisible}
-          >
-            <Menu size={24} aria-hidden="true" />
-            <span>{menuVisible ? "Ocultar menú" : "Mostrar menú"}</span>
-          </button>
-        )}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-3 max-md:gap-2">
           {onCambiarRol && (
             <CambiarRolMenu
@@ -113,17 +89,14 @@ export function AdminTopBar({
           )}
           <button type="button" onClick={() => navigate("landing")} className="pn-header__btn">
             <Store size={24} aria-hidden="true" />
-            <span>Ver la tienda</span>
+            <span>{t("menu.verTienda")}</span>
           </button>
-          <button type="button" onClick={() => setDarkMode(!darkMode)} className="pn-header__btn">
-            {darkMode ? <Sun size={24} aria-hidden="true" /> : <Moon size={24} aria-hidden="true" />}
-            <span>{darkMode ? "Modo claro" : "Modo oscuro"}</span>
-          </button>
+          <LanguageSelector className="pn-header__btn" />
           <button
             type="button"
             onClick={() => navigate("profile")}
             className="pn-header__btn"
-            aria-label={`Mi perfil: ${userName}${roleName ? `, ${roleName}` : ""}`}
+            aria-label={`${t("menu.miPerfil", { nombre: userName })}${roleName ? `, ${roleName}` : ""}`}
           >
             <span className="pn-header__avatar" aria-hidden="true">
               {userName.charAt(0).toUpperCase()}

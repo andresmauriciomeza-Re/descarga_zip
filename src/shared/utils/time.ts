@@ -31,6 +31,13 @@ export const minutosDeHora = (texto?: string): number | null => {
   return h * 60 + min;
 };
 
+/** Fecha ficticia con esa hora, para pintarla con `formatoFecha` según el idioma.
+    Devuelve null si el texto no es una hora. */
+export const fechaDeHora = (texto?: string): Date | null => {
+  const minutos = minutosDeHora(texto);
+  return minutos === null ? null : new Date(2000, 0, 1, Math.floor(minutos / 60), minutos % 60);
+};
+
 const relojBogota = new Intl.DateTimeFormat("en-GB", {
   timeZone: "America/Bogota",
   year: "numeric",

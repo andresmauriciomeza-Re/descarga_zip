@@ -620,7 +620,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-4 min-h-[56px] bg-white rounded-[14px] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-4 min-h-[3.5rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   /** Nombre visible de una categoría: el del listado del módulo Categoría de
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
@@ -1335,7 +1335,7 @@ export function GestionProductosScreen({
     }
   };
 
-  const roCls = "w-full px-4 min-h-[56px] flex items-center bg-[var(--gris-suave)] rounded-[14px] border-2 border-[var(--borde-suave)] text-lg text-foreground cursor-not-allowed";
+  const roCls = "w-full px-4 min-h-[3.5rem] flex items-center bg-[var(--gris-suave)] rounded-[0.875rem] border-2 border-[var(--borde-suave)] text-lg text-foreground cursor-not-allowed";
   const recomendadosPizza = (
     f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
     idCategoria: string,
@@ -1445,7 +1445,7 @@ export function GestionProductosScreen({
             ))}
           </select>
           {!readOnly && !onElegirTipo && values.idCategoria && configDeCategoria(values.idCategoria, catName(values.idCategoria)) && (
-            <p style={{ fontSize: 16, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+            <p style={{ fontSize: "1rem", color: "var(--gris-texto)", margin: "0.375rem 0 0" }}>
               Esta categoría ya dice si se hace aquí o se compra hecha.
             </p>
           )}
@@ -1462,7 +1462,7 @@ export function GestionProductosScreen({
                 <option value={TIPOS_PRODUCTO[0]}>Producto insumo — lo hacemos aquí (lleva receta)</option>
                 <option value={TIPOS_PRODUCTO[1]}>Producto terminado — lo compramos hecho (sin receta)</option>
               </select>
-              {errorTipo && <p role="alert" style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "8px 0 0" }}>{errorTipo}</p>}
+              {errorTipo && <p role="alert" style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.5rem 0 0" }}>{errorTipo}</p>}
             </div>
           )}
           {values.idCategoria && mostrarTipo && !(onElegirTipo && !readOnly) && (
@@ -1695,10 +1695,10 @@ export function GestionProductosScreen({
   }) => (
     <>
       <div className="pn-dialogo-fondo" onClick={onClose} />
-      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 720px)" }}>
+      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 45rem)" }}>
         <div className="pn-modal__cab"><h2 className="pn-modal__titulo">{title}</h2></div>
         <div className="pn-campo">{children}</div>
-        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+        <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
           <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
           <BotonAccion variante="principal" onClick={onConfirm}>{confirmLabel}</BotonAccion>
         </div>
@@ -1906,7 +1906,7 @@ export function GestionProductosScreen({
                   </button>
                 }
               >
-                <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                <p className="text-[0.6875rem] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
                   La ficha se guarda como <span className="font-bold text-foreground">v1</span> junto con el producto.
                 </p>
                 <FichaTecnicaEditor
@@ -1994,7 +1994,7 @@ export function GestionProductosScreen({
         <div className="shrink-0 bg-card border-b-2 border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 style={{ font: "700 32px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
+              <h1 style={{ font: "700 2rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
                 {tipoDe(detailItem, catName(detailItem.idCategoria)) === TIPOS_PRODUCTO[1]
                   ? presentacionDe(detailItem)
                   : detailItem.nombre}
@@ -2003,7 +2003,7 @@ export function GestionProductosScreen({
                 {detailItem.estado === "Disponible" ? "En el menú" : "Fuera del menú"}
               </EstadoPill>
             </div>
-            <p style={{ fontSize: 18, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+            <p style={{ fontSize: "1.125rem", color: "var(--gris-texto)", margin: "0.375rem 0 0" }}>
               {catName(detailItem.idCategoria)} · {llevaFichaDetalle ? "La hacemos aquí" : "La compramos hecha"}
             </p>
           </div>
@@ -2116,10 +2116,10 @@ export function GestionProductosScreen({
                       "Limita"/"No alcanza" la píldora sale por tamaño
                       ("Limita Mediana", "Limita Grande"). */}
                   {desglose.length > 0 && (
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="w-full text-xs">
+                    <div className="mt-2">
+                      <table className="w-full text-xs break-words">
                         <thead>
-                          <tr className="text-[10px] uppercase tracking-wider text-muted-foreground text-left border-b border-border">
+                          <tr className="text-[0.625rem] uppercase tracking-wider text-muted-foreground text-left border-b border-border">
                             <th className="py-1.5 pr-2 font-semibold">Insumo</th>
                             <th className="py-1.5 pr-2 font-semibold text-right">
                               Requerido por unidad
@@ -2143,12 +2143,12 @@ export function GestionProductosScreen({
                               <td className="py-1.5 pr-2 align-top">
                                 <span className="block text-foreground">{f.nombre}</span>
                                 {f.motivo && (
-                                  <span className="block text-[10px] text-red-600">
+                                  <span className="block text-[0.625rem] text-red-600">
                                     {motivoFaltante(f)}
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-foreground whitespace-nowrap">
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-foreground">
                                 {desglose.map((d) => (
                                   <span
                                     key={d.tamano ?? "único"}
@@ -2162,15 +2162,15 @@ export function GestionProductosScreen({
                                   </span>
                                 ))}
                               </td>
-                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-muted-foreground whitespace-nowrap">
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-muted-foreground">
                                 {fmtCant(f.stock, f.unidadStock)}
                               </td>
-                              <td className="py-1.5 text-right align-top whitespace-nowrap">
+                              <td className="py-1.5 text-right align-top">
                                 {limitaEn.length > 0 ? (
                                   limitaEn.map((t) => (
                                     <span
                                       key={t ?? "único"}
-                                      className="inline-flex px-1.5 py-0.5 mr-1 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                                      className="inline-flex px-1.5 py-0.5 mr-1 rounded-full text-[0.625rem] font-bold bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
                                     >
                                       Limita{t ? ` ${t}` : ""}
                                     </span>
@@ -2415,7 +2415,7 @@ export function GestionProductosScreen({
                 }
               >
                 {editFichaVersiones.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
+                  <p className="text-[0.6875rem] text-muted-foreground mb-3 bg-muted/40 px-3 py-1.5 rounded-lg">
                     Esta ficha tiene {editFichaVersiones.length} {editFichaVersiones.length === 1 ? "versión" : "versiones"}. Las versiones anteriores no se pueden modificar.
                   </p>
                 )}
@@ -2515,11 +2515,11 @@ export function GestionProductosScreen({
   const precioProd = (p: Producto) => (<>{esCategoriaPizza(catName(p.idCategoria)) ? (
                         <span className="block text-xs leading-5">
                           <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
-                            <span className="text-[11px] font-normal text-muted-foreground">Mediana</span>
+                            <span className="text-[0.6875rem] font-normal text-muted-foreground">Mediana</span>
                             <span className="truncate" title={fmtCOP(p.precioUnitario)}>{fmtCOP(p.precioUnitario)}</span>
                           </span>
                           <span className="grid grid-cols-[3.5rem_minmax(0,1fr)] whitespace-nowrap">
-                            <span className="text-[11px] font-normal text-muted-foreground">Grande</span>
+                            <span className="text-[0.6875rem] font-normal text-muted-foreground">Grande</span>
                             <span className="truncate" title={fmtCOP(p.precioGrande ?? 0)}>{fmtCOP(p.precioGrande ?? 0)}</span>
                           </span>
                         </span>
@@ -2557,7 +2557,7 @@ export function GestionProductosScreen({
                               style={{
                                 backgroundColor: `${ESTADO_COLORES[p.estado]}1A`,
                                 color: ESTADO_COLORES[p.estado],
-                                fontSize: 13,
+                                fontSize: "1rem",
                               }}
                             >
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ESTADO_COLORES[p.estado] }} />
@@ -2632,7 +2632,7 @@ export function GestionProductosScreen({
                             onClick={() => void subirFichaGuardada(p)}
                             disabled={subiendoFicha === p.id}
                             title="Subir a la API la ficha guardada en este navegador"
-                            className="mt-1 px-2 py-1 rounded-lg bg-card border border-border text-[10px] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
+                            className="mt-1 px-2 py-1 rounded-lg bg-card border border-border text-[0.625rem] font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
                           >
                             {subiendoFicha === p.id ? "Subiendo…" : "Subir ficha guardada"}
                           </button>
@@ -2677,9 +2677,9 @@ export function GestionProductosScreen({
   const fotoDe = (p: Producto) => {
     const src = imagenesDe(p)[0];
     return src ? (
-      <img src={src} alt="" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 16, flex: "none", border: "2px solid var(--borde-suave)" }} />
+      <img src={src} alt="" style={{ width: "5.25rem", height: "5.25rem", objectFit: "cover", borderRadius: "1rem", flex: "none", border: "2px solid var(--borde-suave)" }} />
     ) : (
-      <div aria-hidden="true" style={{ width: 84, height: 84, borderRadius: 16, flex: "none", background: "var(--gris-suave)", color: "var(--gris-texto)", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+      <div aria-hidden="true" style={{ width: "5.25rem", height: "5.25rem", borderRadius: "1rem", flex: "none", background: "var(--gris-suave)", color: "var(--gris-texto)", fontSize: "1rem", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
         Sin foto
       </div>
     );
@@ -2772,7 +2772,7 @@ export function GestionProductosScreen({
       />
 
       {bebidasStockBajo.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: "1.25rem" }}>
           <AvisoBanner
             titulo={`Se están acabando ${bebidasStockBajo.length} ${bebidasStockBajo.length === 1 ? "bebida" : "bebidas"}`}
             boton={abrirOrdenCompra ? <BotonAccion onClick={abrirOrdenCompra}>Pedirlas al proveedor</BotonAccion> : undefined}

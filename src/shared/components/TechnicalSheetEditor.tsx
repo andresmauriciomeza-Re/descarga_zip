@@ -17,6 +17,7 @@
 import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { enfocarFilaNueva } from "@/shared/hooks/useFormValidation";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import { InsumoSearchField, resolverInsumo } from "@/features/products/components/SupplySearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
@@ -310,7 +311,7 @@ function InsumosFichaTable({
   /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
       Insumos). Por defecto solo hay scroll horizontal. */
   contenedorClassName?: string;
-  /** Ref al contenedor con scroll (para bajar al último insumo agregado). */
+  /** Ref al contenedor de la tabla (para ir al último insumo agregado). */
   contenedorRef?: Ref<HTMLDivElement>;
   /** Encabezado sticky cuando el contenedor tiene scroll vertical. */
   stickyHeader?: boolean;
@@ -318,9 +319,9 @@ function InsumosFichaTable({
   return (
     <div
       ref={contenedorRef}
-      className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}
+      className={`rounded-xl border border-border ${contenedorClassName ?? ""}`}
     >
-      <table className="w-full">
+      <table className="w-full break-words">
         <thead
           className={`text-xs text-muted-foreground uppercase tracking-wider ${
             stickyHeader ? "sticky top-0 z-10 bg-muted" : "bg-muted/50"
@@ -366,7 +367,7 @@ function InsumosFichaTable({
                     {presentaciones?.[ins.insumoId ?? ins.nombre] ? (
                       <div>
                         <div>{formatoCantidadFicha.format(ins.cantidad)}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-[0.6875rem] text-muted-foreground">
                           {formatoCantidadFicha.format(presentaciones[ins.insumoId ?? ins.nombre].cantidadOriginal)} ×{" "}
                           {presentaciones[ins.insumoId ?? ins.nombre].etiqueta}
                         </div>
@@ -457,18 +458,15 @@ export function FichaTecnicaEditor({
   const esInsumo = modo === "insumo";
   const filaInputCls = esInsumo ? `${inputCls} h-11` : inputCls;
   const insumosScrollRef = useRef<HTMLDivElement>(null);
-  const insumosCantidadRef = useRef(ficha.insumos.length);
+  /** Solo se va a la fila nueva cuando la agrega la persona, no al cargar la ficha. */
+  const irAlNuevoRef = useRef(false);
 
   useEffect(() => {
-    if (!esInsumo) return;
-    if (ficha.insumos.length > insumosCantidadRef.current) {
-      const contenedor = insumosScrollRef.current;
-      if (contenedor) {
-        contenedor.scrollTo({ top: contenedor.scrollHeight, behavior: "smooth" });
-      }
-    }
-    insumosCantidadRef.current = ficha.insumos.length;
-  }, [ficha.insumos.length, esInsumo]);
+    if (!irAlNuevoRef.current) return;
+    irAlNuevoRef.current = false;
+    const filas = insumosScrollRef.current?.querySelectorAll<HTMLElement>("tbody > tr");
+    enfocarFilaNueva(filas?.[filas.length - 1]);
+  }, [ficha.insumos.length]);
 
   // Búsqueda y alta de insumos (una sola fila a la vez).
   const [sel, setSel] = useState<Insumo | null>(null);
@@ -588,6 +586,7 @@ export function FichaTecnicaEditor({
           ? ins.unidadMedida
           : unidad,
     };
+    irAlNuevoRef.current = true;
     onChange({
       ...ficha,
       insumos: [...ficha.insumos, fila],
@@ -752,7 +751,7 @@ export function FichaTecnicaEditor({
               </div>
             ) : (
               <>
-                <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
+                <div className="flex gap-2 text-[0.6875rem] font-semibold text-muted-foreground mb-1">
                   <span className="flex-1 min-w-0">Tamaño</span>
                   <span className="w-20 shrink-0">Porciones</span>
                   <span className="w-6 shrink-0" />
@@ -876,8 +875,7 @@ export function FichaTecnicaEditor({
                   onChange={updateInsumo}
                   onRemove={removeInsumo}
                   onPresentationChange={guardarPresentacionFila}
-                  contenedorClassName="no-scrollbar max-h-60 overflow-y-auto overscroll-contain lg:max-h-60"
-                  contenedorRef={insumosScrollRef}
+                                    contenedorRef={insumosScrollRef}
                   stickyHeader
                   insumosCatalogo={insumos}
                 />
@@ -894,6 +892,7 @@ export function FichaTecnicaEditor({
             {ficha.insumos.length > 0 ? (
               <div className="mb-3">
                 <InsumosFichaTable
+                  contenedorRef={insumosScrollRef}
                   insumos={ficha.insumos}
                   editable
                   editandoIdx={editandoIdx}
@@ -952,7 +951,7 @@ export function FichaTecnicaEditor({
           <ol className="space-y-1.5 mb-3">
             {ficha.pasos.map((p, idx) => (
               <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[0.6875rem] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{p}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => moverPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
@@ -1088,7 +1087,7 @@ export function FichaTecnicaDetalle({
           <ol className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1">
             {(v.pasos ?? []).map((paso, idx) => (
               <li key={idx} className="flex items-start gap-2 px-3 py-1 bg-muted/40 rounded-xl border border-border">
-                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[0.6875rem] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
               </li>
             ))}

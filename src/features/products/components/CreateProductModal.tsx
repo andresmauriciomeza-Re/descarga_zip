@@ -10,7 +10,7 @@ import { mensajeErrorProductos } from "@/features/products/services/productsApi"
 const SERIF = "var(--font-titulo)";
 
 const iCls =
-  "w-full px-4 min-h-[56px] bg-white border-2 border-[var(--borde-campo)] rounded-[14px] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-4 min-h-[3.5rem] bg-white border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** Datos de una bebida ("Producto terminado") que comparten el Crear de
     Gestión de Productos y el "+ Crear producto" de Compras. */
@@ -178,7 +178,7 @@ export function CrearProductoModal({
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="bg-card rounded-[22px] w-full max-w-xl shadow-2xl border-2 border-border my-4"
+        className="bg-card rounded-[1.375rem] w-full max-w-xl shadow-2xl border-2 border-border my-4"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
@@ -216,9 +216,9 @@ export function CrearProductoModal({
               }`}
             />
             {(tocado.nombre || intentoGuardar) && errores.nombre && (
-              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }}>{errores.nombre}</p>
+              <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.375rem 0 0" }}>{errores.nombre}</p>
             )}
-            {errorServidor && <p style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }}>{errorServidor}</p>}
+            {errorServidor && <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.375rem 0 0" }}>{errorServidor}</p>}
           </div>
           <div>
             <label className="pn-etiqueta">
@@ -245,7 +245,7 @@ export function CrearProductoModal({
               ))}
             </select>
             {(tocado.categoria || intentoGuardar) && errorCategoria && (
-              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }}>{errorCategoria}</p>
+              <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.375rem 0 0" }}>{errorCategoria}</p>
             )}
           </div>
           {/* Presentación (bloque 2.3): misma regla que el Crear de Gestión de
@@ -270,7 +270,7 @@ export function CrearProductoModal({
                 }`}
               />
               {(tocado.contenido || intentoGuardar) && errores.contenido && (
-                <p style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }}>{errores.contenido}</p>
+                <p style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.375rem 0 0" }}>{errores.contenido}</p>
               )}
             </div>
             <div>

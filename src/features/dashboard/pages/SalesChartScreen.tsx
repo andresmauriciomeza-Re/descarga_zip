@@ -11,10 +11,14 @@ import {
 import { WeekCard } from "@/features/dashboard/components/WeekCard";
 import { VentasDetail } from "@/features/dashboard/components/SalesDetail";
 import { ComprasDetail } from "@/features/dashboard/components/PurchasesDetail";
-import { SERIF, fmtCOP, type DayEntry, type WeekEntry } from "@/features/dashboard/utils/dashboard";
+import { SERIF, type DayEntry, type WeekEntry } from "@/features/dashboard/utils/dashboard";
+import { useIdioma } from "@/shared/i18n";
 
 const DOW_ES = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MON_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+// Solo etiquetas visibles: las fechas se calculan con números, no con estos nombres.
+const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MON_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 function getDow(y: number, m: number, d: number) { return new Date(y, m - 1, d).getDay(); }
 function futureDay(y: number, m: number, d: number, hoy: Date) {
@@ -29,9 +33,12 @@ function buildWeeks(
   month: number,
   porFecha: Map<string, { unidades: number; porciones: number; ingresos: number }>,
   hoy: Date,
+  dias: string[],
+  meses: string[],
+  nombreSemana: (n: number) => string,
 ): WeekEntry[] {
   const daysInMonth = new Date(year, month, 0).getDate();
-  const abbr = MON_ES[month - 1].slice(0, 3).toLowerCase();
+  const abbr = meses[month - 1].slice(0, 3).toLowerCase();
   const weeks: WeekEntry[] = [];
 
   for (let start = 1, idx = 0; start <= daysInMonth; start += 7, idx++) {
@@ -44,7 +51,7 @@ function buildWeeks(
       const dato = porFecha.get(`${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
       days.push({
         day: d,
-        label: `${DOW_ES[dow]} ${d}`,
+        label: `${dias[dow]} ${d}`,
         unidades: future ? 0 : (dato?.unidades ?? 0),
         porciones: future ? 0 : (dato?.porciones ?? 0),
         revenue: future ? 0 : (dato?.ingresos ?? 0),
@@ -57,7 +64,7 @@ function buildWeeks(
       < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     weeks.push({
       idx,
-      label: `Semana ${idx + 1}`,
+      label: nombreSemana(idx + 1),
       range: `${start} – ${end} ${abbr}`,
       days,
       totalVentas: days.reduce((s, d) => s + d.unidades + d.porciones, 0),
@@ -82,6 +89,10 @@ export function SalesChartScreen({
   ordenes?: OrdenCompra[];
   onBack: () => void;
 }) {
+  const { idioma, t, formatoMoneda } = useIdioma();
+  // Moneda COP en el formato del idioma, sin decimales.
+  const fmtCOP = (n: number) => formatoMoneda(Math.round(n));
+  const nombresMes = idioma === "es" ? MON_ES : MON_EN;
   const [tab, setTab] = useState<"ventas" | "compras">("ventas");
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [detailMode, setDetailMode] = useState<"ventas" | "compras">("ventas");
@@ -136,7 +147,7 @@ export function SalesChartScreen({
     let y = Number(clavePrimerMes.slice(0, 4));
     let m = Number(clavePrimerMes.slice(5, 7));
     while (y < hoy.getFullYear() || (y === hoy.getFullYear() && m <= hoy.getMonth() + 1)) {
-      mesesDisponibles.push({ year: y, month: m, label: `${MON_ES[m - 1]} ${y}` });
+      mesesDisponibles.push({ year: y, month: m, label: `${nombresMes[m - 1]} ${y}` });
       m += 1;
       if (m > 12) { m = 1; y += 1; }
     }
@@ -149,7 +160,7 @@ export function SalesChartScreen({
   );
   const { year, month, label } = mesesDisponibles[idxMes] ?? mesesDisponibles[mesesDisponibles.length - 1];
   const key = `${year}-${month}`;
-  const weeks = buildWeeks(year, month, porFecha, hoy);
+  const weeks = buildWeeks(year, month, porFecha, hoy, idioma === "es" ? DOW_ES : DOW_EN, nombresMes, (n) => t("dashboard.semanaN", { n }));
 
   const comprasDeLaSemana = (week: WeekEntry) => {
     const desde = new Date(year, month - 1, week.days[0].day);
@@ -184,8 +195,8 @@ export function SalesChartScreen({
     setDetailMode(mode);
   };
 
-  const TAB_CLS = (t: "ventas" | "compras") =>
-    `px-5 py-2 max-md:min-h-11 rounded-xl text-sm font-semibold transition-all cursor-pointer ${tab === t ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"}`;
+  const TAB_CLS = (pestana: "ventas" | "compras") =>
+    `px-5 py-2 max-md:min-h-11 rounded-xl text-sm font-semibold transition-all cursor-pointer ${tab === pestana ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:bg-muted"}`;
 
   return (
     <div className="px-4 sm:px-6 py-6">
@@ -199,13 +210,13 @@ export function SalesChartScreen({
               </button>
               <div className="flex items-start justify-between flex-wrap gap-4">
                 <div>
-                  <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>Estadísticas</h1>
-                  <p className="text-sm text-muted-foreground mt-1">Resumen de ventas y compras por semana</p>
+                  <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: SERIF }}>{t("dashboard.estadisticas")}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">{t("dashboard.e.resumen")}</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="flex gap-1 bg-muted rounded-xl p-1">
-                    <button className={TAB_CLS("ventas")} onClick={() => setTab("ventas")}>Ventas</button>
-                    <button className={TAB_CLS("compras")} onClick={() => setTab("compras")}>Compras</button>
+                    <button className={TAB_CLS("ventas")} onClick={() => setTab("ventas")}>{t("dashboard.d.ventas")}</button>
+                    <button className={TAB_CLS("compras")} onClick={() => setTab("compras")}>{t("dashboard.d.compras")}</button>
                   </div>
                 </div>
               </div>
@@ -214,11 +225,11 @@ export function SalesChartScreen({
             {/* Month navigation — wrap para no desbordar en móvil */}
             <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <button onClick={() => changeMonth(-1)} disabled={idxMes === 0} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes anterior">
+                <button onClick={() => changeMonth(-1)} disabled={idxMes === 0} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label={t("dashboard.e.mesAnterior")}>
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <h2 className="text-lg font-bold text-foreground min-w-36 text-center">{label}</h2>
-                <button onClick={() => changeMonth(1)} disabled={idxMes === mesesDisponibles.length - 1} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label="Mes siguiente">
+                <button onClick={() => changeMonth(1)} disabled={idxMes === mesesDisponibles.length - 1} className="p-2 max-md:p-3 rounded-xl hover:bg-muted disabled:opacity-30 cursor-pointer transition-colors" aria-label={t("dashboard.e.mesSiguiente")}>
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
@@ -228,17 +239,17 @@ export function SalesChartScreen({
                   <>
                     <div className="text-right">
                       <p className="text-xl font-bold text-foreground">{monthTotalVentas}</p>
-                      <p className="text-xs text-muted-foreground">productos</p>
+                      <p className="text-xs text-muted-foreground">{t("dashboard.e.productos")}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xl font-bold text-emerald-600">{fmtCOP(monthTotalRevenue)}</p>
-                      <p className="text-xs text-muted-foreground">ingresos</p>
+                      <p className="text-xs text-muted-foreground">{t("dashboard.e.ingresos")}</p>
                     </div>
                   </>
                 ) : (
                   <div className="text-right">
                     <p className="text-xl font-bold text-blue-700">{fmtCOP(monthTotalCompras)}</p>
-                    <p className="text-xs text-muted-foreground">en insumos</p>
+                    <p className="text-xs text-muted-foreground">{t("dashboard.e.enInsumos")}</p>
                   </div>
                 )}
               </div>

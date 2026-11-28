@@ -1,3 +1,5 @@
+import { useIdioma } from "@/shared/i18n";
+
 const MONO = "var(--font-texto)";
 
 interface Dato {
@@ -13,6 +15,7 @@ const DATOS: Dato[] = [
 ];
 
 function Estadistica({ emoji, value, label }: Dato) {
+  const { tf } = useIdioma();
   return (
     /* Ancho por breakpoint (punto B2): w-40 en móvil, w-52 en md y w-56
        en lg; cada media en animations.css ajusta la duración para que la
@@ -23,9 +26,9 @@ function Estadistica({ emoji, value, label }: Dato) {
         className="text-3xl md:text-4xl font-bold text-white mt-1 leading-none"
         style={{ fontFamily: MONO }}
       >
-        {value}
+        {tf(value)}
       </p>
-      <p className="text-white text-sm font-medium">{label}</p>
+      <p className="text-white text-sm font-medium">{tf(label)}</p>
     </div>
   );
 }

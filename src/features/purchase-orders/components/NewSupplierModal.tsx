@@ -111,7 +111,7 @@ export function NuevoProveedorModal({
         {/* Encabezado FIJO: título + subtítulo y, en la misma fila a la
             derecha (o abajo en móvil), el selector Persona Natural / Persona Jurídica. */}
         <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b border-border shrink-0">
-          <div className="min-w-[180px] flex-1">
+          <div className="min-w-[11.25rem] flex-1">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
           </div>

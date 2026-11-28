@@ -90,7 +90,7 @@ export function LineaPreparacion({
         : []);
 
   return (
-    <div className="p-6 border border-border rounded-[18px] bg-card space-y-3">
+    <div className="p-6 border border-border rounded-[1.125rem] bg-card space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px_auto] gap-5 items-end">
         <div>
           <label className="pn-etiqueta">

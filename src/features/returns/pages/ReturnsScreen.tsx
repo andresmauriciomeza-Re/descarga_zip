@@ -14,6 +14,7 @@ import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill } from "@/shared/components/panel/StatusPill";
 import { FiltrosChips } from "@/shared/components/panel/FilterChips";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { normalizarTexto } from "@/shared/utils/names";
 import { limiteStockDe, productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalog";
@@ -160,7 +161,7 @@ export function DevolucionesScreen({
   const [buscaCanje, setBuscaCanje] = useState("");
 
 
-  const { search, setSearch, chipDev, setChipDev, visibles } = useReturnsFilter(pendientes, resueltas);
+  const { search, setSearch, chipDev, setChipDev, visibles, paged, pageActual, setPage } = useReturnsFilter(pendientes, resueltas);
   // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
   // devolución indicada: el modal de gestión si sigue pendiente, o la vista de
   // solo lectura si ya se resolvió. Se limpia el id para no reabrirla al
@@ -725,8 +726,9 @@ export function DevolucionesScreen({
               Revisa cómo lo escribiste o cambia el filtro.
             </VacioEstado>
           ) : (
+            <>
             <div className="pn-lista">
-              {visibles.map((dev) => {
+              {paged.map((dev) => {
                 const { totalDev, pendiente } = datosDev(dev);
                 const resumenDinero =
                   !pendiente && dev.devolucionTipo === "dinero"
@@ -737,7 +739,7 @@ export function DevolucionesScreen({
                     key={dev.id}
                     resaltada={pendiente ? "ambar" : undefined}
                     pre={`Pedido #${dev.id} · ${dev.fecha}`}
-                    nombre={<span style={{ fontSize: 21 }}>{dev.usuario}</span>}
+                    nombre={<span style={{ fontSize: "1.3125rem" }}>{dev.usuario}</span>}
                     detalle={
                       <>
                         {dev.productos || "—"}
@@ -758,6 +760,8 @@ export function DevolucionesScreen({
                 );
               })}
             </div>
+            <PaginadorGrande pagina={pageActual} total={visibles.length} onCambiar={setPage} />
+            </>
           )}
         </>
       )}
@@ -956,7 +960,7 @@ export function DevolucionesScreen({
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: p.paso === "producto" ? null : "producto" } : p))
                         }
-                        className="w-full min-h-[96px] shrink-0 flex items-center gap-3 p-3.5 text-left cursor-pointer"
+                        className="w-full min-h-[6rem] shrink-0 flex items-center gap-3 p-3.5 text-left cursor-pointer"
                       >
                         <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center shrink-0">
                           <PackageCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -1044,7 +1048,7 @@ export function DevolucionesScreen({
                               no aplastarse a cero cuando el modal es corto, y
                               así la tarjeta de "Dinero" y los botones de abajo
                               (Cancelar/Confirmar) nunca se tapan. */}
-                          <div className="flex-1 min-h-[220px] max-lg:flex-none max-lg:h-[22rem] overflow-y-auto pr-0.5">
+                          <div className="flex-1 min-h-[13.75rem] max-lg:flex-none max-lg:h-[22rem] overflow-y-auto pr-0.5">
                             <div className="grid grid-cols-2 max-md:grid-cols-1 xl:grid-cols-3 gap-2">
                             {productosCanje.map((prod) => {
                               const variantes =
@@ -1193,7 +1197,7 @@ export function DevolucionesScreen({
                         onClick={() =>
                           setActiva((p) => (p ? { ...p, paso: p.paso === "dinero" ? null : "dinero" } : p))
                         }
-                        className="w-full min-h-[96px] flex items-center gap-3 p-3.5 text-left cursor-pointer"
+                        className="w-full min-h-[6rem] flex items-center gap-3 p-3.5 text-left cursor-pointer"
                       >
                         <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
                           <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -1310,7 +1314,7 @@ export function DevolucionesScreen({
                       type="button"
                       disabled={!puedeConfirmar}
                       onClick={confirmarDevolucion}
-                      className="w-full flex items-center justify-center gap-2 py-4 min-h-[62px] bg-foreground text-background text-lg font-semibold rounded-2xl hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 py-4 min-h-[3.875rem] bg-foreground text-background text-lg font-semibold rounded-2xl hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Check className="w-4 h-4" strokeWidth={3} />
                       Listo, cerrar la devolución
@@ -1591,20 +1595,20 @@ export function DevolucionesScreen({
         <Dialog.Root open onOpenChange={(a) => { if (!a) setDetalleDevolucion(null); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 820px)", zIndex: 70 }}>
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 51.25rem)", zIndex: 70 }} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">Devolución del pedido #{devolucionDetalle.id}</Dialog.Title>
                 <EstadoPill tono={devolucionDetalle.devolucionResuelta ? "verde" : "ambar"}>
                   {devolucionDetalle.devolucionResuelta ? "Resuelta" : "Sin resolver"}
                 </EstadoPill>
               </div>
-              <p className="pn-seccion__ayuda" style={{ marginTop: -8 }}>
+              <p className="pn-seccion__ayuda" style={{ marginTop: "-0.5rem" }}>
                 {devolucionDetalle.usuario} · {devolucionDetalle.fecha}
               </p>
               <div className="grid gap-4">
                 <section className="pn-seccion">
                   <h2>Qué devolvió</h2>
-                  <div className="pn-permisos" style={{ marginTop: 14 }}>
+                  <div className="pn-permisos" style={{ marginTop: "0.875rem" }}>
                     {devolucionDetalle.detalle && devolucionDetalle.detalle.length > 0 ? (
                       devolucionDetalle.detalle.map((item, index) => {
                         const m = devolucionDetalle.devolucionMotivos?.[String(index)];
@@ -1624,7 +1628,7 @@ export function DevolucionesScreen({
                       <p className="pn-seccion__ayuda" style={{ margin: 0 }}>{devolucionDetalle.productos || "Sin detalle de productos"}</p>
                     )}
                   </div>
-                  <p style={{ font: "700 22px var(--font-titulo)", margin: "14px 0 0", textAlign: "right" }}>
+                  <p style={{ font: "700 1.375rem var(--font-titulo)", margin: "0.875rem 0 0", textAlign: "right" }}>
                     Total del pedido: {fmtCOPDev(totalDetalleDevolucion)}
                   </p>
                 </section>
@@ -1632,10 +1636,10 @@ export function DevolucionesScreen({
                 <section className="pn-seccion">
                   <h2>Cómo se resolvió</h2>
                   {!devolucionDetalle.devolucionResuelta ? (
-                    <p className="pn-seccion__ayuda" style={{ margin: "10px 0 0" }}>Todavía no se ha resuelto.</p>
+                    <p className="pn-seccion__ayuda" style={{ margin: "0.625rem 0 0" }}>Todavía no se ha resuelto.</p>
                   ) : (
                     <>
-                      <div style={{ marginTop: 14 }}>
+                      <div style={{ marginTop: "0.875rem" }}>
                         <DatosDetalle datos={[
                           {
                             etiqueta: "Qué se le dio",
@@ -1656,7 +1660,7 @@ export function DevolucionesScreen({
                         ]} />
                       </div>
                       {devolucionDetalle.devolucionNota && (
-                        <div className="pn-dialogo__caja" style={{ marginTop: 16, marginBottom: 0 }}>
+                        <div className="pn-dialogo__caja" style={{ marginTop: "1rem", marginBottom: 0 }}>
                           <strong>Lo que se anotó:</strong>
                           “{devolucionDetalle.devolucionNota}”
                         </div>
@@ -1668,13 +1672,13 @@ export function DevolucionesScreen({
                 {devolucionDetalle.comprobanteDevolucion && (
                   <section className="pn-seccion">
                     <h2>Comprobante de la devolución</h2>
-                    <div style={{ marginTop: 12 }}>
+                    <div style={{ marginTop: "0.75rem" }}>
                       {/\.pdf($|\?)/i.test(devolucionDetalle.comprobanteDevolucion) ? (
                         <BotonAccion href={devolucionDetalle.comprobanteDevolucion} target="_blank" rel="noreferrer">Abrir el comprobante (PDF)</BotonAccion>
                       ) : (
                         <>
-                          <img src={devolucionDetalle.comprobanteDevolucion} alt="Comprobante de la devolución" style={{ maxWidth: "100%", maxHeight: 420, borderRadius: 16, border: "2px solid var(--borde-suave)" }} />
-                          <div style={{ marginTop: 10 }}>
+                          <img src={devolucionDetalle.comprobanteDevolucion} alt="Comprobante de la devolución" style={{ maxWidth: "100%", maxHeight: "26.25rem", borderRadius: "1rem", border: "2px solid var(--borde-suave)" }} />
+                          <div style={{ marginTop: "0.625rem" }}>
                             <BotonAccion href={devolucionDetalle.comprobanteDevolucion} target="_blank" rel="noreferrer">Ver más grande</BotonAccion>
                           </div>
                         </>
@@ -1683,7 +1687,7 @@ export function DevolucionesScreen({
                   </section>
                 )}
               </div>
-              <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+              <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                 <BotonAccion variante="oscuro" onClick={() => setDetalleDevolucion(null)}>Cerrar</BotonAccion>
               </div>
             </Dialog.Content>

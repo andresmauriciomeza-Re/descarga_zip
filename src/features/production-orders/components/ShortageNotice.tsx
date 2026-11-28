@@ -22,8 +22,8 @@ export function AvisoFaltantes({
   const crudos = reales.filter((f) => !productosInsumo.includes(f));
   return (
     <div className="pn-aviso" style={{ display: "block" }}>
-      <h2 style={{ marginBottom: 6 }}>Faltan insumos para empezar</h2>
-      <p style={{ fontSize: 18, marginBottom: 8 }}>No hay lo suficiente en la bodega. Baja la cantidad o compra lo que falta.</p>
+      <h2 style={{ marginBottom: "0.375rem" }}>Faltan insumos para empezar</h2>
+      <p style={{ fontSize: "1.125rem", marginBottom: "0.5rem" }}>No hay lo suficiente en la bodega. Baja la cantidad o compra lo que falta.</p>
       {faltantes.map((f) => (
         <div key={f.insumoId} className="text-lg" style={{ color: "var(--ambar-texto)" }}>
           {esInsumoInactivo(f) ? (
@@ -32,13 +32,13 @@ export function AvisoFaltantes({
               <button
                 type="button"
                 onClick={onIrInsumos}
-                className="pn-boton pn-boton--normal" style={{ minHeight: 46, marginLeft: 8 }}
+                className="pn-boton pn-boton--normal" style={{ minHeight: "2.875rem", marginLeft: "0.5rem" }}
               >
                 Ir a Insumos
               </button>
             </p>
           ) : (
-            <p className="flex flex-wrap items-center gap-3" style={{ margin: "4px 0" }}>
+            <p className="flex flex-wrap items-center gap-3" style={{ margin: "0.25rem 0" }}>
               <EstadoPill tono="rojo">Falta</EstadoPill>
               <span>
                 {f.motivo

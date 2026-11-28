@@ -137,7 +137,7 @@ export function EstadoHistorialTooltip({
             ref={panelRef}
             role="tooltip"
             style={{ top: pos.top, left: pos.left }}
-            className="fixed z-[110] w-72 max-w-[calc(100vw-16px)] bg-card text-foreground rounded-xl shadow-lg border border-border p-4 max-h-[60vh] overflow-y-auto"
+            className="fixed z-[110] w-72 max-w-[calc(100vw-1rem)] bg-card text-foreground rounded-xl shadow-lg border border-border p-4 max-h-[60vh] overflow-y-auto"
           >
             <p className="text-base font-bold text-muted-foreground mb-3 uppercase tracking-wider">
               Historial de estados

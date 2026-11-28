@@ -73,7 +73,7 @@ import { hoyLocal, siguienteOrdenId } from "@/features/production-orders/utils/p
 
 const SERIF = "var(--font-titulo)";
 
-const OBS_CREAR_CLS = "w-full min-h-[110px] px-[18px] py-4 bg-muted border border-border text-base text-foreground rounded-[14px] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30";
+const OBS_CREAR_CLS = "w-full min-h-[6.875rem] px-[1.125rem] py-4 bg-muted border border-border text-base text-foreground rounded-[0.875rem] resize-none focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ─────────────────────────── Tipos ───────────────────────────
 export const TIPO_LABEL: Record<TipoOrden, string> = {
@@ -344,7 +344,7 @@ async function exportExcel(ordenes: OrdenProduccion[]) {
       Completada: { texto: "FF065F46", fondo: "FFD1FAE5" },
       "En Proceso": { texto: "FF1E40AF", fondo: "FFDBEAFE" },
       Pendiente: { texto: "FF854D0E", fondo: "FFFEF9C3" },
-      Cancelada: { texto: "FFB91C1C", fondo: "FFFEE2E2" },
+      Cancelada: { texto: "FF991B1B", fondo: "FFFEE2E2" },
     },
     columnas: [
       { header: "ID Orden", valor: (o) => o.id },
@@ -1138,10 +1138,10 @@ export function OrdenProduccionScreen({
   }) => (
     <>
       <div className="pn-dialogo-fondo" onClick={onClose} />
-      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 900px)" }}>
+      <div className="pn-modal pn-modal--medio" role="dialog" aria-modal="true" aria-label={title} style={{ width: "min(96vw, 56.25rem)" }}>
         <div className="pn-modal__cab"><h2 className="pn-modal__titulo">{title}</h2></div>
         <div className="pn-campo">{children}</div>
-        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+        <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
           <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
           <BotonAccion variante="principal" onClick={onConfirm} disabled={deshabilitado}>{label}</BotonAccion>
         </div>
@@ -1305,8 +1305,8 @@ export function OrdenProduccionScreen({
 
   const grupo = (titulo: string, lista: OrdenProduccion[]) =>
     lista.length === 0 ? null : (
-      <section key={titulo} style={{ marginBottom: 28 }}>
-        <h2 className="pn-h2" style={{ marginBottom: 12 }}>{titulo}</h2>
+      <section key={titulo} style={{ marginBottom: "1.75rem" }}>
+        <h2 className="pn-h2" style={{ marginBottom: "0.75rem" }}>{titulo}</h2>
         <div className="pn-lista">{lista.map(tarjetaOrden)}</div>
       </section>
     );
@@ -1405,14 +1405,14 @@ export function OrdenProduccionScreen({
           {grupo("Por empezar", porEmpezar)}
           {grupo("Terminadas hoy", terminadasHoy)}
 
-          <div style={{ margin: "8px 0 20px" }}>
+          <div style={{ margin: "0.5rem 0 1.25rem" }}>
             <BotonAccion variante="normal" onClick={() => { setVerOtras((v) => !v); setPage(1); }}>
               {verOtras ? "Esconder las órdenes de días anteriores" : "Ver órdenes de días anteriores y canceladas"}
             </BotonAccion>
           </div>
           {verOtras && (
             <section>
-              <h2 className="pn-h2" style={{ marginBottom: 12 }}>Días anteriores y canceladas</h2>
+              <h2 className="pn-h2" style={{ marginBottom: "0.75rem" }}>Días anteriores y canceladas</h2>
               {otras.length === 0 ? (
                 <p className="pn-nota">No hay más órdenes con estos filtros.</p>
               ) : (
@@ -1474,7 +1474,7 @@ export function OrdenProduccionScreen({
           onClose: () => setShowCreate(false),
           onConfirm: handleCreate,
           label: "Mandar a la cocina",
-          ancho: "max-w-[800px]",
+          ancho: "max-w-[50rem]",
           crear: true,
           // C6: Crear bloqueado mientras alguna línea no tenga producto o su
           // cantidad sea menor a 1; Bloque 4: también mientras falten insumos
@@ -1502,8 +1502,8 @@ export function OrdenProduccionScreen({
               </div>
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
-                className="inline-flex items-center justify-center gap-2.5 w-full h-[54px] border-[1.5px] border-dashed border-border rounded-[14px] text-[15px] font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
-                <Plus className="w-[18px] h-[18px]" /> Agregar otro producto
+                className="inline-flex items-center justify-center gap-2.5 w-full h-[3.375rem] border-[1.5px] border-dashed border-border rounded-[0.875rem] text-[0.9375rem] font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+                <Plus className="w-[1.125rem] h-[1.125rem]" /> Agregar otro producto
               </button>
 
               {/* Bloque 4: mientras falten insumos el botón Crear viene
@@ -1550,7 +1550,7 @@ export function OrdenProduccionScreen({
             <div className="space-y-4">
               <div className="flex items-center gap-2 px-3 py-2 bg-muted/60 rounded-xl border border-border">
                 <span className="text-xs font-semibold text-muted-foreground">Tipo</span>
-                <span className={`inline-block text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
+                <span className={`inline-block text-[0.625rem] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${
                   editItem.tipo === "preparacion" ? "bg-purple-100 text-purple-800" : "bg-teal-100 text-teal-800"}`}>
                   {TIPO_LABEL[editItem.tipo]}
                 </span>
@@ -1679,7 +1679,7 @@ export function OrdenProduccionScreen({
                             <p className="text-base font-semibold text-foreground">{nombreLineaOrden(l)}</p>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
+                            <p className="text-[0.625rem] uppercase tracking-wide text-muted-foreground">Cantidad estimada</p>
                             <p className="text-base font-bold text-foreground tabular-nums">
                               {cantidadLineaOrden(completarItem, l)}
                             </p>
@@ -1878,7 +1878,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }}
-                  className="flex-1 py-4 min-h-[56px] border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-4 min-h-[3.5rem] border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Todavía no
                 </button>
                 <button
@@ -1896,7 +1896,7 @@ export function OrdenProduccionScreen({
                     }
                     confirmarCompletar();
                   }}
-                  className={`flex-1 py-4 min-h-[56px] bg-primary text-white rounded-2xl text-lg font-semibold transition-colors active:scale-95 ${
+                  className={`flex-1 py-4 min-h-[3.5rem] bg-primary text-white rounded-2xl text-lg font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
                   Terminar y sumar a lo que hay
@@ -1959,11 +1959,11 @@ export function OrdenProduccionScreen({
               className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4 max-h-[90vh] flex flex-col">
               <div className="shrink-0 flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
                 <div className="min-w-0">
-                  <h3 style={{ font: "700 26px/1.2 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
+                  <h3 style={{ font: "700 1.625rem/1.2 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
                     {detailItem.lineas.map((l) => l.nombre).join(", ") || `Orden OP-${detailItem.id.replace("OP-", "")}`}
                     {detailItem.tipo === "pedido" && detailItem.cliente ? ` para ${detailItem.cliente}` : ""}
                   </h3>
-                  <p style={{ fontSize: 18, color: "var(--gris-texto)", margin: "6px 0 0" }}>
+                  <p style={{ fontSize: "1.125rem", color: "var(--gris-texto)", margin: "0.375rem 0 0" }}>
                     {detailItem.tipo === "pedido"
                       ? `Pedido de cliente${detailItem.ventaNumero ? ` #${detailItem.ventaNumero}` : ""}${detailItem.ventaLocal ? " · venta del local" : detailItem.fechaSolicitada ? ` · recoge ${formatearFechaHora(detailItem.fechaSolicitada, detailItem.horaSolicitada)}` : ""}`
                       : `Para tener listo · Orden OP-${detailItem.id.replace("OP-", "")}`}
@@ -1991,24 +1991,24 @@ export function OrdenProduccionScreen({
                 {detailItem.estadoOrden === "en-proceso" && (() => {
                   const fin = detailItem.tipo === "pedido" ? detailItem.finCalentamientoMs : detailItem.finPreparacionMs;
                   return (
-                    <section style={{ border: "3px solid var(--azul-texto)", background: "var(--azul-suave)", borderRadius: 20, padding: "18px 22px" }}>
-                      <p style={{ fontSize: 19, fontWeight: 600, margin: 0, color: "var(--azul-texto)" }}>Estará lista en</p>
+                    <section style={{ border: "3px solid var(--azul-texto)", background: "var(--azul-suave)", borderRadius: "1.25rem", padding: "1.125rem 1.375rem" }}>
+                      <p style={{ fontSize: "1.1875rem", fontWeight: 600, margin: 0, color: "var(--azul-texto)" }}>Estará lista en</p>
                       {fin != null ? (
                         <>
-                          <p style={{ font: "700 52px/1.1 var(--font-titulo)", margin: "4px 0", color: "var(--azul-texto)" }} className="tabular-nums" aria-live="polite">
+                          <p style={{ font: "700 3.25rem/1.1 var(--font-titulo)", margin: "0.25rem 0", color: "var(--azul-texto)" }} className="tabular-nums" aria-live="polite">
                             {tiempoRestante(fin, ahoraCalentamiento)}
                           </p>
-                          <p style={{ fontSize: 18, margin: 0 }}>
+                          <p style={{ fontSize: "1.125rem", margin: 0 }}>
                             Más o menos a las {new Date(fin).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })}
                           </p>
                         </>
                       ) : (
-                        <p style={{ fontSize: 20, margin: "4px 0 0" }}>Se está preparando.</p>
+                        <p style={{ fontSize: "1.25rem", margin: "0.25rem 0 0" }}>Se está preparando.</p>
                       )}
-                      <div style={{ marginTop: 12 }}><EstimacionPedido orden={detailItem} /></div>
+                      <div style={{ marginTop: "0.75rem" }}><EstimacionPedido orden={detailItem} /></div>
                       {esAdministradorSesion && canEdit && detailItem.tipo === "pedido" && (
-                        <div style={{ marginTop: 14 }}>
-                          <p style={{ fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>¿Se va a demorar más o menos?</p>
+                        <div style={{ marginTop: "0.875rem" }}>
+                          <p style={{ fontSize: "1.125rem", fontWeight: 600, margin: "0 0 0.375rem" }}>¿Se va a demorar más o menos?</p>
                           <EditarTiempoPedido
                             key={detailItem.id}
                             orden={detailItem}
@@ -2020,7 +2020,7 @@ export function OrdenProduccionScreen({
                         </div>
                       )}
                       {canEdit && detailItem.tipo === "pedido" && (
-                        <div style={{ marginTop: 16 }}>
+                        <div style={{ marginTop: "1rem" }}>
                           <BotonAccion variante="bien" className="pn-boton--grande" onClick={() => { const o = detailItem; setDetailItem(null); setOrdenLista(o); }}>
                             Ya está listo para entregar
                           </BotonAccion>
@@ -2050,7 +2050,7 @@ export function OrdenProduccionScreen({
                   <EstadoPill tono={detailItem.estadoOrden === "en-proceso" ? "azul" : detailItem.estadoOrden === "completada" ? "verde" : detailItem.estadoOrden === "cancelada" ? "gris" : "ambar"}>
                     {detailItem.estadoOrden === "pendiente" ? "Por empezar" : detailItem.estadoOrden === "en-proceso" ? "En la cocina" : detailItem.estadoOrden === "completada" ? "Terminada" : "Cancelada"}
                   </EstadoPill>
-                  <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>Desde {formatearFechaHora(ultimoCambio(detailItem))}</span>
+                  <span style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>Desde {formatearFechaHora(ultimoCambio(detailItem))}</span>
                 </div>
 
                 {detailItem.tipo === "pedido" && (
@@ -2091,8 +2091,8 @@ export function OrdenProduccionScreen({
 
                 <div>
                   <p className="text-base font-semibold text-muted-foreground mb-1.5">Cantidades estimadas</p>
-                  <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full text-lg text-left">
+                  <div className="rounded-xl border border-border">
+                    <table className="w-full text-lg text-left break-words">
                       <thead className="bg-muted text-base text-muted-foreground">
                         <tr><th className="p-3">Producto o insumo</th><th className="p-3">Cantidad estimada</th><th className="p-3">Unidad</th></tr>
                       </thead>

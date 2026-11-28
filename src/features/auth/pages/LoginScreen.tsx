@@ -19,6 +19,7 @@ import { normalizarNombreRol } from "@/shared/utils/roleName";
 import { AuthLayout } from "@/features/auth/components/AuthLayout";
 import { ForgotPasswordModal } from "@/features/auth/components/ForgotPasswordModal";
 import { AceptacionTerminos } from "@/features/auth/components/AcceptTerms";
+import { useIdioma } from "@/shared/i18n";
 
 /** Puente API → estado local: arma la ficha `Usuario` que conoce el panel a
     partir del usuario que devolvió el backend y el rol local equivalente. */
@@ -52,7 +53,6 @@ export function LoginScreen({
   usuarios,
   roles,
   onUsuarioNuevo,
-  darkMode,
   loginNotice,
   initialEmail,
   mensajeExito,
@@ -67,7 +67,6 @@ export function LoginScreen({
   roles: Rol[];
   /** Registra en el estado `usuarios` la ficha armada con datos del API. */
   onUsuarioNuevo: (user: Usuario) => void;
-  darkMode: boolean;
   loginNotice?: boolean;
   /** Correo que queda escrito al llegar desde el cambio de contraseña:
    *  la sesión acaba de cerrarse y así el usuario solo escribe la clave. */
@@ -76,6 +75,9 @@ export function LoginScreen({
    *  iniciar sesión." al llegar de la invitación de empleado). */
   mensajeExito?: string;
 }) {
+  // `errors` guarda español y se traduce al pintar (MensajeError). `rechazo`
+  // distingue el origen: texto de la web (tf) o del backend (errorVisible).
+  const { t, tf, errorVisible } = useIdioma();
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [terminosAceptados, setTerminosAceptados] = useState(false);
@@ -88,7 +90,7 @@ export function LoginScreen({
   }>({});
   // Motivo por el que App rechazó el login (sin roles activos, sin pantallas…):
   // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
-  const [rechazo, setRechazo] = useState<string | null>(null);
+  const [rechazo, setRechazo] = useState<{ texto: string; delServidor: boolean } | null>(null);
   const [showForgot, setShowForgot] = useState(false);
   // Cuenta pendiente (403 "Tu cuenta aún no está activada"): se ofrece
   // "Reenviar correo de confirmación", con 60 s de espera entre envíos (el
@@ -106,7 +108,7 @@ export function LoginScreen({
       setReenvioEnEspera(true);
       window.setTimeout(() => setReenvioEnEspera(false), 60_000);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "No se pudo reenviar el correo.");
+      toast.error(err instanceof Error ? errorVisible(err.message) : t("auth.v.sinReenvio"));
     } finally {
       setReenviando(false);
     }
@@ -157,7 +159,7 @@ export function LoginScreen({
           email: "Credenciales incorrectas",
           password: "Verifica tu correo y contraseña",
         });
-        toast.error("Tu cuenta está inactiva. Contacta al administrador.");
+        toast.error(t("auth.v.cuentaInactiva"));
         return;
       }
 
@@ -170,7 +172,7 @@ export function LoginScreen({
         const rolLocal = roles.find(r => normalizarNombreRol(r.nombre) === normalizarNombreRol(rolPrincipalApi?.nombre ?? usuarioApi.rol ?? ""));
         if (!rolLocal) {
           borrarToken();
-          toast.error("Tu cuenta no tiene un rol configurado en el panel.");
+          toast.error(t("auth.v.sinRolPanel"));
           return;
         }
         cuenta = { ...construirUsuarioLocal(usuarioApi, rolLocal), rolesSesionApi: rolesApi };
@@ -183,14 +185,15 @@ export function LoginScreen({
         // El login fue RECHAZADO en App: muestra el motivo y no navega.
         borrarToken();
         const mensaje = respuesta.mensaje ?? "Tu cuenta no tiene roles activos. Contacta al administrador.";
-        setRechazo(mensaje);
-        toast.error(mensaje);
+        setRechazo({ texto: mensaje, delServidor: false });
+        toast.error(tf(mensaje));
         return;
       }
       setRechazo(null);
       const firstName = cuenta.nombre.split(" ")[0];
-      toast.success(`¡Bienvenid${firstName.endsWith("a") ? "a" : "o"}, ${firstName}!`, {
-        description: "Has ingresado correctamente.",
+      const saludo = firstName.endsWith("a") ? "auth.bienvenidaNombre" : "auth.bienvenidoNombre";
+      toast.success(t(saludo, { nombre: firstName }), {
+        description: t("auth.ingresadoOk"),
       });
     } catch (err) {
       const status = (err as ApiErrorConEstado).status;
@@ -204,12 +207,12 @@ export function LoginScreen({
         // Cuenta sin activar (empleado invitado o cliente que aún no confirma
         // su correo): el backend manda el motivo ("Tu cuenta aún no está
         // activada. Revisa tu correo.") y se ofrece reenviar la confirmación.
-        setRechazo(mensaje);
+        setRechazo({ texto: mensaje, delServidor: true });
         setCuentaPendiente(true);
       } else {
         // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
         // extrajo el texto que corresponde.
-        toast.error(mensaje);
+        toast.error(errorVisible(mensaje));
       }
     } finally {
       setLoading(false);
@@ -219,7 +222,6 @@ export function LoginScreen({
   return (
     <AuthLayout
       contentClassName="items-start justify-center sm:justify-end px-4 py-6 lg:px-8 lg:pr-16 xl:pr-12"
-      darkMode={darkMode}
       overlay={
         <AnimatePresence>
           {showForgot && (
@@ -263,22 +265,22 @@ export function LoginScreen({
       >
         <button
           onClick={() => navigate("landing")}
-          title="Volver al inicio"
+          title={t("auth.volverInicio")}
           className={`absolute top-5 left-5 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="text-center mb-6">
-          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
+          <Logo variante="claro" alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-2" />
 
           <h1
             className="text-2xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}
           >
-            Bienvenido a La Sirena
+            {t("auth.bienvenido")}
           </h1>
           <p className="text-sm mt-2 text-foreground/75 dark:text-white/75">
-            Ingresa tus datos para continuar
+            {t("auth.ingresaDatos")}
           </p>
         </div>
 
@@ -291,7 +293,7 @@ export function LoginScreen({
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-                Correo electrónico
+                {t("auth.correo")}
               </label>
               <input
                 value={email}
@@ -302,7 +304,7 @@ export function LoginScreen({
                 }}
                 type="email"
                 placeholder="correo@lasirena.com"
-                aria-label="Correo electrónico"
+                aria-label={t("auth.correo")}
                 ref={validacion.refCampo("email")}
                 onKeyDown={validacion.onKeyDownCampo("email", {
                   errores: errors,
@@ -317,7 +319,7 @@ export function LoginScreen({
             </div>
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2 dark:text-white">
-                Contraseña
+                {t("auth.contrasena")}
               </label>
               <PasswordField
                 value={password}
@@ -330,7 +332,7 @@ export function LoginScreen({
                 }}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                ariaLabel="Contraseña"
+                ariaLabel={t("auth.contrasena")}
                 inputRef={validacion.refCampo("password")}
                 onKeyDown={validacion.onKeyDownCampo("password", {
                   errores: errors,
@@ -360,7 +362,7 @@ export function LoginScreen({
               onClick={() => setShowForgot(true)}
               className="text-sm text-primary font-medium hover:underline cursor-pointer max-md:inline-flex max-md:items-center max-md:min-h-11"
             >
-              ¿Olvidaste tu contraseña?
+              {t("auth.olvidaste")}
             </button>
           </div>
 
@@ -373,13 +375,13 @@ export function LoginScreen({
             {loading ? (
               <RefreshCw className="w-5 h-5 animate-spin" />
             ) : null}
-            {loading ? "Ingresando..." : "Iniciar sesión"}
+            {loading ? t("auth.ingresando") : t("auth.iniciarSesion")}
           </PrimaryBtn>
         </form>
 
         {rechazo && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
-            {rechazo}
+            {rechazo.delServidor ? errorVisible(rechazo.texto) : tf(rechazo.texto)}
           </p>
         )}
 
@@ -391,30 +393,30 @@ export function LoginScreen({
               disabled={reenviando || reenvioEnEspera}
               className="text-sm font-semibold text-primary underline underline-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {reenviando ? "Enviando..." : "Reenviar correo de confirmación"}
+              {reenviando ? t("auth.enviando") : t("auth.reenviarConfirmacion")}
             </button>
           </div>
         )}
 
         {mensajeExito && (
           <p className="text-center text-sm font-semibold text-emerald-600 mb-3">
-            {mensajeExito}
+            {tf(mensajeExito)}
           </p>
         )}
 
         {loginNotice && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
-            Inicia sesión para terminar tu pedido. Tus productos quedan guardados.
+            {t("auth.terminarPedido")}
           </p>
         )}
 
         <p className="text-center text-sm text-foreground/75 mt-4 dark:text-white/75">
-          {"¿No tienes cuenta? "}
+          {t("auth.noTienesCuenta")}
           <button
             onClick={() => navigate("register")}
             className="text-primary font-semibold hover:underline cursor-pointer max-md:inline-block max-md:py-3 max-md:-my-3"
           >
-            Regístrate aquí
+            {t("auth.registrate")}
           </button>
         </p>
       </motion.div>

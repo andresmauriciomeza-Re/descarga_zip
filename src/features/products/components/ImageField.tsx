@@ -98,7 +98,7 @@ export function CampoImagenes({
                       event.stopPropagation();
                       onChange([src, ...imagenes.filter((_, i) => i !== idx)]);
                     }}
-                    className="absolute bottom-2 left-2 rounded-lg bg-black/80 px-3 min-h-[44px] text-base font-semibold text-white hover:bg-black disabled:opacity-50 cursor-pointer"
+                    className="absolute bottom-2 left-2 rounded-lg bg-black/80 px-3 min-h-[2.75rem] text-base font-semibold text-white hover:bg-black disabled:opacity-50 cursor-pointer"
                   >
                     Hacer portada
                   </button>
@@ -114,7 +114,7 @@ export function CampoImagenes({
                       e.stopPropagation();
                       onChange(imagenes.filter((_, i) => i !== idx));
                     }}
-                    className="absolute top-2 right-2 rounded-lg bg-white border-2 border-[var(--rojo)] px-3 min-h-[44px] text-base font-semibold text-[var(--rojo)] cursor-pointer"
+                    className="absolute top-2 right-2 rounded-lg bg-white border-2 border-[var(--rojo)] px-3 min-h-[2.75rem] text-base font-semibold text-[var(--rojo)] cursor-pointer"
                   >
                     Quitar
                   </button>
@@ -146,7 +146,7 @@ export function CampoImagenes({
         <>
           {/* Fila 1: alta desde el equipo, a ancho completo. */}
           <label
-            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-4 min-h-[56px] bg-white border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-4 min-h-[3.5rem] bg-white border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
               completa || subiendo ? "opacity-50 pointer-events-none" : ""
             }`}
           >
@@ -191,7 +191,7 @@ export function CampoImagenes({
               type="button"
               onClick={() => agregar(url)}
               disabled={completa || subiendo || !url.trim()}
-              className="shrink-0 inline-flex items-center gap-1.5 px-4 min-h-[56px] bg-primary text-white rounded-2xl text-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 min-h-[3.5rem] bg-primary text-white rounded-2xl text-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" /> Agregar la foto
             </button>

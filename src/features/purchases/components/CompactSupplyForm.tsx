@@ -205,6 +205,15 @@ export interface CompactInsumoFormProps {
   tamanoUnidad?: string;
 }
 
+/** Al «Cambiar» una fila de la tabla: lleva la vista al formulario de línea y
+ *  pone el foco en su primer campo (sin animar si se pidió menos movimiento). */
+export function irAlFormularioDeLinea(contenedor: HTMLElement | null) {
+  if (!contenedor) return;
+  const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  contenedor.scrollIntoView({ block: "start", behavior: suave ? "smooth" : "auto" });
+  contenedor.querySelector<HTMLElement>(".pn-lineas input:not([disabled])")?.focus({ preventScroll: true });
+}
+
 export function CompactInsumoForm({
   titulo,
   nombre,
@@ -700,15 +709,15 @@ export function CompactInsumoForm({
       )}
 
       <div className="relative">
-        {/* Punto 3: la rejilla se organiza en TRES filas explícitas con
-            controles de igual altura y sin mensajes dentro de las celdas
-            (viven en la línea reservada de abajo): así un error nunca
-            desplaza ni desalinea a los campos vecinos.
-              Fila 1 → Nombre · Presentación · Cantidad
-              Fila 2 → Contenido · Medida · Monto unitario
-              Fila 3 → Tipo de IVA · IVA % · Precio de venta · botones */}
-        <div className={disabled ? "opacity-50" : ""}>
-        <div className="flex flex-wrap items-end gap-2">
+        {/* Rejilla de 12 columnas en escritorio, 2 en tableta y 1 en celular.
+            Los mensajes de error viven en la línea reservada de abajo, así
+            nunca desplazan a los campos vecinos.
+              Fila 1 → Nombre (6) · Presentación (3) · Cantidad (3)
+              Fila 2 → Monto unitario · Tipo de IVA · IVA %  (4 cada uno)
+              Fila 3 → Contenido · Medida · Precio de venta (solo si aplican)
+              Final  → botones a la derecha */}
+        <div className={`pn-lineas-marco${disabled ? " opacity-50" : ""}`}>
+        <div className="pn-lineas">
           {/* Nombre — su celda es también el WRAPPER del buscador (punto 7):
               contiene el input y la lista, el "adentro" para cerrar el
               desplegable. */}
@@ -721,7 +730,7 @@ export function CompactInsumoForm({
               if (destino && evento.currentTarget.contains(destino)) return;
               onCerrarSugerencias?.();
             }}
-            className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}
+            className={`relative ${ocultarMedida ? "pn-c9" : "pn-c6"}`}
           >
             <label className={esCompacta ? labelClsCompacta : labelCls}>{etiquetaNombre}</label>
 
@@ -818,7 +827,7 @@ export function CompactInsumoForm({
 
           {/* Presentación — unidades compatibles y empaques configurables. */}
           {!ocultarMedida && (
-            <div className={esCompacta ? "w-[96px] flex-none" : "w-[132px]"}>
+            <div className="pn-c3">
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 {etiquetaUnidad}
               </label>
@@ -867,45 +876,88 @@ export function CompactInsumoForm({
           )}
 
           {/* Cantidad permanece como texto hasta que se intenta agregar. */}
-          {esCompacta ? (
-            <div className="w-[70px] flex-none">
-              <label className={labelClsCompacta}>Cantidad</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={cantidadTexto}
-                onChange={(e) => {
-                  setCantidadTexto(e.target.value);
-                  setIntentoAgregar(false);
-                }}
-                disabled={bloqueado}
-                className={`${inputClsCompacta}${errorCantidad ? " border-destructive" : ""}`}
-              />
-            </div>
-          ) : (
-            <div className="w-[112px]">
-              <label className={labelCls}>Cantidad</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={cantidadTexto}
-                onChange={(e) => {
-                  setCantidadTexto(e.target.value);
-                  setIntentoAgregar(false);
-                }}
-                disabled={bloqueado}
-                className={`${compactInputCls} text-center${errorCantidad ? " border-destructive" : ""}`}
-              />
+          <div className="pn-c3">
+            <label className={esCompacta ? labelClsCompacta : labelCls}>Cantidad</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={cantidadTexto}
+              onChange={(e) => {
+                setCantidadTexto(e.target.value);
+                setIntentoAgregar(false);
+              }}
+              disabled={bloqueado}
+              className={`${esCompacta ? inputClsCompacta : compactInputCls}${errorCantidad ? " border-destructive" : ""}`}
+            />
+          </div>
+
+          {/* Monto unitario */}
+          <div className="pn-c4">
+            <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
+
+            <input
+              type="text"
+              inputMode="decimal"
+              value={precioTexto}
+              onChange={(e) => {
+                setPrecioTexto(e.target.value);
+                setIntentoAgregar(false);
+              }}
+              placeholder="0"
+              disabled={bloqueado}
+              className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-destructive" : ""}`}
+            />
+          </div>
+
+          <div className="pn-c4">
+            <label className={esCompacta ? labelClsCompacta : labelCls}>Tipo de IVA</label>
+            <UnidadSelect
+              value={modoIvaActual}
+              onChange={(value) => {
+                const modo = MODOS_IVA.find((opcion) => opcion === value);
+                if (modo) cambiarModo(modo);
+              }}
+              disabled={bloqueado}
+              ariaLabel="Tipo de IVA"
+              unidades={opcionesModoIva}
+              fieldClassName={
+                esCompacta
+                  ? "bg-muted border border-border text-foreground min-h-14 rounded-lg"
+                  : unidadCampoCls
+              }
+            />
+            <p className="mt-1 text-base text-muted-foreground">{ayudaModoIva(modoIvaActual)}</p>
+          </div>
+
+          {modoIvaActual !== "exento" && (
+            <div className="pn-c4">
+              <label className={esCompacta ? labelClsCompacta : labelCls}>
+                IVA{ivaObligatorio && <span className="text-destructive"> *</span>}
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={ivaTexto}
+                  onChange={(e) => {
+                    setIvaTexto(e.target.value);
+                    setIntentoAgregar(false);
+                  }}
+                  placeholder={ivaObligatorio ? "Ej. 19" : "0"}
+                  disabled={bloqueado}
+                  className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-base text-muted-foreground">%</span>
+              </div>
+              {/* Punto 4: se eliminaron los atajos rápidos [0, 5, 19]; queda
+                  el input con su sufijo "%", su validación (0–100) y el valor
+                  por defecto de siempre. */}
             </div>
           )}
-        </div>
 
-        {/* Fila 2 — Contenido + Medida (si la presentación lo requiere) y
-            Monto unitario, con la MISMA línea base que la fila 1. */}
-        <div className="flex flex-wrap items-end gap-2 mt-2">
           {requiereContenido && (
             <>
-              <div className="w-[120px] flex-none">
+              <div className="pn-c4 pn-nueva-fila">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Contenido</label>
                 <input
                   type="text"
@@ -922,7 +974,7 @@ export function CompactInsumoForm({
                   }`}
                 />
               </div>
-              <div className="w-[160px] flex-none">
+              <div className="pn-c4">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Medida</label>
                 {medidaContenidoBloqueada ? (
                   /* Punto 5: la Medida es de SOLO LECTURA en Nueva Compra y
@@ -962,79 +1014,11 @@ export function CompactInsumoForm({
             </>
           )}
 
-          {/* Monto unitario */}
-          <div className={`flex-none ${esCompacta ? "w-[110px]" : "w-[116px]"}`}>
-            <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
-
-            <input
-              type="text"
-              inputMode="decimal"
-              value={precioTexto}
-              onChange={(e) => {
-                setPrecioTexto(e.target.value);
-                setIntentoAgregar(false);
-              }}
-              placeholder="0"
-              disabled={bloqueado}
-              className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls}${errorPrecio ? " border-destructive" : ""}`}
-            />
-          </div>
-        </div>
-
-        {/* Fila 3 — Tipo de IVA · IVA % · Precio de venta (sólo producto) y
-            los botones alineados abajo a la derecha. */}
-        <div className="flex flex-wrap items-end gap-2 mt-2">
-          <div className="w-full sm:w-56">
-            <label className={esCompacta ? labelClsCompacta : labelCls}>Tipo de IVA</label>
-            <UnidadSelect
-              value={modoIvaActual}
-              onChange={(value) => {
-                const modo = MODOS_IVA.find((opcion) => opcion === value);
-                if (modo) cambiarModo(modo);
-              }}
-              disabled={bloqueado}
-              ariaLabel="Tipo de IVA"
-              unidades={opcionesModoIva}
-              fieldClassName={
-                esCompacta
-                  ? "bg-muted border border-border text-foreground min-h-14 rounded-lg"
-                  : unidadCampoCls
-              }
-            />
-            <p className="mt-1 text-base text-muted-foreground">{ayudaModoIva(modoIvaActual)}</p>
-          </div>
-
-          {modoIvaActual !== "exento" && (
-            <div className={`${esCompacta ? "w-[76px] flex-none" : "w-[88px]"}`}>
-              <label className={esCompacta ? labelClsCompacta : labelCls}>
-                IVA{ivaObligatorio && <span className="text-destructive"> *</span>}
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={ivaTexto}
-                  onChange={(e) => {
-                    setIvaTexto(e.target.value);
-                    setIntentoAgregar(false);
-                  }}
-                  placeholder={ivaObligatorio ? "Ej. 19" : "0"}
-                  disabled={bloqueado}
-                  className={`${readOnly ? (esCompacta ? readOnlyInputCompactaCls : readOnlyInputCls) : esCompacta ? inputClsCompacta : compactInputCls} pr-6${errorIva ? " border-destructive" : ""}`}
-                />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-base text-muted-foreground">%</span>
-              </div>
-              {/* Punto 4: se eliminaron los atajos rápidos [0, 5, 19]; queda
-                  el input con su sufijo "%", su validación (0–100) y el valor
-                  por defecto de siempre. */}
-            </div>
-          )}
-
           {/* Precio de venta al público del producto: sólo se pinta al
               agregar PRODUCTOS (la Orden de Compra no lo usa). Es OBLIGATORIO
               (punto B2): con `errorPrecioVenta` el campo se pinta en rojo. */}
           {mostrarPrecioVenta && (
-            <div className={`${esCompacta ? "w-[110px] flex-none" : "w-[116px]"}`}>
+            <div className={`pn-c4${requiereContenido ? "" : " pn-nueva-fila"}`}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 Precio de venta
               </label>
@@ -1056,7 +1040,7 @@ export function CompactInsumoForm({
             </div>
           )}
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="pn-c12 flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => void agregarValidado()}
@@ -1086,7 +1070,7 @@ export function CompactInsumoForm({
             venta). Al estar fuera de las celdas, un error nunca desplaza ni
             desalinea a los campos vecinos; al estar reservada, nada salta al
             aparecer. */}
-        <div className="min-h-[16px] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <div className="min-h-[1rem] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           {errorCantidad && (
             <p className="text-base font-medium text-destructive">{errorCantidad}</p>
           )}

@@ -23,9 +23,9 @@ export function Tarjeta({
   className?: string;
 }) {
   return (
-    <section className={`bg-card border-2 border-border rounded-[20px] flex flex-col ${className}`}>
+    <section className={`bg-card border-2 border-border rounded-[1.25rem] flex flex-col ${className}`}>
       <div className="shrink-0 flex items-center justify-between gap-2 px-4 sm:px-5 pt-4 pb-3">
-        <h2 style={{ font: "700 22px/1.2 var(--font-titulo)", margin: 0 }}>{titulo}</h2>
+        <h2 style={{ font: "700 1.375rem/1.2 var(--font-titulo)", margin: 0 }}>{titulo}</h2>
         {acciones}
       </div>
       {/* `flex-1` siempre: en tarjetas de alto natural no cambia nada (el

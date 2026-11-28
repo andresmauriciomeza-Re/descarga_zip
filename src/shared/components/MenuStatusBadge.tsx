@@ -1,4 +1,5 @@
 import type { EstadoProducto } from "@/shared/components/ProductStatus";
+import { useIdioma } from "@/shared/i18n";
 
 /** Etiqueta de estado del MENÚ PÚBLICO (tarjetas del catálogo, favoritas de la
     landing y detalle). A diferencia del `EstadoBadge` del panel —fondo suave y
@@ -47,7 +48,9 @@ export function EstadoMenuBadge({
 }) {
   const agotado = estado === "Disponible" && stock === 0;
   const fondo = agotado ? "bg-red-600 dark:bg-red-500" : FONDO_ESTADO[estado];
-  const texto = agotado ? "Agotado" : estado;
+  const { t, tf } = useIdioma();
+  // `estado` sigue en español para elegir el color; solo se traduce al pintarlo.
+  const texto = agotado ? t("comun.agotado") : tf(estado);
   return (
     <span
       className={`${BASE_PILDONA} ${fondo} ${className}`}
@@ -64,10 +67,11 @@ export function EstadoMenuBadge({
     estado, y `etiquetaEstadoMenu` (App) garantiza que nunca salen los dos a la
     vez, así que no se superponen. */
 export function AgotadoMenuBadge({ className = "" }: { className?: string }) {
+  const { t } = useIdioma();
   return (
     <span className={`${BASE_PILDONA} bg-red-600 ${className}`}>
       <span className={PUNTITO} aria-hidden="true" />
-      Agotado
+      {t("comun.agotado")}
     </span>
   );
 }
@@ -76,13 +80,14 @@ export function AgotadoMenuBadge({ className = "" }: { className?: string }) {
     semitransparente con blur, texto blanco. Se pinta encima de la imagen en
     gris y complementa a `EstadoMenuBadge`. */
 export function NoDisponibleOverlay({ className = "" }: { className?: string }) {
+  const { t } = useIdioma();
   return (
     <span
       className={`pointer-events-none flex items-center justify-center ${className}`}
       aria-hidden="true"
     >
       <span className="bg-black/60 backdrop-blur-sm text-white text-sm font-semibold px-4 py-2 rounded-full shadow-md ring-1 ring-white/20">
-        No disponible hoy
+        {t("comun.noDisponibleHoy")}
       </span>
     </span>
   );

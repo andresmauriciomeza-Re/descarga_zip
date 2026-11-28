@@ -204,7 +204,7 @@ export function RolModal({ title, initialNombre, initialDesc, initialActivo, ini
                 ayuda="Marca una casilla por cada cosa que podrá hacer. Lo que no marques, no podrá hacerlo."
               >
                 {errors.modulos && (
-                  <p className="pn-campo__error" role="alert" style={{ marginBottom: 12 }}>
+                  <p className="pn-campo__error" role="alert" style={{ marginBottom: "0.75rem" }}>
                     <span>{errors.modulos}</span>
                   </p>
                 )}

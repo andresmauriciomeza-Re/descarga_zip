@@ -27,7 +27,7 @@ export function VersionPills({
           }`}
         >
           <span className="text-xs font-bold leading-tight">v{v.version}</span>
-          <span className={`text-[10px] leading-tight ${i === activo ? "text-white/80" : ""}`}>
+          <span className={`text-[0.625rem] leading-tight ${i === activo ? "text-white/80" : ""}`}>
             {rangoVersion(v)}
           </span>
         </button>

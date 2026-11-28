@@ -1,4 +1,5 @@
 import { RefreshCw, Lock, AlertTriangle } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
 
 export function EstadoVentas({
   estado,
@@ -11,18 +12,19 @@ export function EstadoVentas({
   textoCargando?: string;
   textoError?: string;
 }) {
+  const { t, tf } = useIdioma();
   const Icon = estado === "cargando" ? RefreshCw : estado === "permiso" ? Lock : AlertTriangle;
   const texto =
     estado === "cargando"
-      ? textoCargando
+      ? tf(textoCargando)
       : estado === "permiso"
-        ? "No tienes permiso para ver ventas. Solicita al administrador el permiso Ventas > Ver."
-        : `${textoError}${error ? ` ${error}` : " Intenta de nuevo más tarde."}`;
+        ? t("dashboard.sinPermisoVentas")
+        : `${tf(textoError)}${error ? ` ${error}` : t("dashboard.intentaLuego")}`;
 
   return (
     <div
       role={estado === "error" ? "alert" : "status"}
-      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
+      className={`flex min-h-[4.5rem] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
         estado === "error"
           ? "bg-destructive/10 text-destructive"
           : "bg-muted/30 text-muted-foreground"

@@ -9,6 +9,7 @@ import {
 } from "@/shared/components/FormInputs";
 import { authGlassInputCls } from "@/shared/styles/authGlass";
 import { useValidacionFormulario } from "@/shared/hooks/useFormValidation";
+import { useIdioma } from "@/shared/i18n";
 
 /**
  * Paso "nueva contraseña" del flujo de contraseña (vidrio esmerilado). Es
@@ -33,6 +34,8 @@ export function PasoNuevaContrasena({
   labelBoton?: string;
   labelBotonCargando?: string;
 }) {
+  // Las etiquetas y la lista `faltan` van en español y se traducen al pintar.
+  const { t, tf } = useIdioma();
   const [nueva, setNueva] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -82,7 +85,7 @@ export function PasoNuevaContrasena({
       <div className="space-y-3 mb-5">
         <div>
           <label className="block text-sm font-semibold text-foreground dark:text-white mb-1.5">
-            Nueva contraseña
+            {t("auth.nuevaContrasena")}
           </label>
           <PasswordField
             value={nueva}
@@ -96,7 +99,7 @@ export function PasoNuevaContrasena({
               })(e);
               enviarConEnter(e);
             }}
-            placeholder="Mínimo 8 caracteres"
+            placeholder={t("auth.minimoCaracteres")}
             autoComplete="new-password"
             cls={clsCampo(estadoNew)}
             inputRef={validacion.refCampo("newPass")}
@@ -111,12 +114,13 @@ export function PasoNuevaContrasena({
           <RequisitosContrasena valor={nueva} />
           <MensajeError
             id={validacion.idError("newPass")}
-            err={passwordError ?? errorGuardado ?? undefined}
+            err={passwordError ?? undefined}
+            delServidor={errorGuardado ?? undefined}
           />
         </div>
         <div>
           <label className="block text-sm font-semibold text-foreground dark:text-white mb-1.5">
-            {labelConfirmar}
+            {tf(labelConfirmar)}
           </label>
           <PasswordField
             value={confirm}
@@ -128,7 +132,7 @@ export function PasoNuevaContrasena({
               })(e);
               enviarConEnter(e);
             }}
-            placeholder="Repite tu contraseña"
+            placeholder={t("auth.repiteContrasena")}
             autoComplete="new-password"
             cls={clsCampo(estadoConfirm)}
             inputRef={validacion.refCampo("confirm")}
@@ -146,7 +150,7 @@ export function PasoNuevaContrasena({
           {confirmCoincide && (
             <p className="text-xs text-emerald-600 mt-1 leading-tight flex items-center gap-1">
               <Check className="w-3.5 h-3.5 shrink-0" aria-hidden />
-              Las contraseñas coinciden
+              {t("auth.coinciden")}
             </p>
           )}
         </div>
@@ -157,12 +161,12 @@ export function PasoNuevaContrasena({
         className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2 mb-3"
       >
         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-        {loading ? labelBotonCargando : labelBoton}
+        {tf(loading ? labelBotonCargando : labelBoton)}
       </button>
       {/* Un botón deshabilitado nunca queda sin explicación. */}
       {!todoValido && (
         <p className="text-xs text-muted-foreground mb-3 leading-tight">
-          Para guardar falta: {faltan.join(", ")}.
+          {t("auth.paraGuardarFalta", { lista: faltan.map((falta) => tf(falta)).join(", ") })}
         </p>
       )}
     </>

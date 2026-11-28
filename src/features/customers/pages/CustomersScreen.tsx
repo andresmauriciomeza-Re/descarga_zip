@@ -237,14 +237,14 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     // La lista se recarga al cambiar el estado: se toma la versión más nueva.
     const c = clientes.find(x => x.id === detailItem.id) ?? detailItem;
     return (
-      <div className="pn-contenido" style={{ maxWidth: 900 }}>
+      <div className="pn-contenido" style={{ maxWidth: "56.25rem" }}>
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
         <div className="flex flex-wrap items-center gap-5 mb-6">
           <Avatar c={c} tam={80} />
           <div className="min-w-0">
-            <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{c.nombre}</h1>
+            <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{c.nombre}</h1>
             <div className="mt-2"><EstadoCompra activo={c.activo} /></div>
           </div>
         </div>
@@ -255,13 +255,13 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
               { etiqueta: "Correo", valor: c.correo || "—" },
               { etiqueta: "Celular", valor: c.telefono || "—" },
             ]} />
-            <p className="pn-campo__ayuda" style={{ fontSize: 17, marginTop: 16 }}>
+            <p className="pn-campo__ayuda" style={{ fontSize: "1.0625rem", marginTop: "1rem" }}>
               Los datos los cambia cada persona desde su perfil.
             </p>
           </SeccionFormulario>
           <SeccionFormulario titulo="Resumen">
             <DatosDetalle datos={[
-              { etiqueta: "Pedidos hechos", valor: <span style={{ font: "700 26px var(--font-titulo)" }}>{c.pedidos}</span> },
+              { etiqueta: "Pedidos hechos", valor: <span style={{ font: "700 1.625rem var(--font-titulo)" }}>{c.pedidos}</span> },
             ]} />
           </SeccionFormulario>
           <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>{botonEstado(c)}</div>
@@ -335,7 +335,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   <br />{c.correo || "Sin correo"}
                 </>
               }
-              datos={[{ etiqueta: "Pedidos", valor: <span style={{ font: "700 26px var(--font-titulo)" }}>{c.pedidos}</span> }]}
+              datos={[{ etiqueta: "Pedidos", valor: <span style={{ font: "700 1.625rem var(--font-titulo)" }}>{c.pedidos}</span> }]}
               estado={<EstadoCompra activo={c.activo} />}
               acciones={
                 <>
@@ -443,7 +443,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
                   </div>
                 </div>
               </SeccionFormulario>
-              <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+              <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                 <BotonAccion variante="normal" onClick={cerrarCrear}>Cancelar</BotonAccion>
                 <BotonAccion
                   variante="principal"
