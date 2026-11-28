@@ -35,6 +35,8 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 2, pantallas bajo demanda | Escritorio | 79 | 100 | 100 | 100 | 0,6 s | 1,6 s | 263 ms | 2,5 s | 0 |
 | 3, Excel al exportar | Móvil | 43 | 100 | 100 | 100 | 1,6 s | 5,8 s | 2467 ms | 6,2 s | 0,009 |
 | 3, Excel al exportar | Escritorio | 59 | 100 | 100 | 100 | 0,6 s | 1,7 s | 977 ms | 2,7 s | 0 |
+| 5, hero sin esperar animaciones | Móvil | 62 | 100 | 100 | 100 | 1,6 s | 1,6 s | 4954 ms | 7,2 s | 0,041 |
+| 5, hero sin esperar animaciones | Escritorio | 77 | 100 | 100 | 100 | 0,6 s | 1,6 s | 265 ms | 2,5 s | 0,021 |
 
 ## Línea base
 
@@ -94,3 +96,33 @@ Consecuencias:
 ## Observado, sin cambiar
 
 En móvil, al volver del detalle de un producto, el menú queda a veces en la posición anterior y a veces centra la tarjeta (unos 130 px de diferencia). También pasa en la versión anterior a estas fases.
+
+## Fase 5: pintado principal (hecha antes que la 4)
+
+Medida alternando 5 corridas de cada versión en el puerto 4173:
+
+| Disp. | Antes: rend. (rango) / LCP | Después: rend. (rango) / LCP |
+|---|---|---|
+| Móvil | 42 (40–46) / 5,8 s | 62 (59–67) / 1,6 s |
+| Escritorio | 70 (68–76) / 1,6 s | 77 (57–84) / 1,6 s |
+
+Cambios:
+
+- La primera pantalla se monta sin el fundido de entrada; los cambios de pantalla lo conservan.
+- El título y el párrafo del hero se mueven, pero ya no empiezan invisibles.
+- La foto del hero se precarga desde `index.html`.
+
+La corrección 2 aprobada cambia: `initial={false}` en `AnimatePresence` se transmite a todos los componentes del primer render y habría apagado las animaciones de entrada del landing. Se puso solo en el contenedor, en la primera carga.
+
+No se hizo:
+
+- Versión de la foto de 800 px: en un celular la foto se recorta y se dibuja con al menos 1170 px de ancho, así que se vería borrosa.
+- Las líneas del título siguen subiendo desde su recorte; el pintado principal ya cumple la meta (2,5 s).
+- Adelantar la petición del catálogo en `main.tsx` (opcional; el hero no la espera).
+- Esqueleto de carga en las secciones del menú: hoy quedan vacías hasta que responde la API, y añadirlo es diseño nuevo.
+
+Observado:
+
+- El desplazamiento de diseño subió (móvil 0,009 → 0,041; sigue bajo 0,1). Lo causa el cambio de fuente: el texto se ve antes de que lleguen las fuentes de Google. Revisar tras la Fase 4.
+- El tiempo de bloqueo en móvil salió con mediana más alta (3517 → 4954 ms), con rangos que se solapan (1257–6477 y 1625–5445). Revisar en la Fase 7.
+- La precarga de la foto se aplica a cualquier dirección, también a las que no muestran el hero.
