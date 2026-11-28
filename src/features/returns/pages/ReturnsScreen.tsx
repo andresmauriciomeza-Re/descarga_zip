@@ -19,7 +19,7 @@ import { normalizarTexto } from "@/shared/utils/names";
 import { limiteStockDe, productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalog";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import type { FichasPorProducto } from "@/features/products/pages/ProductsScreen";
+import type { FichasPorProducto } from "@/shared/utils/technicalSheets";
 import type { Producto } from "@/features/products/utils/products";
 import { normalizarNombre } from "@/features/production-orders/utils/production-orders";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";

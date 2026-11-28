@@ -1,6 +1,7 @@
 import type { EstadoProducto } from "@/shared/components/ProductStatus";
 import { imagenEnApi } from "@/shared/utils/getImageUrl";
 import type { FichaVersion } from "@/shared/utils/technicalSheets";
+import { configDeCategoria, TIPOS_PRODUCTO, type TipoProducto } from "@/shared/utils/categoryConfig";
 
 export type EstadoEntrega = "listo" | "entregado";
 
@@ -18,15 +19,6 @@ export interface ProductoTerminado {
 }
 
 // ─────────────────────────── GESTIÓN PRODUCTOS ───────────────────────────
-
-/** Los DOS tipos de producto. Quien los define es la CATEGORÍA del producto
-    (ver `CONFIG_CATEGORIA`): las que se elaboran con insumos y llevan ficha
-    técnica son "Producto insumo" (pizzas, lasañas) y las que se revenden tal
-    como se compran son "Producto terminado" (gaseosas) — mismo vocabulario que
-    usa Orden de Producción. */
-export const TIPOS_PRODUCTO = ["Producto insumo", "Producto terminado"] as const;
-
-export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 
 export interface Producto {
   id: string;
@@ -131,3 +123,198 @@ export const fmtFechaFicha = (iso: string): string =>
     vigente (sin fechaFin), "12/09/2026 – vigente". */
 export const rangoVersion = (v: FichaVersion): string =>
   `${fmtFechaFicha(v.fechaInicio)} – ${v.fechaFin ? fmtFechaFicha(v.fechaFin) : "vigente"}`;
+
+/** Tipo del producto. Manda la categoría configurada (`configDeCategoria`),
+    porque es ella quien define el tipo; si no tiene configuración, lo guardado
+    cuando ya está en el vocabulario nuevo. El dato viejo "Producto de reventa"
+    se traduce al índice 1 (el tipo sin ficha) y cualquier otro valor antiguo
+    ("Producto") cae al respaldo por nombre y, sin configuración, al tipo sin
+    ficha. `nombreCategoria` es el nombre visible de la categoría y habilita el
+    respaldo por nombre. */
+export const tipoDe = (
+  p: {
+    idCategoria: string;
+    tipo?: TipoProducto | "Producto de reventa" | "Producto";
+  },
+  nombreCategoria?: string,
+): TipoProducto => {
+  const cfg = configDeCategoria(p.idCategoria, nombreCategoria);
+  if (cfg) return cfg.tipo;
+  if (p.tipo === TIPOS_PRODUCTO[0] || p.tipo === TIPOS_PRODUCTO[1]) return p.tipo;
+  // Dato viejo ("Producto de reventa", "Producto"): tipo sin ficha (índice 1).
+  return TIPOS_PRODUCTO[1];
+};
+
+export const INITIAL_PRODUCTOS: Producto[] = [
+  // ── Pizzas (CAT-001): $14.000 pequeña, $16.000 grande ──
+  // Las `imagen` apuntan a archivos EXISTENTES de src/assets/img (los .webp
+  // del menú); antes usaban .png que ya no existen (o capturas de pantalla),
+  // así la semilla local mostraba imágenes rotas.
+  {
+    id: "PROD-001",
+    imagen: "/src/assets/img/pizza_peperoni.webp",
+    nombre: "Pizza Peperoni",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 50,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-002",
+    imagen: "/src/assets/img/pizza_jamon_queso.webp",
+    nombre: "Pizza Jamon",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 45,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-003",
+    imagen: "/src/assets/img/pizza_hawaii.webp",
+    nombre: "Pizza Hawaiana",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 40,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-004",
+    imagen: "/src/assets/img/pizza_pollo.webp",
+    nombre: "Pizza Pollo",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 35,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-005",
+    imagen: "/src/assets/img/pizza_cañon.webp",
+    nombre: "Pizza Cañon",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 30,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-006",
+    imagen: "/src/assets/img/pizza_maicitos.webp",
+    nombre: "Pizza Maicitos",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 60,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-007",
+    imagen: "/src/assets/img/pizza_carnes.webp",
+    nombre: "Pizza Paisa",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 25,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-008",
+    imagen: "/src/assets/img/pizza_tocineta.webp",
+    nombre: "Pizza Tocineta",
+    idCategoria: "CAT-001",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 14000, precioUnitario: 14000,
+    unidadVenta: "und",
+    stockDisponible: 40,
+    estado: "Disponible",
+  },
+  // ── Lasañas (CAT-002) ──
+  {
+    id: "PROD-009",
+    imagen: "/src/assets/img/lasaña_carne.webp",
+    nombre: "Lasaña Carne",
+    idCategoria: "CAT-002",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 20000, precioUnitario: 20000,
+    unidadVenta: "und",
+    stockDisponible: 30,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-010",
+    imagen: "/src/assets/img/lasaña_pollo.webp",
+    nombre: "Lasaña Pollo",
+    idCategoria: "CAT-002",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 20000, precioUnitario: 20000,
+    unidadVenta: "und",
+    stockDisponible: 25,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-011",
+    imagen: "/src/assets/img/lasaña_mixta.webp",
+    nombre: "Lasaña Mixta",
+    idCategoria: "CAT-002",
+    tipo: TIPOS_PRODUCTO[0],
+    costoUnitario: 22000, precioUnitario: 22000,
+    unidadVenta: "und",
+    stockDisponible: 20,
+    estado: "Disponible",
+  },
+  // ── Bebidas (CAT-003) ──
+  {
+    id: "PROD-012",
+    imagen: "/src/assets/img/Quatro.webp",
+    nombre: "Gaseosa Cuatro",
+    idCategoria: "CAT-003",
+    tipo: TIPOS_PRODUCTO[1],
+    costoUnitario: 3000, precioUnitario: 3000,
+    unidadVenta: "und",
+    stockDisponible: 100,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-013",
+    imagen: "/src/assets/img/Premio.webp",
+    nombre: "Gaseosa Premium",
+    idCategoria: "CAT-003",
+    tipo: TIPOS_PRODUCTO[1],
+    costoUnitario: 3500, precioUnitario: 3500,
+    unidadVenta: "und",
+    stockDisponible: 80,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-014",
+    imagen: "/src/assets/img/Coca-Cola.webp",
+    nombre: "Gaseosa Coca-Cola",
+    idCategoria: "CAT-003",
+    tipo: TIPOS_PRODUCTO[1],
+    costoUnitario: 2500, precioUnitario: 2500,
+    unidadVenta: "und",
+    stockDisponible: 120,
+    estado: "Disponible",
+  },
+  {
+    id: "PROD-015",
+    imagen: "/src/assets/img/Pepsi.webp",
+    nombre: "Gaseosa Pepsi",
+    idCategoria: "CAT-003",
+    tipo: TIPOS_PRODUCTO[1],
+    costoUnitario: 2500, precioUnitario: 2500,
+    unidadVenta: "und",
+    stockDisponible: 100,
+    estado: "Disponible",
+  },
+];

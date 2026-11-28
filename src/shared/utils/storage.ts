@@ -2,7 +2,7 @@ import { INITIAL_ROLES, completarRolesSemilla } from "@/features/roles/utils/rol
 import { SUBS_CON_EXCEL } from "@/features/roles/utils/roles";
 import { ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
 import { DASHBOARD_PERM_KEY } from "@/shared/utils/navigation";
-import { INITIAL_PRODUCTOS } from "@/features/products/pages/ProductsScreen";
+import { INITIAL_PRODUCTOS } from "@/features/products/utils/products";
 import type { Producto } from "@/features/products/utils/products";
 
 // ── Persistencia de roles (TEMPORAL) ──────────────────────────────────

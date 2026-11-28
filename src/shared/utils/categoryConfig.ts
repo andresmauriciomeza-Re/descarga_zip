@@ -1,5 +1,13 @@
 import type { PorcionesTamano } from "@/shared/utils/technicalSheets";
-import type { TipoProducto } from "@/features/products/utils/products";
+
+/** Los DOS tipos de producto. Quien los define es la CATEGORÍA del producto
+    (ver `CONFIG_CATEGORIA`): las que se elaboran con insumos y llevan ficha
+    técnica son "Producto insumo" (pizzas, lasañas) y las que se revenden tal
+    como se compran son "Producto terminado" (gaseosas) — mismo vocabulario que
+    usa Orden de Producción. */
+export const TIPOS_PRODUCTO = ["Producto insumo", "Producto terminado"] as const;
+
+export type TipoProducto = (typeof TIPOS_PRODUCTO)[number];
 
 /** Lo que la CATEGORÍA define del producto (sección 3): su tipo y los
     tamaños de su ficha técnica. Una categoría SIN entrada aquí es "sin

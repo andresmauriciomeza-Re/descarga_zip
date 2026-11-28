@@ -2,7 +2,7 @@ import { type LineaOrden, esProductoInsumo, esPizzaProducto, fichaVigente, reque
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 import type { FichasPorProducto } from "@/shared/utils/technicalSheets";
-import { tipoDe } from "@/features/products/pages/ProductsScreen";
+import { tipoDe } from "@/features/products/utils/products";
 import { useState } from "react";
 import { esIdInsumo } from "@/shared/utils/technicalSheets";
 import { type GrupoProductoInsumo, SelectorProductoInsumo } from "@/features/production-orders/components/ProductSupplySelector";
