@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { cargarParaDescarga } from "@/shared/utils/optionalImport";
 
 /**
  * Descarga los datos proporcionados como un archivo Excel (.xlsx).
@@ -6,11 +6,12 @@ import * as XLSX from "xlsx";
  * @param cols  Definición de columnas: { key, label } — el label va como encabezado.
  * @param filename  Nombre del archivo sin extensión (se agrega .xlsx automáticamente).
  */
-export function exportToExcel<T extends Record<string, unknown>>(
+export async function exportToExcel<T extends Record<string, unknown>>(
   rows: T[],
   cols: { key: keyof T & string; label: string }[],
   filename: string
-): void {
+): Promise<void> {
+  const XLSX = await cargarParaDescarga(() => import("xlsx"));
   const header = cols.map(c => c.label);
   const data = rows.map(row => cols.map(c => {
     const val = row[c.key];

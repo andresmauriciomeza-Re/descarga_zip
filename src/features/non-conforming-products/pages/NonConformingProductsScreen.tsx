@@ -25,7 +25,7 @@ import { SearchInput } from "@/shared/components/SearchInput";
 import { Paginador } from "@/shared/components/Paginator";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
-import * as XLSX from "xlsx";
+import { cargarParaDescarga } from "@/shared/utils/optionalImport";
 import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { BotonDescargarExcel } from "@/shared/components/buttons/DownloadExcelButton";
 import type { Insumo } from "@/features/supplies/utils/supplies";
@@ -93,7 +93,8 @@ const emptyForm = (): Omit<NoConformidad, "id"> => ({
   ordenRef: "",
 });
 
-function downloadXLSX(data: NoConformidad[]) {
+async function downloadXLSX(data: NoConformidad[]) {
+  const XLSX = await cargarParaDescarga(() => import("xlsx"));
   const wb = XLSX.utils.book_new();
 
   // ── Sheet 1: Resumen general ──

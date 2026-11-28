@@ -1,4 +1,4 @@
-import ExcelJS from "exceljs";
+import { cargarParaDescarga } from "@/shared/utils/optionalImport";
 
 export type AlineacionExcel = "left" | "center" | "right";
 
@@ -47,6 +47,7 @@ export async function exportarExcelEstilizado<T>({
   coloresEstado = {},
   fecha = new Date(),
 }: OpcionesExcel<T>): Promise<string> {
+  const { default: ExcelJS } = await cargarParaDescarga(() => import("exceljs"));
   const wb = new ExcelJS.Workbook();
   wb.creator = "S.I.V.PRO — La Sirena Pizza";
   wb.created = fecha;
@@ -180,6 +181,7 @@ export async function exportarGestionComprasConInsumosExcel({
   nombreArchivo,
   fecha = new Date(),
 }: ExportarGestionComprasConInsumosOptions): Promise<string> {
+  const { default: ExcelJS } = await cargarParaDescarga(() => import("exceljs"));
   const wb = new ExcelJS.Workbook();
   wb.creator = "S.I.V.PRO — La Sirena Pizza";
   wb.created = fecha;
@@ -422,6 +424,7 @@ export async function exportarOrdenesConInsumosExcel({
   nombreArchivo,
   fecha = new Date(),
 }: ExportarOrdenesConInsumosOptions): Promise<string> {
+  const { default: ExcelJS } = await cargarParaDescarga(() => import("exceljs"));
   const wb = new ExcelJS.Workbook();
   wb.creator = "S.I.V.PRO — La Sirena Pizza";
   wb.created = fecha;
@@ -670,6 +673,7 @@ export async function exportarMultiExcelEstilizado({
   nombreArchivo,
   fecha = new Date(),
 }: OpcionesMultiExcel): Promise<string> {
+  const { default: ExcelJS } = await cargarParaDescarga(() => import("exceljs"));
   const wb = new ExcelJS.Workbook();
   wb.creator = "S.I.V.PRO — La Sirena Pizza";
   wb.created = fecha;

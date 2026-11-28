@@ -52,7 +52,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,tsx,webp}', 'icons/*.png'],
-        globIgnores: ['**/img/**'],
+        // Excel se descarga solo al exportar: no se guarda por adelantado.
+        globIgnores: ['**/img/**', '**/vendor-excel-*.js'],
         navigateFallback: '/index.html',
         // /legal/ son archivos estáticos: no deben responderse con index.html.
         navigateFallbackDenylist: [/^\/api\//, /^\/legal\//],

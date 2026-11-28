@@ -45,6 +45,7 @@ import { claveEstado, type OrdenCompra, type GestionCompra, type ProveedorRef, t
 import { OrdenModal } from "@/features/purchase-orders/components/PurchaseOrderModal";
 import { OrdenDetallePageContenido } from "@/features/purchase-orders/components/PurchaseOrderDetailContent";
 import { ESTADO_CONFIG, fmtCOP, totalLineaOrden, calcTotal, type OrdenFormData, type NuevoInsumoCreado } from "@/features/purchase-orders/utils/purchase-orders";
+import { cargarParaDescarga } from "@/shared/utils/optionalImport";
 
 /**
  * Sólo las órdenes en Borrador se pueden editar: es la condición del lápiz en
@@ -485,8 +486,8 @@ export function OrdenCompraScreen({
   // PDF generation for individual order
   const handleDownloadPDF = (orden: OrdenCompra) => {
     // Dynamic import of jsPDF to avoid SSR issues
-    import("jspdf").then(({ jsPDF }) => {
-      import("jspdf-autotable").then(() => {
+    cargarParaDescarga(() => import("jspdf")).then(({ jsPDF }) => {
+      cargarParaDescarga(() => import("jspdf-autotable")).then(() => {
         const doc = new jsPDF();
         const prov = proveedores.find(p => p.nombre === orden.proveedor);
         const nit = orden.proveedorNit || prov?.nit || "";
