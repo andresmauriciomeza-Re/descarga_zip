@@ -53,14 +53,8 @@ import { claveDoc, docValida, idRolCliente, type Usuario } from "@/features/user
 import { ActivarCuentaModal } from "@/shared/components/ActivateAccountModal";
 import { verificarCorreo } from "@/shared/services/verificationService";
 import type { GestionCompra, OrdenCompra, OrdenItem, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
-import {
-  INITIAL_GESTIONES,
-  INITIAL_ORDENES,
-  NuevaOrdenCompraPage,
-  OrdenCompraScreen,
-  OrdenDetallePage,
-  PROVEEDORES_INIT,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { NuevaOrdenCompraPage, OrdenCompraScreen, OrdenDetallePage } from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
+import { INITIAL_GESTIONES, INITIAL_ORDENES, PROVEEDORES_INIT } from "@/features/purchase-orders/utils/purchase-orders";
 import { OrdenProduccionScreen, INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId } from "@/features/production-orders/pages/ProductionOrdersScreen";
 import { normalizarNombre, type Faltante } from "@/features/production-orders/utils/production-orders";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
