@@ -782,8 +782,8 @@ export function DashboardScreen({
             Ver todos ›
           </BotonAccion>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div>
+          <table className="w-full break-words">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {cols.map((h) => (

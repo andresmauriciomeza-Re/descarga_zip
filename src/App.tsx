@@ -2250,17 +2250,6 @@ function AppContent() {
         : "ml-[var(--ancho-menu-contraido)]"
     : "";
 
-  const isLockedScreen = isAdmin && (
-    screen === "clientes" || screen === "users" || screen === "empleados" ||
-    // Módulo de Compra / Orden de Compra: ocupa el viewport y scrollea por dentro
-    screen === "orden-compra" || screen === "nueva-orden-compra" ||
-    screen === "recepcion-compra" || screen === "gestion-compra" ||
-    screen === "nueva-compra" || screen === "orden-detalle" ||
-    // Proveedores: ocupa el viewport y sin scroll de página (la tabla se
-    // pagina en bloques de 5 en vez de crecer hasta hacer scroll).
-    screen === "suppliers"
-  );
-
   return (
     <div
       className={`min-h-screen bg-background text-foreground${isAdmin ? " panel-admin" : " app-publica"}`}
@@ -2321,7 +2310,7 @@ function AppContent() {
       )}
 
       <div
-        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen${isLockedScreen ? " h-dvh min-h-dvh overflow-hidden max-[820px]:h-[calc(100dvh-4rem)] max-[820px]:min-h-0" : ""}`}
+        className={`transition-[margin] duration-200 motion-reduce:transition-none ${sideW} flex flex-col min-h-screen`}
       >
         {/* Public navbar */}
         {!isAdmin && !isAuth && (
@@ -2366,8 +2355,6 @@ function AppContent() {
             !isAdmin && !isAuth && screen !== "landing"
               ? "pt-20"
               : "",
-            isLockedScreen ? " flex-1 min-h-0" : "",
-            isLockedScreen ? " overflow-y-auto" : "",
           ].join(" ")}
         >
           {/* Aviso fijo del catálogo público: solo aparece si la API no respondió.
@@ -3162,8 +3149,7 @@ function AppContent() {
 
         {/* P12: se eliminó el footer de administración ("S.I.V.PRO — Panel
             Administrativo") para que no se muestre en ningún módulo del panel.
-            El footer público del landing no se toca. `isLockedScreen` sigue
-            vivo porque lo usa el contenedor de arriba (alto fijo del viewport). */}
+            El footer público del landing no se toca. */}
 
         {/* Mobile bottom nav */}
         {!isAdmin && !isAuth && (

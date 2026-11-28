@@ -528,7 +528,7 @@ export function OrdenModal({
       <div
         className={
           isPage
-            ? `w-full px-4 pt-4 ${FORM_MAXW_PAGINA} mx-auto h-full overflow-y-auto overflow-x-hidden ${isView ? "pb-4" : "pn-pagina-con-barra"}`
+            ? `w-full px-4 pt-4 ${FORM_MAXW_PAGINA} mx-auto ${isView ? "pb-4" : "pn-pagina-con-barra"}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -1036,7 +1036,7 @@ export function OrdenModal({
                       <div className="px-3 py-2 border-b border-emerald-200 bg-emerald-100/60">
                         <p className="text-base font-bold uppercase tracking-wider text-emerald-800">Insumos recibidos</p>
                       </div>
-                      <table className="w-full text-base">
+                      <table className="pn-tabla-adapta w-full text-base break-words">
                         <thead className="text-base text-muted-foreground uppercase tracking-wider">
                           <tr>
                             {["Nombre", "Solicitado", "Recibido", "Unidad", "P. real", "Subtotal"].map(h => (
@@ -1055,11 +1055,11 @@ export function OrdenModal({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-muted-foreground text-base">{item.cantidadSolicitada || "—"}</td>
-                              <td className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
-                              <td className="px-3 py-2 text-base text-muted-foreground">{item.unidad}</td>
-                              <td className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
-                              <td className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
+                              <td data-etiqueta="Solicitado" className="px-3 py-2 text-muted-foreground text-base">{item.cantidadSolicitada || "—"}</td>
+                              <td data-etiqueta="Recibido" className="px-3 py-2 font-semibold">{item.cantidadRecibida}</td>
+                              <td data-etiqueta="Unidad" className="px-3 py-2 text-base text-muted-foreground">{item.unidad}</td>
+                              <td data-etiqueta="P. real" className="px-3 py-2">{fmtCOP(item.costoUnitario)}</td>
+                              <td data-etiqueta="Subtotal" className="px-3 py-2 font-semibold">{fmtCOP(item.cantidadRecibida * item.costoUnitario)}</td>
                             </tr>
                           ))}
                         </tbody>

@@ -372,19 +372,14 @@ export function InsumosSolicitadosTable({
 
   if (enPagina) {
     return (
-      <div className={"flex flex-col flex-1 min-h-0 " + className}>
-        <div
-          className={
-            "flex-1 min-h-0 " +
-            "overflow-auto"
-          }
-        >
+      <div className={"flex flex-col " + className}>
+        <div>
           <table
             className="pn-tabla-compra w-full [&_td]:py-2"
           >
             {colgroup}
             <thead
-              className={"text-base uppercase tracking-wider sticky top-0 z-10 border-b border-border " +
+              className={"text-base uppercase tracking-wider border-b border-border " +
                 (esAmber ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground")}
             >
               <tr>
@@ -434,13 +429,7 @@ export function InsumosSolicitadosTable({
           </p>
         </div>
       )}
-      <div
-        className={
-          "flex-1 min-h-0 " +
-          "overflow-auto" +
-          (enPagina && items.length === 0 ? " flex items-center" : "")
-        }
-      >
+      <div className={enPagina && items.length === 0 ? "flex items-center" : undefined}>
         <table
           className={"pn-tabla-compra w-full " + (enPagina ? "[&_td]:py-2" : "")}
         >
@@ -455,7 +444,7 @@ export function InsumosSolicitadosTable({
                   key={h}
                   className={(sinScrollX ? "px-1 " : "px-1.5 ") + (enPagina ? "py-1.5" : "py-2.5") + " text-left font-semibold leading-tight whitespace-normal " +
                     (enPagina
-                      ? "sticky top-0 z-10 border-b border-border " +
+                      ? "border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
                       : "")}
                 >
@@ -470,7 +459,7 @@ export function InsumosSolicitadosTable({
                 <th
                   className={(sinScrollX ? "px-1 py-2.5 " : "px-1.5 py-2.5 ") +
                     (enPagina
-                      ? "sticky top-0 z-10 border-b border-border " +
+                      ? "border-b border-border " +
                         (esAmber ? "bg-amber-50" : "bg-muted")
                       : "")}
                 />

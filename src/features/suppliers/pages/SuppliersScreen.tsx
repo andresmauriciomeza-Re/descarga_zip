@@ -31,6 +31,7 @@ import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill, type TonoPill } from "@/shared/components/panel/StatusPill";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 
 // ─────────────────────────── SUPPLIERS ───────────────────────────
@@ -605,29 +606,22 @@ export function SuppliersScreen({
           Revisa cómo lo escribiste o agrega uno nuevo con «Agregar un proveedor».
         </VacioEstado>
       ) : (
-        <div className="pn-prov-grid">
+        <div className="pn-lista">
           {paged.map(s => {
             const apagado = s.estado === "inactivo";
             return (
-              <article key={s.id} className="pn-tarjeta">
-                <div>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <h2 className="pn-tarjeta__nombre">{s.nombre}</h2>
-                    <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
-                  </div>
-                  <p className="pn-tarjeta__sub">
-                    {s.tipoPersona === "Persona Jurídica" ? "Empresa" : s.tipoPersona === "Persona Natural" ? "Persona" : "Proveedor"} · NIT {formatoNit(s.nit)}
-                  </p>
-                </div>
-                <dl className="pn-tarjeta__datos">
-                  <div><dt>Correo</dt><dd>{s.email || (s as Supplier).contactoEmail || "—"}</dd></div>
-                  <div><dt>Hablar con</dt><dd>{s.asesorComercial || (s as Supplier).contactoNombre || "—"}</dd></div>
-                  <div><dt>Teléfono</dt><dd>{s.telefono || (s as Supplier).contactoTelefono || "—"}</dd></div>
-                </dl>
-                <div className="pn-tarjeta__botones">
-                  <BotonAccion variante="normal" onClick={() => setDetailItem(s)}>Ver todos los datos</BotonAccion>
-                </div>
-              </article>
+              <TarjetaFila
+                key={s.id}
+                nombre={s.nombre}
+                detalle={`${s.tipoPersona === "Persona Jurídica" ? "Empresa" : s.tipoPersona === "Persona Natural" ? "Persona" : "Proveedor"} · NIT ${formatoNit(s.nit)}`}
+                datos={[
+                  { etiqueta: "Correo", valor: s.email || (s as Supplier).contactoEmail || "—" },
+                  { etiqueta: "Hablar con", valor: s.asesorComercial || (s as Supplier).contactoNombre || "—" },
+                  { etiqueta: "Teléfono", valor: s.telefono || (s as Supplier).contactoTelefono || "—" },
+                ]}
+                estado={<EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>}
+                acciones={<BotonAccion variante="normal" onClick={() => setDetailItem(s)}>Ver todos los datos</BotonAccion>}
+              />
             );
           })}
         </div>

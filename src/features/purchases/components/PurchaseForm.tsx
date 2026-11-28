@@ -703,7 +703,7 @@ export function CompraForm({
       <div
         className={
           isPage
-            ? `w-full px-4 sm:px-6 pt-4 h-full overflow-y-auto overflow-x-hidden ${isView ? "pb-4" : "pn-pagina-con-barra"}`
+            ? `w-full px-4 sm:px-6 pt-4 ${isView ? "pb-4" : "pn-pagina-con-barra"}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
@@ -1292,17 +1292,14 @@ export function CompraForm({
                     </span>
                   </div>
 
-                  {/* Con más de ~6 filas la tabla scrollea por dentro; el
+                  {/* La tabla crece con sus filas; el
                       modal se queda con su alto natural. Sin scroll
                       horizontal: por debajo de `md` se ocultan Tipo, Medida,
                       IVA % y Monto IVA (el Tipo baja junto al nombre). */}
                   <div
-                    className={
-                      "rounded-xl border border-border bg-muted/30 overflow-hidden " +
-                      (items.length > 6 ? "max-h-[21.25rem] overflow-y-auto" : "")
-                    }
+                    className="rounded-xl border border-border bg-muted/30"
                   >
-                    <table className="table-fixed w-full text-base">
+                    <table className="table-fixed w-full text-base break-words">
                       <thead className="text-base uppercase tracking-wider bg-muted/50 text-muted-foreground">
                         <tr>
                           <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>

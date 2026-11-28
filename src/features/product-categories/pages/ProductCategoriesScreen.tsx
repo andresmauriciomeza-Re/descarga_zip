@@ -13,6 +13,7 @@ import { DialogoConfirmacion } from "@/shared/components/panel/ConfirmDialog";
 import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill } from "@/shared/components/panel/StatusPill";
 import { OpcionesBotones } from "@/shared/components/buttons/OptionButtons";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
@@ -545,23 +546,22 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
               Revisa cómo lo escribiste o agrega una nueva.
             </VacioEstado>
           ) : (
-            <div className="pn-cat-grid">
+            <div className="pn-lista">
               {paged.map(c => (
-                <article key={c.id} className="pn-tarjeta" style={apagada(c) ? { background: "var(--gris-suave)" } : undefined}>
-                  <div className="flex items-center gap-4">
-                    <span aria-hidden="true" style={{ fontSize: "3.5rem", lineHeight: 1 }}>{c.icono}</span>
-                    <h2 className="pn-tarjeta__nombre" style={{ fontSize: "1.625rem" }}>{c.nombre}</h2>
-                  </div>
-                  <div><PillEstado c={c} /></div>
-                  <p style={{ fontSize: "1.125rem", margin: 0, color: c.descripcion?.trim() ? "var(--texto)" : "var(--gris-texto)" }}>
-                    {c.descripcion?.trim() || "Todavía no tiene descripción"}
-                  </p>
-                  <p style={{ fontSize: "1.1875rem", fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
-                  <div className="pn-tarjeta__botones">
-                    <BotonAccion variante="normal" onClick={() => setDetailItem(c)}>Ver sus productos</BotonAccion>
-                    {canEdit && <BotonAccion variante="normal" onClick={() => abrirEditar(c)}>Cambiar nombre</BotonAccion>}
-                  </div>
-                </article>
+                <TarjetaFila
+                  key={c.id}
+                  avatar={<span aria-hidden="true" style={{ fontSize: "2.5rem", lineHeight: 1 }}>{c.icono}</span>}
+                  nombre={c.nombre}
+                  detalle={c.descripcion?.trim() || "Todavía no tiene descripción"}
+                  datos={[{ etiqueta: "En el menú", valor: cuentaMenu(c) }]}
+                  estado={<PillEstado c={c} />}
+                  acciones={
+                    <>
+                      <BotonAccion variante="normal" onClick={() => setDetailItem(c)}>Ver sus productos</BotonAccion>
+                      {canEdit && <BotonAccion variante="normal" onClick={() => abrirEditar(c)}>Cambiar nombre</BotonAccion>}
+                    </>
+                  }
+                />
               ))}
             </div>
           )}

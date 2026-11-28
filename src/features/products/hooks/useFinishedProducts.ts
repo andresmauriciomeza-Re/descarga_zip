@@ -9,7 +9,7 @@ const INITIAL_PRODUCTOS: ProductoTerminado[] = [
   { id:"ORD-005", idReceta:"REC-005", nombreReceta:"Veggie Mediterránea", fechaEntrega:"2024-01-17", horaEntrega:"19:30", cantidad:8,  tamano:"Grande", estadoEntrega:"listo" },
 ];
 
-const PER_PAGE = 5;
+const PER_PAGE = 10;
 
 /** Productos terminados: búsqueda, paginación y conteos. */
 export function useFinishedProducts() {
@@ -26,5 +26,5 @@ export function useFinishedProducts() {
   const listos    = productos.filter(p => p.estadoEntrega === "listo").length;
   const entregados = productos.filter(p => p.estadoEntrega === "entregado").length;
 
-  return { productos, setProductos, search, setSearch, page, setPage, filtered, totalPages, paged, listos, entregados };
+  return { productos, setProductos, search, setSearch, page, setPage, PER_PAGE, filtered, totalPages, paged, listos, entregados };
 }

@@ -17,6 +17,7 @@
 import { Fragment, useEffect, useRef, useState, type Ref } from "react";
 import { Check, ChevronDown, ChevronUp, Edit2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { enfocarFilaNueva } from "@/shared/hooks/useFormValidation";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import { InsumoSearchField, resolverInsumo } from "@/features/products/components/SupplySearchField";
 import { UnidadSelect, type OpcionUnidad } from "@/features/purchases/components/UnitSelect";
@@ -310,7 +311,7 @@ function InsumosFichaTable({
   /** Clase extra del contenedor (p. ej. para el scroll interno del modal de
       Insumos). Por defecto solo hay scroll horizontal. */
   contenedorClassName?: string;
-  /** Ref al contenedor con scroll (para bajar al último insumo agregado). */
+  /** Ref al contenedor de la tabla (para ir al último insumo agregado). */
   contenedorRef?: Ref<HTMLDivElement>;
   /** Encabezado sticky cuando el contenedor tiene scroll vertical. */
   stickyHeader?: boolean;
@@ -318,9 +319,9 @@ function InsumosFichaTable({
   return (
     <div
       ref={contenedorRef}
-      className={`overflow-x-auto rounded-xl border border-border ${contenedorClassName ?? ""}`}
+      className={`rounded-xl border border-border ${contenedorClassName ?? ""}`}
     >
-      <table className="w-full">
+      <table className="w-full break-words">
         <thead
           className={`text-xs text-muted-foreground uppercase tracking-wider ${
             stickyHeader ? "sticky top-0 z-10 bg-muted" : "bg-muted/50"
@@ -457,18 +458,15 @@ export function FichaTecnicaEditor({
   const esInsumo = modo === "insumo";
   const filaInputCls = esInsumo ? `${inputCls} h-11` : inputCls;
   const insumosScrollRef = useRef<HTMLDivElement>(null);
-  const insumosCantidadRef = useRef(ficha.insumos.length);
+  /** Solo se va a la fila nueva cuando la agrega la persona, no al cargar la ficha. */
+  const irAlNuevoRef = useRef(false);
 
   useEffect(() => {
-    if (!esInsumo) return;
-    if (ficha.insumos.length > insumosCantidadRef.current) {
-      const contenedor = insumosScrollRef.current;
-      if (contenedor) {
-        contenedor.scrollTo({ top: contenedor.scrollHeight, behavior: "smooth" });
-      }
-    }
-    insumosCantidadRef.current = ficha.insumos.length;
-  }, [ficha.insumos.length, esInsumo]);
+    if (!irAlNuevoRef.current) return;
+    irAlNuevoRef.current = false;
+    const filas = insumosScrollRef.current?.querySelectorAll<HTMLElement>("tbody > tr");
+    enfocarFilaNueva(filas?.[filas.length - 1]);
+  }, [ficha.insumos.length]);
 
   // Búsqueda y alta de insumos (una sola fila a la vez).
   const [sel, setSel] = useState<Insumo | null>(null);
@@ -588,6 +586,7 @@ export function FichaTecnicaEditor({
           ? ins.unidadMedida
           : unidad,
     };
+    irAlNuevoRef.current = true;
     onChange({
       ...ficha,
       insumos: [...ficha.insumos, fila],
@@ -876,8 +875,7 @@ export function FichaTecnicaEditor({
                   onChange={updateInsumo}
                   onRemove={removeInsumo}
                   onPresentationChange={guardarPresentacionFila}
-                  contenedorClassName="no-scrollbar max-h-60 overflow-y-auto overscroll-contain lg:max-h-60"
-                  contenedorRef={insumosScrollRef}
+                                    contenedorRef={insumosScrollRef}
                   stickyHeader
                   insumosCatalogo={insumos}
                 />
@@ -894,6 +892,7 @@ export function FichaTecnicaEditor({
             {ficha.insumos.length > 0 ? (
               <div className="mb-3">
                 <InsumosFichaTable
+                  contenedorRef={insumosScrollRef}
                   insumos={ficha.insumos}
                   editable
                   editandoIdx={editandoIdx}

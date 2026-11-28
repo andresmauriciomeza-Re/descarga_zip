@@ -32,20 +32,20 @@ export function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry;
             <p className="text-sm font-semibold text-foreground">Insumos comprados</p>
             <p className="text-xs text-muted-foreground">{items.length} ítems</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[35rem]">
+          <div>
+            <table className="pn-tabla-adapta w-full break-words">
               <thead className="bg-muted/50">
                 <tr>{["Insumo","Cantidad","Precio unit.","Subtotal"].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground">{h}</th>
                 ))}</tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {items.map((x, i) => (
                   <tr key={i} className="hover:bg-muted/20">
                     <td className="px-4 py-3 text-sm font-medium text-foreground">{x.nombre}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{x.cantidad} {x.unidad}</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{fmtCOP(x.costoUnitario)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">{fmtCOP(x.cantidad * x.costoUnitario)}</td>
+                    <td data-etiqueta="Cantidad" className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{x.cantidad} {x.unidad}</td>
+                    <td data-etiqueta="Precio unit." className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{fmtCOP(x.costoUnitario)}</td>
+                    <td data-etiqueta="Subtotal" className="px-4 py-3 text-sm font-semibold text-foreground tabular-nums">{fmtCOP(x.cantidad * x.costoUnitario)}</td>
                   </tr>
                 ))}
               </tbody>

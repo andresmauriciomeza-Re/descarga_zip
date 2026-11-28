@@ -1349,7 +1349,7 @@ export function RecepcionCompraScreen({
   </>);
 
   return (
-    <div className="px-4 sm:px-6 pt-5 pb-6 h-full overflow-y-auto overflow-x-hidden">
+    <div className="px-4 sm:px-6 pt-5 pb-6">
       {/* HEADER */}
       <div className="flex items-center gap-4 mb-5 pb-5 border-b border-border shrink-0">
         <button

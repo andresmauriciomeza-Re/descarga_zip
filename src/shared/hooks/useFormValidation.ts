@@ -19,6 +19,19 @@ import { useRef, useState, type KeyboardEvent } from "react";
 
 export type MapaErrores = Record<string, string | undefined>;
 
+/** Lleva a la vista una fila recién agregada y pone el foco en su primer
+ *  control (sin animar si se pidió menos movimiento). Si no hay ninguno
+ *  disponible, el foco queda en la propia fila. */
+export function enfocarFilaNueva(
+  fila: HTMLElement | null | undefined,
+  selector = "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])",
+) {
+  if (!fila) return;
+  const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  fila.scrollIntoView({ block: "center", behavior: suave ? "smooth" : "auto" });
+  (fila.querySelector<HTMLElement>(selector) ?? fila).focus({ preventScroll: true });
+}
+
 /** Opciones del handler Tab de un campo. */
 type OpcionesCampo = {
   /** Estado de errores actual del formulario (incluye los de envío, p. ej. duplicados). */

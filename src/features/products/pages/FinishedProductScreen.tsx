@@ -5,7 +5,9 @@ import { PackageCheck, X, Clock, CheckCircle2, AlertCircle } from "lucide-react"
 import { toast } from "sonner";
 import { EstadoSelect } from "@/shared/components/StatusSelect";
 import { SearchInput } from "@/shared/components/SearchInput";
-import { Paginador } from "@/shared/components/Paginator";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
+import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { BotonAccion } from "@/shared/components/buttons/ActionButton";
 import { useFinishedProducts } from "@/features/products/hooks/useFinishedProducts";
 import type { ProductoTerminado, EstadoEntrega } from "@/features/products/utils/products";
 
@@ -31,7 +33,7 @@ interface PizzaStock {
 
 export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[] }) {
 
-  const { productos, setProductos, search, setSearch, page, setPage, filtered, totalPages, paged, listos, entregados } = useFinishedProducts();
+  const { productos, setProductos, search, setSearch, page, setPage, PER_PAGE, filtered, paged, listos, entregados } = useFinishedProducts();
   // Estado del modal de entrega
   const [confirmItem,  setConfirmItem]  = useState<ProductoTerminado | null>(null);
   const [recalentado,  setRecalentado]  = useState(false);
@@ -89,12 +91,12 @@ export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[]
           <h2 className="text-sm font-bold text-foreground">Stock de pizzas por tamaño</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Existencias en porciones; se actualizan desde producción y ventas.</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div>
+          <table className="pn-tabla-adapta w-full break-words">
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {["Pizza", "Mediana (porciones)", "Grande (porciones)"].map((heading) => (
-                  <th key={heading} className="px-4 py-2.5 text-left font-semibold whitespace-nowrap">{heading}</th>
+                  <th key={heading} className="px-4 py-2.5 text-left font-semibold">{heading}</th>
                 ))}
               </tr>
             </thead>
@@ -103,7 +105,7 @@ export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[]
                 <tr key={pizza.id}>
                   <td className="px-4 py-2.5 text-sm font-medium text-foreground">{pizza.nombre}</td>
                   {[pizza.stockMediana, pizza.stockGrande].map((stock, index) => (
-                    <td key={index} className={`px-4 py-2.5 text-sm font-semibold ${stock <= 0 ? "text-red-600 dark:text-red-400" : stock <= 10 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    <td key={index} data-etiqueta={index === 0 ? "Mediana (porciones)" : "Grande (porciones)"} className={`px-4 py-2.5 text-sm font-semibold ${stock <= 0 ? "text-red-600 dark:text-red-400" : stock <= 10 ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                       {stock} porc.{stock <= 0 ? " · Agotado" : stock <= 10 ? " · Stock bajo" : ""}
                     </td>
                   ))}
@@ -124,102 +126,70 @@ export function ProductoTerminadoScreen({ pizzas = [] }: { pizzas?: PizzaStock[]
         placeholder="Buscar por ID u orden de producción..."
       />
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden mb-4">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
-              <tr>
-                {["ID Orden","Receta","Fecha Entrega","Hora Entrega","Porciones / tamaño","Estado","Recalentado","Acciones"].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {paged.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-14 text-center text-muted-foreground">
-                  <p className="text-4xl mb-3">📦</p>
-                  <p>No se encontraron productos</p>
-                </td></tr>
-              ) : paged.map(p => (
-                <tr key={p.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3.5 text-sm font-mono font-semibold text-foreground">{p.id}</td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-xs font-mono font-semibold text-muted-foreground">{p.idReceta}</p>
-                    <p className="text-sm font-medium text-foreground">{p.nombreReceta}</p>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearFechaHora(p.fechaEntrega)}</td>
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-foreground">
+      {/* Listado: la misma fila de los demás módulos */}
+      {paged.length === 0 ? (
+        <div className="bg-card border border-border rounded-2xl px-4 py-14 text-center text-muted-foreground mb-4">
+          <p className="text-4xl mb-3">📦</p>
+          <p>No se encontraron productos</p>
+        </div>
+      ) : (
+        <div className="pn-lista">
+          {paged.map(p => (
+            <TarjetaFila
+              key={p.id}
+              pre={`${p.id} · ${p.idReceta}`}
+              nombre={p.nombreReceta}
+              datos={[
+                {
+                  etiqueta: "Entrega",
+                  valor: (
+                    <span className="inline-flex flex-wrap items-center gap-1">
+                      {formatearFechaHora(p.fechaEntrega)}
                       <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                       {formatearHora(p.horaEntrega) || "—"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm font-bold text-center text-foreground">{p.cantidad} porc. · {p.tamano}</td>
-                  <td className="px-4 py-3.5">
-                    {/* Pill de estado (diseño de Proveedores). La única
-                        transición es listo → entregado y pasa por el MISMO
-                        modal de confirmación del botón de la fila; entregado
-                        queda sin menú (estado final). */}
-                    <EstadoSelect
-                      value={p.estadoEntrega}
-                      onChange={next => {
-                        if (next === p.estadoEntrega) return;
-                        openConfirm(p);
-                      }}
-                      options={[
-                        {
-                          value: p.estadoEntrega,
-                          label: ESTADO_LABEL[p.estadoEntrega],
-                          color: ESTADO_COLOR[p.estadoEntrega],
-                        },
-                        ...(p.estadoEntrega === "listo"
-                          ? [{
-                              value: "entregado" as EstadoEntrega,
-                              label: ESTADO_LABEL.entregado,
-                              color: ESTADO_COLOR.entregado,
-                            }]
-                          : []),
-                      ]}
-                      disabled={p.estadoEntrega === "entregado"}
-                    />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    {p.estadoEntrega === "entregado" ? (
-                      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${p.recalentado ? "bg-amber-100 text-amber-800" : "bg-muted text-muted-foreground"}`}>
-                        {p.recalentado ? "Sí" : "No"}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground/50 italic">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    {p.estadoEntrega === "listo" ? (
-                      <button
-                        onClick={() => openConfirm(p)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap"
-                      >
-                        <PackageCheck className="w-3.5 h-3.5" />
-                        Marcar como Entregada
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Entregado
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ),
+                },
+                { etiqueta: "Porciones / tamaño", valor: `${p.cantidad} porc. · ${p.tamano}` },
+                { etiqueta: "Recalentado", valor: p.estadoEntrega === "entregado" ? (p.recalentado ? "Sí" : "No") : "—" },
+              ]}
+              estado={
+                /* La única transición es listo → entregado y pasa por el MISMO
+                   modal de confirmación del botón; entregado es estado final. */
+                <EstadoSelect
+                  value={p.estadoEntrega}
+                  onChange={next => {
+                    if (next === p.estadoEntrega) return;
+                    openConfirm(p);
+                  }}
+                  options={[
+                    {
+                      value: p.estadoEntrega,
+                      label: ESTADO_LABEL[p.estadoEntrega],
+                      color: ESTADO_COLOR[p.estadoEntrega],
+                    },
+                    ...(p.estadoEntrega === "listo"
+                      ? [{
+                          value: "entregado" as EstadoEntrega,
+                          label: ESTADO_LABEL.entregado,
+                          color: ESTADO_COLOR.entregado,
+                        }]
+                      : []),
+                  ]}
+                  disabled={p.estadoEntrega === "entregado"}
+                />
+              }
+              acciones={p.estadoEntrega === "listo" ? (
+                <BotonAccion variante="principal" icono={PackageCheck} onClick={() => openConfirm(p)}>
+                  Marcar como Entregada
+                </BotonAccion>
+              ) : undefined}
+            />
+          ))}
         </div>
-      </div>
-
-      {/* Pagination (unificada) */}
-      {filtered.length > 0 && (
-        <Paginador pagina={page} totalPaginas={totalPages} onCambio={setPage} />
       )}
+
+      <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
 
       {/* ── Modal: Confirmar Entrega ── */}
       <AnimatePresence>

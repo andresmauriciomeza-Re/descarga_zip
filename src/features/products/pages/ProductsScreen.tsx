@@ -2116,8 +2116,8 @@ export function GestionProductosScreen({
                       "Limita"/"No alcanza" la píldora sale por tamaño
                       ("Limita Mediana", "Limita Grande"). */}
                   {desglose.length > 0 && (
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="w-full text-xs">
+                    <div className="mt-2">
+                      <table className="w-full text-xs break-words">
                         <thead>
                           <tr className="text-[0.625rem] uppercase tracking-wider text-muted-foreground text-left border-b border-border">
                             <th className="py-1.5 pr-2 font-semibold">Insumo</th>
@@ -2148,7 +2148,7 @@ export function GestionProductosScreen({
                                   </span>
                                 )}
                               </td>
-                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-foreground whitespace-nowrap">
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-foreground">
                                 {desglose.map((d) => (
                                   <span
                                     key={d.tamano ?? "único"}
@@ -2162,10 +2162,10 @@ export function GestionProductosScreen({
                                   </span>
                                 ))}
                               </td>
-                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-muted-foreground whitespace-nowrap">
+                              <td className="py-1.5 pr-2 text-right align-top tabular-nums text-muted-foreground">
                                 {fmtCant(f.stock, f.unidadStock)}
                               </td>
-                              <td className="py-1.5 text-right align-top whitespace-nowrap">
+                              <td className="py-1.5 text-right align-top">
                                 {limitaEn.length > 0 ? (
                                   limitaEn.map((t) => (
                                     <span

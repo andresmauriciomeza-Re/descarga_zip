@@ -74,7 +74,7 @@ export function TablaItemsFactura({
     <div
       className={
         (enPagina
-          ? "flex flex-col flex-1 min-h-0 "
+          ? "flex flex-col "
           : "rounded-xl border border-border bg-muted/30 overflow-hidden flex flex-col ") +
         className
       }
@@ -87,15 +87,7 @@ export function TablaItemsFactura({
         </div>
       )}
 
-      <div
-        className={
-          // Punto 2.8c: sin `flex items-center` cuando está vacío — centraba
-          // el mensaje en toda la altura restante y dejaba EL HUECO GRANDE
-          // entre "Precios con IVA incluido" y la tabla. Ahora el aviso queda
-          // pegado a la cabecera.
-          "flex-1 min-h-0 overflow-auto"
-        }
-      >
+      <div>
         {/* Punto 2.8c: sin `[&_td]:py-2` en página — esa regla pisaba el
             `py-1.5` de las celdas y las filas no se compactaban. */}
         <table
@@ -111,7 +103,7 @@ export function TablaItemsFactura({
             className={
               "text-base uppercase tracking-wider " +
               (enPagina
-                ? "sticky top-0 z-10 border-b border-border bg-muted text-muted-foreground"
+                ? "border-b border-border bg-muted text-muted-foreground"
                 : "bg-muted/50 text-muted-foreground")
             }
           >

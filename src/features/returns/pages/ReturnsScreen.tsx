@@ -14,6 +14,7 @@ import { EncabezadoPagina } from "@/shared/components/panel/PageHeader";
 import { EstadoPill } from "@/shared/components/panel/StatusPill";
 import { FiltrosChips } from "@/shared/components/panel/FilterChips";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
+import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { normalizarTexto } from "@/shared/utils/names";
 import { limiteStockDe, productoDisponible, type Product, SECCIONES_MENU, verImagenCompleta } from "@/shared/utils/catalog";
@@ -160,7 +161,7 @@ export function DevolucionesScreen({
   const [buscaCanje, setBuscaCanje] = useState("");
 
 
-  const { search, setSearch, chipDev, setChipDev, visibles } = useReturnsFilter(pendientes, resueltas);
+  const { search, setSearch, chipDev, setChipDev, visibles, paged, pageActual, setPage } = useReturnsFilter(pendientes, resueltas);
   // Al llegar desde la tabla de ventas con "Gestionar", se abre sola la
   // devolución indicada: el modal de gestión si sigue pendiente, o la vista de
   // solo lectura si ya se resolvió. Se limpia el id para no reabrirla al
@@ -725,8 +726,9 @@ export function DevolucionesScreen({
               Revisa cómo lo escribiste o cambia el filtro.
             </VacioEstado>
           ) : (
+            <>
             <div className="pn-lista">
-              {visibles.map((dev) => {
+              {paged.map((dev) => {
                 const { totalDev, pendiente } = datosDev(dev);
                 const resumenDinero =
                   !pendiente && dev.devolucionTipo === "dinero"
@@ -758,6 +760,8 @@ export function DevolucionesScreen({
                 );
               })}
             </div>
+            <PaginadorGrande pagina={pageActual} total={visibles.length} onCambiar={setPage} />
+            </>
           )}
         </>
       )}

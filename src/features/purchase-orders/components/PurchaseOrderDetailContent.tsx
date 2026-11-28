@@ -54,11 +54,6 @@ export function OrdenDetallePageContenido({
     ultimoCambio?.fechaHora ?? orden.recepcion?.fechaRecepcion ?? orden.fecha
   );
 
-  /** Las tablas miden según sus filas; solo con muchas filas scrollean solas.
-      En móvil (columnas apiladas) siempre pueden desplazar en horizontal. */
-  const FILAS_SCROLL = 15;
-  const claseTabla = (filas: number) =>
-    `rounded-xl border border-border ${filas > FILAS_SCROLL ? "max-h-[55vh] overflow-auto" : "overflow-x-auto"}`;
 
   const tonoEstado: Record<EstadoOrden, TonoPill> = { Borrador: "gris", Enviado: "azul", Completado: "verde", Anulado: "rojo" };
   const numero = orden.id.replace(/^\D+-?0*/, "") || orden.id;

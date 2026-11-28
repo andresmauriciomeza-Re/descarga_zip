@@ -2091,8 +2091,8 @@ export function OrdenProduccionScreen({
 
                 <div>
                   <p className="text-base font-semibold text-muted-foreground mb-1.5">Cantidades estimadas</p>
-                  <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full text-lg text-left">
+                  <div className="rounded-xl border border-border">
+                    <table className="w-full text-lg text-left break-words">
                       <thead className="bg-muted text-base text-muted-foreground">
                         <tr><th className="p-3">Producto o insumo</th><th className="p-3">Cantidad estimada</th><th className="p-3">Unidad</th></tr>
                       </thead>

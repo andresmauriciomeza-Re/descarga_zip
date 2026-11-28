@@ -12,7 +12,7 @@ import { FiltrosChips } from "@/shared/components/panel/FilterChips";
 import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useState, useMemo, useRef } from "react";
 import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
 import { disponiblePizza } from "@/shared/utils/pizzaStock";
@@ -164,6 +164,24 @@ const hoyFecha = () => {
     tamaño: string;
   }
 
+  /** Tras mover el foco con una tecla aún presionada: ignora las repeticiones de
+      Enter y Espacio hasta que se suelte, para que no activen el nuevo botón.
+      Una pulsación nueva funciona normal. */
+  function ignorarTeclaRepetida(boton: HTMLButtonElement) {
+    const alPresionar = (e: KeyboardEvent) => {
+      if (!e.repeat) soltar();
+      else if (e.key === "Enter" || e.key === " ") e.preventDefault();
+    };
+    const soltar = () => {
+      boton.removeEventListener("keydown", alPresionar);
+      boton.removeEventListener("keyup", soltar);
+      boton.removeEventListener("blur", soltar);
+    };
+    boton.addEventListener("keydown", alPresionar);
+    boton.addEventListener("keyup", soltar);
+    boton.addEventListener("blur", soltar);
+  }
+
   /** Modal exclusivo del panel de administrador: el pedido se toma en el local,
       frente al cliente, así que no se pide estado ni comprobante. La fecha se
       carga sola con el día en que se hace el pedido y la hora de recogida se
@@ -191,6 +209,60 @@ const hoyFecha = () => {
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
     );
+    // Cada línea que se suma se anuncia; la vista y el foco siguen en el catálogo.
+    const [anuncio, setAnuncio] = useState("");
+    const lineasPreviasRef = useRef<string[]>([]);
+    useEffect(() => {
+      const lineas = selProductos.map((p) => `${p.id}-${p.tamaño}`);
+      const previas = lineasPreviasRef.current;
+      lineasPreviasRef.current = lineas;
+      // Al quitar una línea se vacía, para que volver a agregarla se anuncie.
+      if (lineas.length < previas.length) setAnuncio("");
+      // Cambiar de tamaño o la cantidad no agrega líneas.
+      if (lineas.length <= previas.length) return;
+      const nueva = lineas.findIndex((linea) => !previas.includes(linea));
+      const { nombre, tamaño } = selProductos[nueva];
+      const esPizza = productos.find((p) => p.id === selProductos[nueva].id)?.category.toLowerCase().includes("pizza");
+      setAnuncio(`Agregado: ${nombre}${esPizza ? ` — ${tamaño}` : ""}`);
+    }, [selProductos]);
+
+    /** Botón del catálogo que se acaba de pulsar y a qué altura estaba. */
+    const pulsadoRef = useRef<{ boton: HTMLButtonElement; arriba: number } | null>(null);
+    /** Hueco al final del modal, por si no hay suficiente para compensar. */
+    const huecoRef = useRef<HTMLDivElement>(null);
+    const recordarPulsado = (e: React.MouseEvent) => {
+      const boton = (e.target as HTMLElement).closest("button");
+      if (!boton) return;
+      pulsadoRef.current = { boton, arriba: boton.getBoundingClientRect().top };
+      // Si el clic no cambió la selección, no queda pendiente para después.
+      setTimeout(() => { pulsadoRef.current = null; }, 0);
+    };
+    // La lista de elegidos crece encima del catálogo: antes de pintar se
+    // compensa el desplazamiento para que lo pulsado no se mueva de sitio.
+    useLayoutEffect(() => {
+      const pulsado = pulsadoRef.current;
+      if (!pulsado) return;
+      pulsadoRef.current = null;
+      const { boton, arriba } = pulsado;
+      const modal = boton.closest<HTMLElement>(".pn-modal");
+      const hueco = huecoRef.current;
+      if (modal && hueco) {
+        const salto = boton.getBoundingClientRect().top - arriba;
+        // Alto real del contenido: scrollHeight no sirve si aún no llena el modal.
+        const contenido = hueco.getBoundingClientRect().bottom - modal.getBoundingClientRect().top
+          + modal.scrollTop + parseFloat(getComputedStyle(modal).paddingBottom);
+        const falta = modal.scrollTop + salto - (contenido - modal.clientHeight);
+        if (falta > 0) hueco.style.height = `${hueco.offsetHeight + Math.ceil(falta)}px`;
+        modal.scrollTop += salto;
+      }
+      // Al agotarse las porciones el botón se deshabilita: el foco pasa al otro
+      // tamaño disponible o, si no hay, a la tarjeta del producto.
+      if (boton.disabled) {
+        const tarjeta = boton.closest<HTMLElement>("[data-tarjeta-producto]");
+        const otro = tarjeta?.querySelector<HTMLElement>("[data-tamanos] button:not([disabled])");
+        (otro ?? tarjeta)?.focus({ preventScroll: true });
+      }
+    }, [selProductos]);
     /** Estado "guardando": bloquea el botón Comprar mientras la venta se
         registra. El `ref` es la barrera real anti doble clic (el `disabled`
         del botón no alcanza si llegan dos clics en el mismo tick). */
@@ -674,9 +746,10 @@ const hoyFecha = () => {
     return (
       <>
         <div className="pn-dialogo-fondo" onClick={onClose} />
-        <div className="pn-modal pn-modal--formulario" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
+        <div className="pn-modal pn-modal--formulario pn-modal--alto-fijo" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
           <div className="pn-modal__cab">
             <h2 id="titulo-venta-local" className="pn-modal__titulo">Registrar venta del local</h2>
+            <p className="sr-only" role="status" aria-live="polite">{anuncio}</p>
           </div>
           <div className="grid gap-5">
             <SeccionFormulario numero={1} titulo="¿Quién compra?">
@@ -834,7 +907,7 @@ const hoyFecha = () => {
 
               {/* Productos seleccionados */}
               {selProductos.length > 0 && (
-                <div className="mb-2 space-y-2 max-h-72 overflow-y-auto">
+                <div className="mb-2 space-y-2">
                   {selProductos.map((p) => {
                     const prodData = productos.find(
                       (x) => x.id === p.id,
@@ -911,9 +984,17 @@ const hoyFecha = () => {
                               <span className="text-base text-muted-foreground">porc.</span>
                             )}
                             <button
-                              onClick={() =>
-                                updateQty(p.id, p.tamaño, p.cantidad + 1)
-                              }
+                              onClick={(e) => {
+                                const mas = e.currentTarget;
+                                updateQty(p.id, p.tamaño, p.cantidad + 1);
+                                // Al llegar al límite «+» se deshabilita: el foco pasa al «−» de la línea.
+                                setTimeout(() => {
+                                  const menos = mas.disabled ? mas.parentElement?.querySelector("button") : null;
+                                  if (!menos) return;
+                                  menos.focus({ preventScroll: true });
+                                  ignorarTeclaRepetida(menos);
+                                }, 0);
+                              }}
                               disabled={disponible !== undefined && p.cantidad >= disponible}
                               className="w-6 h-6 rounded bg-muted flex items-center justify-center cursor-pointer hover:bg-border text-foreground font-bold text-base disabled:opacity-40 disabled:cursor-not-allowed"
                             >
@@ -1019,7 +1100,7 @@ const hoyFecha = () => {
                   </div>
 
                   <div className="max-h-64 overflow-y-auto">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3" onClickCapture={recordarPulsado}>
                       {filteredProds.map((p) => {
                         const selItem = selProductos.find((x) => x.id === p.id);
                         const sel = !!selItem;
@@ -1027,6 +1108,10 @@ const hoyFecha = () => {
                         return (
                           <div
                             key={p.id}
+                            data-tarjeta-producto
+                            tabIndex={-1}
+                            role="group"
+                            aria-label={p.name}
                             className={`rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${
                               sel
                                 ? "border-primary/40 bg-primary/5"
@@ -1060,7 +1145,7 @@ const hoyFecha = () => {
                               </p>
                             </div>
 
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-1.5" data-tamanos>
                               {variantesDe(p).map((s) => {
                                 if (esPizza) {
                                   const active = selProductos.some((x) => x.id === p.id && x.tamaño === s.label);
@@ -1209,6 +1294,7 @@ const hoyFecha = () => {
               </BotonAccion>
             </div>
           </div>
+          <div ref={huecoRef} aria-hidden="true" />
         </div>
       </>
     );
