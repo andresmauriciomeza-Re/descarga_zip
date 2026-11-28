@@ -1,6 +1,7 @@
-import { type WeekEntry, fmtCOP, barFill } from "@/features/dashboard/utils/dashboard";
+import { type WeekEntry, barFill } from "@/features/dashboard/utils/dashboard";
 import { ResponsiveContainer, BarChart, Bar } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
 
 // ── Week card (shown in month grid) ─────────────────────────────────
 export function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, isCompras }: {
@@ -8,6 +9,9 @@ export function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, is
   onVentas: () => void; onCompras: () => void;
   prevWeek?: WeekEntry; isCompras: boolean;
 }) {
+  const { t, formatoMoneda } = useIdioma();
+  // Moneda COP en el formato del idioma, sin decimales.
+  const fmtCOP = (n: number) => formatoMoneda(Math.round(n));
   // Sin % si la semana no terminó o si no hay semana previa con ventas:
   // así nunca aparece un "-100%" de una semana a medio camino.
   const delta = prevWeek && prevWeek.totalVentas > 0 && week.terminada
@@ -25,14 +29,14 @@ export function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, is
         </div>
         <div className="text-right">
           {noData && !hasCom ? (
-            <span className="text-xs text-muted-foreground font-medium">Pendiente</span>
+            <span className="text-xs text-muted-foreground font-medium">{t("dashboard.d.pendiente")}</span>
           ) : (
             <>
               <p className="text-xl font-bold text-foreground">
-                {isCompras ? fmtCOP(comprasTotal) : `${week.totalUnidades} und · ${week.totalPorciones} porc.`}
+                {isCompras ? fmtCOP(comprasTotal) : t("dashboard.e.abreviado", { u: week.totalUnidades, p: week.totalPorciones })}
               </p>
               <p className="text-[0.625rem] text-muted-foreground">
-                {isCompras ? "en insumos" : "unidades y porciones"}
+                {isCompras ? t("dashboard.e.enInsumos") : t("dashboard.e.unidadesYPorciones")}
               </p>
               {!isCompras && week.totalRevenue > 0 && (
                 <p className="text-[0.625rem] text-emerald-600 font-semibold">{fmtCOP(week.totalRevenue)}</p>
@@ -75,8 +79,8 @@ export function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, is
           </span>
         ) : <span />}
         <div className="flex gap-3">
-          {!noData && <button onClick={onVentas} className="text-xs font-semibold text-primary hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver ventas →</button>}
-          {hasCom && <button onClick={onCompras} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">Ver compras →</button>}
+          {!noData && <button onClick={onVentas} className="text-xs font-semibold text-primary hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">{t("dashboard.e.verVentas")}</button>}
+          {hasCom && <button onClick={onCompras} className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer max-md:min-h-11 max-md:px-1">{t("dashboard.e.verCompras")}</button>}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Home, Menu, Search, X } from "l
 import { Logo } from "@/shared/components/Logo";
 import { canViewPermission, NAV_SECTIONS } from "@/shared/utils/navigation";
 import { SERIF } from "@/shared/utils/fonts";
+import { useIdioma } from "@/shared/i18n";
 
 export function Sidebar({
   current,
@@ -31,7 +32,6 @@ export function Sidebar({
   onExpandir?: () => void;
   /** Cierra el menú (escritorio) y devuelve el foco a la flecha. */
   onClose?: () => void;
-  darkMode?: boolean;
   userRole?: string;
   /** Nombre de quien inició sesión («Hola, {nombre}»). */
   userName?: string;
@@ -47,6 +47,7 @@ export function Sidebar({
   /** Ref mutable que recibe la primera opción del menú al abrir (para el foco). */
   firstNavRef?: { current: HTMLButtonElement | null };
 }) {
+  const { t, tf } = useIdioma();
   // Grupos del menú: todos cerrados al entrar; cada módulo se abre solo con
   // clic (no hay ningún efecto que los reabra según la pantalla activa).
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -118,8 +119,9 @@ export function Sidebar({
     // Con texto en el buscador solo quedan las opciones (o módulos) que coinciden.
     .map((m) => {
       if (!q) return m;
-      const modCoincide = m.sec.label.toLowerCase().includes(q);
-      return { ...m, items: modCoincide ? m.items : m.items.filter((it) => it.label.toLowerCase().includes(q)) };
+      // Se busca por el nombre en español y por el que se está viendo.
+      const coincide = (etiqueta: string) => [etiqueta, tf(etiqueta)].some((x) => x.toLowerCase().includes(q));
+      return { ...m, items: coincide(m.sec.label) ? m.items : m.items.filter((it) => coincide(it.label)) };
     })
     .filter((m) => m.items.length > 0);
 
@@ -142,7 +144,7 @@ export function Sidebar({
       className={hija ? "pn-sidebar__opcion pn-sidebar__opcion--hija" : "pn-sidebar__opcion"}
     >
       <it.Icon size={hija ? 18 : 22} aria-hidden="true" className="shrink-0" />
-      <span>{it.label}</span>
+      <span>{tf(it.label)}</span>
     </button>
   );
 
@@ -163,14 +165,14 @@ export function Sidebar({
             aria-expanded={abierto}
           >
             {abierto ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
-            <span>{abierto ? "Cerrar" : "Menú"}</span>
+            <span>{abierto ? t("menu.cerrar") : t("menu.abrir")}</span>
           </button>
         </div>
       )}
       <aside
         ref={asideRef}
         role="navigation"
-        aria-label="Menú principal"
+        aria-label={t("menu.principal")}
         className={`pn-sidebar flex flex-col shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil
           ? "fixed left-0 right-0 bottom-0 top-16 z-30"
           : `fixed left-0 top-0 h-full z-30 ${contraido ? "w-[var(--ancho-menu-contraido)]" : "w-[var(--ancho-menu)]"}`
@@ -186,9 +188,9 @@ export function Sidebar({
               type="button"
               className="pn-sidebar__icono"
               onClick={onToggleMenu}
-              aria-label="Expandir menú"
+              aria-label={t("menu.expandir")}
               aria-expanded={false}
-              title="Expandir menú"
+              title={t("menu.expandir")}
             >
               <ChevronRight size={24} aria-hidden="true" />
             </button>
@@ -204,8 +206,8 @@ export function Sidebar({
                   className="pn-sidebar__icono"
                   onClick={() => (directo ? ir(items[0].screen) : expandirGrupo(sec.key))}
                   aria-current={actual ? (directo ? "page" : "true") : undefined}
-                  aria-label={sec.label}
-                  title={sec.label}
+                  aria-label={tf(sec.label)}
+                  title={tf(sec.label)}
                 >
                   <sec.Icon size={22} aria-hidden="true" />
                 </button>
@@ -226,7 +228,7 @@ export function Sidebar({
               <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "1.3125rem", lineHeight: 1.2 }}>La Sirena</p>
               {nombrePila && (
                 <p style={{ fontSize: "1.125rem", lineHeight: 1.3 }} className="truncate">
-                  Hola, {nombrePila}
+                  {t("menu.hola", { nombre: nombrePila })}
                 </p>
               )}
             </div>
@@ -235,16 +237,16 @@ export function Sidebar({
               type="button"
               className="pn-sidebar__icono pn-sidebar__flecha"
               onClick={onToggleMenu}
-              aria-label="Contraer menú"
+              aria-label={t("menu.contraer")}
               aria-expanded={true}
-              title="Contraer menú"
+              title={t("menu.contraer")}
             >
               <ChevronLeft size={24} aria-hidden="true" />
             </button>
           </div>
         )}
         {esMovil && nombrePila && (
-          <p style={{ fontSize: "1.125rem", padding: "1rem 1.75rem 0.75rem" }}>Hola, {nombrePila}</p>
+          <p style={{ fontSize: "1.125rem", padding: "1rem 1.75rem 0.75rem" }}>{t("menu.hola", { nombre: nombrePila })}</p>
         )}
 
         {/* Buscador de módulos */}
@@ -254,8 +256,8 @@ export function Sidebar({
             type="search"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar en el menú"
-            aria-label="Buscar un módulo del menú"
+            placeholder={t("menu.buscar")}
+            aria-label={t("menu.buscarEtiqueta")}
             autoComplete="off"
           />
         </div>
@@ -267,7 +269,7 @@ export function Sidebar({
           style={{ scrollbarWidth: "none" }}
         >
           {modulos.length === 0 && (
-            <p className="pn-sidebar__vacio">No hay ninguna opción con ese nombre.</p>
+            <p className="pn-sidebar__vacio">{t("menu.sinResultados")}</p>
           )}
           {modulos.map(({ sec, items }) => {
             if (sec.key === "dashboard" || sec.key === "inicio") {
@@ -285,7 +287,7 @@ export function Sidebar({
                   aria-expanded={abiertoGrupo}
                 >
                   <sec.Icon size={22} aria-hidden="true" className="shrink-0" />
-                  <span className="flex-1">{sec.label}</span>
+                  <span className="flex-1">{tf(sec.label)}</span>
                   <ChevronDown
                     size={20}
                     aria-hidden="true"

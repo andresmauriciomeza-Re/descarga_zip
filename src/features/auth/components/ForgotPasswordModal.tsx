@@ -4,14 +4,17 @@ import { filtrarCorreo, MensajeError, validarCorreo } from "@/shared/components/
 import { restablecerContrasena, solicitarCodigoRecuperacion, verificarCodigoRecuperacion } from "@/shared/services/authService";
 import { toast } from "sonner";
 import type { ApiErrorConEstado } from "@/types/api";
-import { AUTH_GLASS_BUTTON_SECONDARY, AUTH_GLASS_CARD, AUTH_GLASS_OVERLAY, authGlassInputCls } from "@/shared/styles/authGlass";
+import { AUTH_GLASS_BUTTON_SECONDARY, AUTH_GLASS_CARD, AUTH_GLASS_OVERLAY, AUTH_SELECTOR_IDIOMA, authGlassInputCls } from "@/shared/styles/authGlass";
+import { LanguageSelector } from "@/shared/components/LanguageSelector";
 import { motion } from "motion/react";
 import { CheckCircle, Mail, RefreshCw, X } from "lucide-react";
 import { SERIF } from "@/shared/utils/fonts";
 import { PasoCodigoVerificacion } from "@/shared/components/VerificationCodeStep";
 import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
+import { useIdioma } from "@/shared/i18n";
 
 export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
+  const { t, errorVisible } = useIdioma();
   const [step, setStep] = useState<
     "email" | "code" | "password" | "done"
   >("email");
@@ -31,7 +34,8 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const closeWithEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      // Si el menú de idioma está abierto, Escape solo lo cierra a él.
+      if (event.key === "Escape" && !event.defaultPrevented) onClose();
     };
     document.addEventListener("keydown", closeWithEscape);
     return () => document.removeEventListener("keydown", closeWithEscape);
@@ -53,11 +57,11 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
       await solicitarCodigoRecuperacion(correo);
       setErrorCodigo(undefined);
       setStep("code");
-      toast.success("Si el correo está registrado, te enviamos un código.");
+      toast.success(t("auth.v.codigoSiRegistrado"));
     } catch (e) {
       // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
       // extrajo el texto; no se avanza de paso.
-      toast.error((e as Error).message);
+      toast.error(errorVisible((e as Error).message));
     } finally {
       setLoading(false);
     }
@@ -89,7 +93,7 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
       }
       // 429 y fallo de conexión: se avisa y se vuelve al correo, porque el
       // código no se pudo validar.
-      toast.error(err.message);
+      toast.error(errorVisible(err.message));
       if (err.status === 429) setStep("email");
     }
   };
@@ -115,7 +119,7 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
       }
       if (err.status === 429) {
         // Demasiadas solicitudes: se reinicia el flujo desde el correo.
-        toast.error(err.message);
+        toast.error(errorVisible(err.message));
         setCode(["", "", "", "", "", ""]);
         setStep("email");
         return;
@@ -129,11 +133,13 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className={AUTH_GLASS_OVERLAY}
+      className={`${AUTH_GLASS_OVERLAY} max-md:pt-16!`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
+      {/* El fondo del modal tapa el selector de la pantalla: va uno propio. */}
+      <LanguageSelector className={AUTH_SELECTOR_IDIOMA} />
       <motion.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -144,7 +150,7 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar recuperación de contraseña"
+          aria-label={t("auth.cerrarRecuperacion")}
           className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
@@ -160,16 +166,15 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                ¿Olvidaste tu contraseña?
+                {t("auth.olvidaste")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Ingresa tu correo y te enviaremos un código de
-                verificación.
+                {t("auth.teEnviaremosCodigo")}
               </p>
             </div>
             <div className="mb-5">
               <label className="block text-sm font-semibold text-foreground dark:text-white mb-1.5">
-                Correo electrónico
+                {t("auth.correo")}
               </label>
               <input
                 value={forgotEmail}
@@ -200,13 +205,13 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               {loading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : null}
-              {loading ? "Enviando..." : "Enviar código"}
+              {loading ? t("auth.enviando") : t("auth.enviarCodigo")}
             </button>
             <button
               onClick={onClose}
               className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
-              Volver al inicio de sesión
+              {t("auth.volverLogin")}
             </button>
           </>
         )}
@@ -238,10 +243,10 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                Nueva contraseña
+                {t("auth.nuevaContrasena")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Elige una contraseña segura para tu cuenta.
+                {t("auth.eligeSegura")}
               </p>
             </div>
             <PasoNuevaContrasena onGuardar={cambiarPassword} />
@@ -249,7 +254,7 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
-              Volver a iniciar sesión
+              {t("auth.volverAIniciar")}
             </button>
           </>
         )}
@@ -264,17 +269,16 @@ export function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               className="text-xl font-bold text-foreground dark:text-white mb-2"
               style={{ fontFamily: SERIF }}
             >
-              ¡Contraseña actualizada!
+              {t("auth.actualizada")}
             </h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Tu contraseña fue cambiada exitosamente. Ya puedes
-              iniciar sesión.
+              {t("auth.actualizadaTexto")}
             </p>
             <button
               onClick={onClose}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
             >
-              Ir a iniciar sesión
+              {t("auth.irAIniciar")}
             </button>
           </div>
         )}

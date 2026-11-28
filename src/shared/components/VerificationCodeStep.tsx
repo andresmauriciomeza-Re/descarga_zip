@@ -3,6 +3,7 @@ import { CheckCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { MensajeError } from "@/shared/components/FormInputs";
 import { CodigoVerificacionInput } from "@/shared/components/VerificationCodeInput";
+import { useIdioma } from "@/shared/i18n";
 
 const SERIF = "var(--font-titulo)";
 
@@ -40,6 +41,7 @@ export function PasoCodigoVerificacion({
   errorInicial?: string;
   idPrefijo?: string;
 }) {
+  const { t, errorVisible } = useIdioma();
   const [errorCodigo, setErrorCodigo] = useState<string | undefined>(
     errorInicial,
   );
@@ -95,11 +97,11 @@ export function PasoCodigoVerificacion({
     setReenviando(true);
     try {
       await onReenviar();
-      toast.success("Si el correo está registrado, te enviamos un código.");
+      toast.success(t("auth.v.codigoSiRegistrado"));
       setCooldown(30);
     } catch (e) {
       // El cooldown solo se reinicia si el backend aceptó la solicitud.
-      toast.error((e as Error).message);
+      toast.error(errorVisible((e as Error).message));
     } finally {
       setReenviando(false);
     }
@@ -115,10 +117,10 @@ export function PasoCodigoVerificacion({
           className="text-xl font-bold text-foreground dark:text-white"
           style={{ fontFamily: SERIF }}
         >
-          Código enviado
+          {t("auth.codigoEnviado")}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Ingresa el código de 6 dígitos enviado a{" "}
+          {t("auth.ingresaCodigoEnviado")}{" "}
           <strong className="text-foreground">{correoDestino}</strong>
         </p>
       </div>
@@ -143,7 +145,7 @@ export function PasoCodigoVerificacion({
         {verificando ? (
           <RefreshCw className="w-4 h-4 animate-spin" />
         ) : null}
-        {verificando ? "Verificando..." : "Verificar código"}
+        {verificando ? t("auth.verificando") : t("auth.verificarCodigo")}
       </button>
       <button
         onClick={() => void reenviar()}
@@ -151,15 +153,15 @@ export function PasoCodigoVerificacion({
         className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60 mb-0.5"
       >
         {cooldown > 0
-          ? `Reenviar en 00:${String(cooldown).padStart(2, "0")}`
-          : "Reenviar código"}
+          ? t("auth.reenviarEn", { segundos: String(cooldown).padStart(2, "0") })
+          : t("auth.reenviarCodigo")}
       </button>
       {onVolverOtroCorreo && (
         <button
           onClick={onVolverOtroCorreo}
           className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
         >
-          ← Ingresar otro correo
+          {t("auth.otroCorreo")}
         </button>
       )}
     </>

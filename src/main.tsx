@@ -1,6 +1,7 @@
 
   import { createRoot } from "react-dom/client";
   import App from "./App";
+  import { IdiomaProvider } from "./shared/i18n";
   import { hayCargaOpcional } from "./shared/utils/optionalImport";
   import "./shared/styles/index.css";
 
@@ -24,5 +25,9 @@
     window.location.reload();
   });
 
-  createRoot(document.getElementById("root")!).render(<App />);
+  createRoot(document.getElementById("root")!).render(
+    <IdiomaProvider>
+      <App />
+    </IdiomaProvider>,
+  );
   

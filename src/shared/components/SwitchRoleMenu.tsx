@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronsUpDown, UserCog, User } from "lucide-react";
 import type { Rol } from "@/features/roles/utils/roles";
+import { useIdioma } from "@/shared/i18n";
 
 // Menú "Cambiar de rol" del encabezado (y de Mi perfil).
 // El padre pasa los roles extra activos distintos del rol activo.
@@ -13,6 +14,7 @@ export function CambiarRolMenu({
   rolActivoNombre: string;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useIdioma();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
@@ -44,7 +46,7 @@ export function CambiarRolMenu({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        title="Cambiar de rol"
+        title={t("menu.cambiarRol")}
         className="inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
       >
         <UserCog className="w-4 h-4 text-primary" />
@@ -55,7 +57,7 @@ export function CambiarRolMenu({
       {open && (
         <div className="absolute right-0 max-md:fixed max-md:inset-x-2 max-md:top-14 max-md:mt-0 max-md:w-auto z-40 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
           <p className="px-3 py-2 text-[0.625rem] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
-            Cambiar de rol
+            {t("menu.cambiarRol")}
           </p>
           <div className="max-h-72 overflow-y-auto py-1">
             <button
@@ -63,7 +65,7 @@ export function CambiarRolMenu({
               onClick={() => { setOpen(false); }}
               className="w-full flex items-center justify-between gap-2 px-3 py-2 max-md:min-h-11 text-sm text-left cursor-pointer text-primary font-semibold bg-primary/10 rounded-lg"
             >
-              <span className="truncate">{rolActivoNombre} (actual)</span>
+              <span className="truncate">{t("menu.rolActual", { rol: rolActivoNombre })}</span>
               <Check className="w-4 h-4 shrink-0" />
             </button>
             {roles.map(r => (

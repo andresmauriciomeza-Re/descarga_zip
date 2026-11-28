@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { useIdioma } from "@/shared/i18n";
 
 interface Base {
   abierto: boolean;
@@ -37,6 +38,7 @@ interface Bloqueo extends Base {
 
 /** Diálogo accesible (Radix AlertDialog: foco atrapado y tecla Escape). */
 export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
+  const { t } = useIdioma();
   const [motivo, setMotivo] = useState("");
   const idMotivo = useId();
   useEffect(() => {
@@ -54,13 +56,13 @@ export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
             <div>
               {props.variante === "bloqueo" ? (
                 <div className="pn-dialogo__caja pn-dialogo__caja--ambar">
-                  <strong>Por qué no se puede:</strong>
-                  <ul>{props.porQueNo.map((t) => <li key={t}>{t}</li>)}</ul>
+                  <strong>{t("comun.porQueNo")}</strong>
+                  <ul>{props.porQueNo.map((linea) => <li key={linea}>{linea}</li>)}</ul>
                 </div>
               ) : (
                 <div className="pn-dialogo__caja">
-                  <strong>Qué va a pasar:</strong>
-                  <ul>{props.queVaAPasar.map((t) => <li key={t}>{t}</li>)}</ul>
+                  <strong>{t("comun.queVaAPasar")}</strong>
+                  <ul>{props.queVaAPasar.map((linea) => <li key={linea}>{linea}</li>)}</ul>
                 </div>
               )}
             </div>
@@ -68,7 +70,7 @@ export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
 
           {props.variante !== "bloqueo" && props.pedirMotivo && (
             <div className="pn-campo" style={{ marginBottom: "1rem" }}>
-              <label htmlFor={idMotivo} className="pn-etiqueta">{props.etiquetaMotivo ?? "Motivo (opcional)"}</label>
+              <label htmlFor={idMotivo} className="pn-etiqueta">{props.etiquetaMotivo ?? t("comun.motivoOpcional")}</label>
               <input id={idMotivo} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </div>
           )}
@@ -77,7 +79,7 @@ export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
             {props.variante === "bloqueo" ? (
               <>
                 <AlertDialog.Cancel asChild>
-                  <BotonAccion variante="oscuro">{props.textoEntendido ?? "Entendido"}</BotonAccion>
+                  <BotonAccion variante="oscuro">{props.textoEntendido ?? t("comun.entendido")}</BotonAccion>
                 </AlertDialog.Cancel>
                 {props.textoAlternativa && (
                   <BotonAccion
@@ -94,7 +96,7 @@ export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
             ) : (
               <>
                 <AlertDialog.Cancel asChild>
-                  <BotonAccion variante="oscuro">{props.textoSeguro ?? "No, dejarlo como está"}</BotonAccion>
+                  <BotonAccion variante="oscuro">{props.textoSeguro ?? t("comun.dejarComoEsta")}</BotonAccion>
                 </AlertDialog.Cancel>
                 <BotonAccion
                   variante="peligro"

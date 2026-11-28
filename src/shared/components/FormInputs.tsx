@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { Check, Circle, Eye, EyeOff } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
 
 // Piezas compartidas del patron de validacion inline.
 //
@@ -36,10 +37,12 @@ export function inputCls(err?: string, base: string = ""): string {
  * para mantener contraste legible sobre fondo oscuro.
  */
 export function MensajeError({ err, id }: { err?: string; id?: string }) {
+  // `err` llega en español; lo que no esté en el diccionario (backend) sale igual.
+  const { tf } = useIdioma();
   if (!err) return null;
   return (
     <p id={id} className="text-xs text-red-500 dark:text-red-400 mt-1 ml-0.5 leading-tight">
-      {err}
+      {tf(err)}
     </p>
   );
 }
@@ -93,6 +96,7 @@ export function PasswordField({
   /** Nombre accesible del campo (`aria-label`), para lectores de pantalla. */
   ariaLabel?: string;
 }) {
+  const { t } = useIdioma();
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
@@ -113,8 +117,8 @@ export function PasswordField({
         type="button"
         onClick={() => setVisible((v) => !v)}
         tabIndex={-1}
-        title={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
-        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        title={visible ? t("comun.ocultarContrasena") : t("comun.mostrarContrasena")}
+        aria-label={visible ? t("comun.ocultarContrasena") : t("comun.mostrarContrasena")}
         className="absolute right-2 max-md:right-0 top-1/2 -translate-y-1/2 p-1 max-md:p-3.5 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
       >
         {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -175,7 +179,8 @@ export function validarNombre(v: string): string | null {
 }
 
 export function MarcaObligatorio() {
-  return <span aria-label="obligatorio" className="font-bold text-red-600 dark:text-red-400"> *</span>;
+  const { t } = useIdioma();
+  return <span aria-label={t("comun.obligatorio")} className="font-bold text-red-600 dark:text-red-400"> *</span>;
 }
 
 export function filtrarNombre(valor: string): string {
@@ -298,6 +303,7 @@ export function RequisitosContrasena({
   valor: string;
   className?: string;
 }) {
+  const { tf } = useIdioma();
   return (
     <ul className={className ?? "mt-2 space-y-1"}>
       {REGLAS_CONTRASENA.map((regla) => {
@@ -314,7 +320,7 @@ export function RequisitosContrasena({
             ) : (
               <Circle className="w-3.5 h-3.5 shrink-0" aria-hidden />
             )}
-            <span>{regla.texto}</span>
+            <span>{tf(regla.texto)}</span>
           </li>
         );
       })}

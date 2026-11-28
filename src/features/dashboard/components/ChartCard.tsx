@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { FiltroPeriodo } from "@/features/dashboard/components/PeriodFilter";
 import type { Periodo } from "@/shared/utils/dates";
+import { useIdioma } from "@/shared/i18n";
 
 const SERIF = "var(--font-titulo)";
 
@@ -23,19 +24,20 @@ export function ChartCard({
   controlAdicional?: ReactNode;
   children: ReactNode;
 }) {
+  const { t, tf } = useIdioma();
   return (
     <section className="pn-seccion" style={{ minWidth: 0 }}>
       <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF, fontSize: "1.4375rem", lineHeight: 1.3 }}>
-        {titulo}
+        {tf(titulo)}
       </h3>
-      <p className="pn-seccion__ayuda" style={{ marginBottom: "0.875rem" }}>{etiqueta}</p>
+      <p className="pn-seccion__ayuda" style={{ marginBottom: "0.875rem" }}>{tf(etiqueta)}</p>
       {periodo !== undefined && onPeriodo && (
         <div className="flex flex-col gap-3 mb-4">
           <FiltroPeriodo
             value={periodo}
             onChange={onPeriodo}
             size="sm"
-            ariaLabel={`Periodo de ${titulo}`}
+            ariaLabel={t("dashboard.periodoDe", { titulo: tf(titulo) })}
           />
           {controlAdicional}
         </div>

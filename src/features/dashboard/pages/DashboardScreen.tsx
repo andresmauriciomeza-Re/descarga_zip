@@ -49,16 +49,15 @@ import { GrafTooltip, SinDatos } from "@/features/dashboard/components/ChartHelp
 import { EstadoVentas } from "@/features/dashboard/components/SalesStatus";
 import { TarjetaIndicador } from "@/features/dashboard/components/MetricCard";
 import type { MesDisponible } from "@/features/dashboard/utils/dashboard";
+import { useIdioma } from "@/shared/i18n";
+import { fechaDeHora } from "@/shared/utils/time";
 
 const SERIF = "var(--font-titulo)";
 const MONO = "var(--font-texto)";
-const fmt = (n: number) => `$${n.toLocaleString("es-CO")}`;
 // Colores de las series: rojo, verde y azul (nunca solo rojo contra verde).
 const C_ROJO = "var(--rojo)";
 const C_VERDE = "var(--verde)";
 const C_AZUL = "#1E5BB8";
-/** Texto de «cuándo» para las frases de las gráficas. */
-const cuando = (p: Periodo) => (p === "dia" ? "hoy" : p === "semana" ? "esta semana" : "este mes");
 const ESTADO_VENTA_TXT: Record<Venta["estado"], string> = {
   "Por verificar": "Por verificar",
   "En espera": "En espera",
@@ -188,10 +187,19 @@ export function DashboardScreen({
   ordenesProduccion: OrdenProduccion[];
   clientes: Cliente[];
 }) {
-  const firstName = (loggedInUser?.nombre ?? "Empleado").split(" ")[0];
+  const { idioma, t, tf, formatoMoneda: fmt, formatoFecha } = useIdioma();
+  /** Texto de «cuándo» para las frases de las gráficas. */
+  const cuando = (p: Periodo) => t(`dashboard.cuando.${p}`);
+  /** Hora guardada ("18:30", "6:30 p. m.") en el formato del idioma. */
+  const horaVisible = (texto: string, opciones: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" }) => {
+    const legible = formatearHora(texto);
+    const fecha = fechaDeHora(legible);
+    return fecha ? formatoFecha(fecha, opciones) : tf(legible);
+  };
+  const firstName = (loggedInUser?.nombre ?? t("dashboard.empleado")).split(" ")[0];
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
-  const dateStr = new Date().toLocaleDateString("es-CO", {
+  const greeting = hour < 12 ? t("dashboard.buenosDias") : hour < 19 ? t("dashboard.buenasTardes") : t("dashboard.buenasNoches");
+  const dateStr = formatoFecha(new Date(), {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 
@@ -448,16 +456,16 @@ export function DashboardScreen({
   }
   const gruposEje = (p: Periodo): GrupoEje[] =>
     p === "dia"
-      ? [{ clave: hoyISO(), etiqueta: "Hoy", extraer: (f) => f }]
+      ? [{ clave: hoyISO(), etiqueta: t("comun.hoy"), extraer: (f) => f }]
       : p === "semana"
         ? Array.from({ length: 7 }, (_, i) => {
             const d = agregarDias(lunesDe(new Date()), i);
             const iso = fechaISO(d);
-            return { clave: iso, etiqueta: `${DOW_CORTO[d.getDay()]} ${d.getDate()}`, extraer: (f: string) => f };
+            return { clave: iso, etiqueta: `${idioma === "es" ? DOW_CORTO[d.getDay()] : formatoFecha(d, { weekday: "short" })} ${d.getDate()}`, extraer: (f: string) => f };
           })
         : [1, 2, 3, 4, 5].map((s) => ({
             clave: String(s),
-            etiqueta: `Semana ${s}`,
+            etiqueta: t("dashboard.semanaN", { n: s }),
             extraer: (f: string) => String(semanaDelMes(f)),
           }));
 
@@ -505,7 +513,7 @@ export function DashboardScreen({
           return horas.map((h) => {
             const fila = ventasGrafica.filter((v) => horaIngreso(v) === h);
             return vaciarSiFuturo(h > horaActual, {
-              etiqueta: h < 0 ? "Sin hora" : formatearHora(`${h}:00`, { sinMinutos: true }),
+              etiqueta: h < 0 ? t("dashboard.sinHora") : horaVisible(`${h}:00`, { hour: "numeric" }),
               ingresos: fila.reduce((s, v) => s + v.total, 0),
               unidades: fila.reduce((s, v) => s + cantidadesVenta(v).unidades, 0),
               porciones: fila.reduce((s, v) => s + cantidadesVenta(v).porciones, 0),
@@ -583,7 +591,8 @@ export function DashboardScreen({
 
   const vacio = (valores: Array<number | null>) => valores.every((v) => !v);
   const cop = (v: number) => fmt(v);
-  const und = (v: number) => `${v} ${v === 1 ? "unidad" : "unidades"}`;
+  const und = (v: number) => t(v === 1 ? "dashboard.n.unidad" : "dashboard.n.unidades", { n: v });
+  const porc = (v: number) => t(v === 1 ? "dashboard.n.porcion" : "dashboard.n.porciones", { n: v });
   /** Etiqueta del eje X según el filtro de CADA gráfica (títulos/etiquetas). */
   const ejeDe = (p: Periodo) =>
     p === "dia" ? "de hoy" : p === "semana" ? "por día (lun–dom)" : "por semana del mes";
@@ -777,9 +786,9 @@ export function DashboardScreen({
     }) => (
       <div className="bg-card border border-border rounded-2xl overflow-hidden mb-6">
         <div className="flex items-center justify-between p-5 border-b border-border">
-          <h2 className="pn-h2">{titulo}</h2>
+          <h2 className="pn-h2">{tf(titulo)}</h2>
           <BotonAccion variante="normal" onClick={() => navigate(destino)}>
-            Ver todos ›
+            {t("dashboard.verTodos")} ›
           </BotonAccion>
         </div>
         <div>
@@ -787,7 +796,7 @@ export function DashboardScreen({
             <thead className="bg-muted/50 text-xs text-muted-foreground uppercase tracking-wider">
               <tr>
                 {cols.map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-semibold">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left font-semibold">{tf(h)}</th>
                 ))}
               </tr>
             </thead>
@@ -795,7 +804,7 @@ export function DashboardScreen({
               {filas ?? (
                 <tr>
                   <td colSpan={cols.length} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                    {vacio}
+                    {tf(vacio)}
                   </td>
                 </tr>
               )}
@@ -809,11 +818,11 @@ export function DashboardScreen({
       <div className="pn-contenido max-w-6xl mx-auto">
         {/* Header: saludo dinámico + fecha + chip del rol activo */}
         <EncabezadoPagina
-          titulo={`¡${greeting}, ${firstName}!`}
+          titulo={t("dashboard.saludo", { saludo: greeting, nombre: firstName })}
           descripcion={
             <>
               {dateStr}
-              <span className="ml-3 align-middle"><EstadoPill tono="rojo">{tieneRolActivo ? loggedInRoleName : "sin rol"}</EstadoPill></span>
+              <span className="ml-3 align-middle"><EstadoPill tono="rojo">{tieneRolActivo ? loggedInRoleName : t("dashboard.sinRolChip")}</EstadoPill></span>
             </>
           }
         />
@@ -825,13 +834,13 @@ export function DashboardScreen({
               <Lock className="w-7 h-7 text-muted-foreground" />
             </div>
             <p className="text-lg font-semibold text-foreground mb-1">
-              {tieneRolActivo ? "Sin módulos asignados" : "Sin rol asignado"}
+              {tieneRolActivo ? t("dashboard.sinModulos") : t("dashboard.sinRol")}
             </p>
             <p className="text-sm text-muted-foreground max-w-sm">
               {tieneRolActivo ? (
-                <>Tu rol <span className="font-semibold">{loggedInRoleName}</span> aún no tiene permisos configurados. Contacta al administrador.</>
+                <>{t("dashboard.tuRol")} <span className="font-semibold">{loggedInRoleName}</span> {t("dashboard.sinPermisos")}</>
               ) : (
-                <>Tu usuario no tiene un rol activo: fue eliminado o está desactivado. Pide al administrador que te asigne uno para poder trabajar.</>
+                <>{t("dashboard.sinRolActivo")}</>
               )}
             </p>
           </div>
@@ -843,11 +852,11 @@ export function DashboardScreen({
             {tarjetasEmp.length > 0 && (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                  <h2 className="pn-h2">Resumen de tus módulos</h2>
+                  <h2 className="pn-h2">{t("dashboard.resumenModulos")}</h2>
                   <FiltroPeriodo
                     value={periodoInicio}
                     onChange={onPeriodoInicio}
-                    ariaLabel="Filtro de las tarjetas del inicio"
+                    ariaLabel={t("dashboard.filtroInicio")}
                   />
                 </div>
                 <div className={`pn-kpis ${colsTarjetas}`}>
@@ -869,11 +878,11 @@ export function DashboardScreen({
             {/* Accesos rápidos (solo módulos con permiso Crear) */}
             {accesosRapidos.length > 0 && (
               <div className="mb-8">
-                <h2 className="pn-h2 mb-3">Accesos rápidos</h2>
+                <h2 className="pn-h2 mb-3">{t("dashboard.accesosRapidos")}</h2>
                 <div className="pn-accesos">
                   {accesosRapidos.map(({ label, Icon, screen }) => (
                     <BotonAccion key={label} icono={Icon} className="pn-boton--grande" onClick={() => navigate(screen)}>
-                      {label}
+                      {tf(label)}
                     </BotonAccion>
                   ))}
                 </div>
@@ -890,10 +899,10 @@ export function DashboardScreen({
                 vacio="Aún no hay ventas hoy"
                 filas={ventasHoyTabla.length === 0 ? null : ventasHoyTabla.map((venta) => (
                   <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
+                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || t("dashboard.ventaGeneral")}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{venta.cantidad}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{formatearHora(horaVenta(venta))}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_VENTA[venta.estado] ?? venta.estado}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{horaVisible(horaVenta(venta))}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{tf(ESTADO_VENTA[venta.estado] ?? venta.estado)}</td>
                   </tr>
                 ))}
               />
@@ -908,7 +917,7 @@ export function DashboardScreen({
                 vacio="No hay devoluciones registradas"
                 filas={devolucionesTabla.length === 0 ? null : devolucionesTabla.map((venta) => (
                   <tr key={venta.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || "Venta general"}</td>
+                    <td className="px-4 py-3.5 text-sm text-foreground">{venta.usuario?.trim() || t("dashboard.ventaGeneral")}</td>
                     <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{venta.cantidad}</td>
                     <td className="px-4 py-3.5 text-sm text-muted-foreground">{venta.fecha}</td>
                   </tr>
@@ -926,8 +935,8 @@ export function DashboardScreen({
                 filas={ordenesTabla.length === 0 ? null : ordenesTabla.map((o) => (
                   <tr key={o.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3.5 text-sm font-bold text-foreground" style={{ fontFamily: MONO }}>{o.id}</td>
-                    <td className="px-4 py-3.5 text-sm text-foreground">{o.cliente?.trim() || "Sin cliente"}</td>
-                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{ESTADO_OP[o.estadoOrden] ?? o.estadoOrden}</td>
+                    <td className="px-4 py-3.5 text-sm text-foreground">{o.cliente?.trim() || t("dashboard.sinCliente")}</td>
+                    <td className="px-4 py-3.5 text-sm text-muted-foreground">{tf(ESTADO_OP[o.estadoOrden] ?? o.estadoOrden)}</td>
                   </tr>
                 ))}
               />
@@ -958,16 +967,16 @@ export function DashboardScreen({
   return (
     <div className="pn-contenido">
       {/* Header */}
-      <EncabezadoPagina titulo={`¡${greeting}, ${firstName}!`} descripcion={dateStr} />
+      <EncabezadoPagina titulo={t("dashboard.saludo", { saludo: greeting, nombre: firstName })} descripcion={dateStr} />
 
       {/* Tarjetas (exactamente 4) + filtro global */}
       <div className="mb-7">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="pn-h2">Cómo va el negocio</h2>
+            <h2 className="pn-h2">{t("dashboard.comoVa")}</h2>
             <FiltroPeriodo
               value={periodo}
               onChange={setPeriodo}
-              ariaLabel="Filtro de los indicadores"
+              ariaLabel={t("dashboard.filtroIndicadores")}
             />
           </div>
           {estadoCargaVentas && (
@@ -996,10 +1005,10 @@ export function DashboardScreen({
       <div className="mb-8">
           <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
             <h2 className="pn-h2">
-              Estadísticas
+              {t("dashboard.estadisticas")}
             </h2>
             <p className="text-base text-muted-foreground">
-              Cada gráfica tiene sus propios botones de periodo
+              {t("dashboard.cadaGrafica")}
             </p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1016,7 +1025,7 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades, d.porciones])) ? (
-                <SinDatos texto={`Todavía no hay ventas ${cuando(fVentas)}`} />
+                <SinDatos texto={t("dashboard.sinVentas", { cuando: cuando(fVentas) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1031,18 +1040,18 @@ export function DashboardScreen({
                         tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
                       />
                       <Tooltip
-                        content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />}
+                        content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? porc(v) : und(v)} />}
                       />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill={C_ROJO} radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill={C_AZUL} radius={[4, 4, 0, 0]} />
-                      <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke={C_VERDE} strokeWidth={3} dot={{ r: 4 }} connectNulls={false} />
+                      <Bar yAxisId="und" dataKey="unidades" name={t("dashboard.serie.unidades")} fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="und" dataKey="porciones" name={t("dashboard.serie.porciones")} fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                      <Line yAxisId="cop" dataKey="ingresos" name={t("dashboard.serie.ingresos")} stroke={C_VERDE} strokeWidth={3} dot={{ r: 4 }} connectNulls={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               )}
               <div className="flex justify-end mt-3">
-                <BotonAccion onClick={() => navigate("sales-chart")}>Ver el detalle por semana ›</BotonAccion>
+                <BotonAccion onClick={() => navigate("sales-chart")}>{t("dashboard.verDetalleSemana")}</BotonAccion>
               </div>
             </ChartCard>
 
@@ -1064,19 +1073,19 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : dataClientes.length === 0 ? (
-                <SinDatos texto={`Todavía no hay compras de clientes ${cuando(fClientes)}`} />
+                <SinDatos texto={t("dashboard.sinComprasClientes", { cuando: cuando(fClientes) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dataClientes} margin={{ left: -8, right: 4, bottom: 60 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                      <XAxis dataKey="nombre" tick={{ fontSize: 12 }} interval={0} angle={-35} textAnchor="end" height={100} />
+                      <XAxis dataKey="nombre" tick={{ fontSize: 12 }} interval={0} angle={-35} textAnchor="end" height={100} tickFormatter={(n: string) => (n === "Venta general" ? tf(n) : n)} />
                       <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 12 }} />
                       <YAxis yAxisId="valor" orientation="right" tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                      <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "total" ? cop(v) : `${v} ${v === 1 ? "pedido" : "pedidos"}`)} />} />
+                      <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "total" ? cop(v) : t(v === 1 ? "dashboard.n.pedido" : "dashboard.n.pedidos", { n: v }))} />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill={C_ROJO} radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="valor" dataKey="total" name="Valor comprado" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="pedidos" dataKey="pedidos" name={t("dashboard.serie.pedidos")} fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="valor" dataKey="total" name={t("dashboard.serie.valorComprado")} fill={C_AZUL} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1101,7 +1110,7 @@ export function DashboardScreen({
               {estadoCargaVentas ? (
                 <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
               ) : dataProductos.length === 0 ? (
-                <SinDatos texto={`Todavía no se ha vendido ningún producto ${cuando(fProductos)}`} />
+                <SinDatos texto={t("dashboard.sinProductos", { cuando: cuando(fProductos) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1109,10 +1118,10 @@ export function DashboardScreen({
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
                       <YAxis type="category" dataKey="nombre" width={150} tick={{ fontSize: 12 }} />
-                      <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />} />
+                      <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? porc(v) : und(v)} />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="unidades" name="Unidades" fill={C_AZUL} radius={[0, 4, 4, 0]} />
-                      <Bar dataKey="porciones" name="Porciones" fill={C_ROJO} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="unidades" name={t("dashboard.serie.unidades")} fill={C_AZUL} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="porciones" name={t("dashboard.serie.porciones")} fill={C_ROJO} radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1137,7 +1146,7 @@ export function DashboardScreen({
                   textoError="No fue posible cargar órdenes de compra y compras."
                 />
               ) : vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
-                <SinDatos texto={`Todavía no hay compras ni órdenes ${cuando(fOC)}`} />
+                <SinDatos texto={t("dashboard.sinComprasOrdenes", { cuando: cuando(fOC) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1147,8 +1156,8 @@ export function DashboardScreen({
                       <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
                       <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="ordenes" name="Órdenes de compra" fill={C_AZUL} radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="compras" name="Compras (facturas)" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="ordenes" name={t("dashboard.serie.ordenes")} fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="compras" name={t("dashboard.serie.compras")} fill={C_ROJO} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1173,7 +1182,7 @@ export function DashboardScreen({
                   textoError="No fue posible cargar las compras."
                 />
               ) : !hayComprasProveedores ? (
-                <SinDatos texto={`Todavía no hay compras a proveedores ${cuando(fProv)}`} />
+                <SinDatos texto={t("dashboard.sinComprasProveedores", { cuando: cuando(fProv) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1187,7 +1196,7 @@ export function DashboardScreen({
                         <Bar
                           key={p}
                           dataKey={p}
-                          name={p}
+                          name={p === "Otros" || p === "Sin proveedor" ? tf(p) : p}
                           stackId="prov"
                           fill={PALETA[i % PALETA.length]}
                           radius={i === nombresProveedores.length - 1 ? [4, 4, 0, 0] : undefined}
@@ -1217,7 +1226,7 @@ export function DashboardScreen({
                   textoError="No fue posible cargar los productos no conformes."
                 />
               ) : noConformesGrafica.length === 0 ? (
-                <SinDatos texto={`No hay productos no conformes ${cuando(fNC)}`} />
+                <SinDatos texto={t("dashboard.sinNoConformes", { cuando: cuando(fNC) })} />
               ) : (
                 <div style={{ height: "20rem" }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -1225,13 +1234,13 @@ export function DashboardScreen({
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                       <XAxis dataKey="etiqueta" tick={{ fontSize: 12 }} interval={0} height={48} {...ejeXMovil} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                      <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
+                      <Tooltip content={<GrafTooltip formatear={(_, v) => t(v === 1 ? "dashboard.n.registro" : "dashboard.n.registros", { n: v })} />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       {TIPOS_NC.map((t, i) => (
                         <Bar
                           key={t}
                           dataKey={t}
-                          name={t}
+                          name={tf(t)}
                           stackId="nc"
                           fill={COLOR_TIPO_NC[t]}
                           radius={i === TIPOS_NC.length - 1 ? [4, 4, 0, 0] : undefined}
@@ -1248,11 +1257,11 @@ export function DashboardScreen({
       {/* Quick actions */}
       {quickActions.length > 0 && (
         <div className="mb-8">
-          <h2 className="pn-h2 mb-3">Accesos rápidos</h2>
+          <h2 className="pn-h2 mb-3">{t("dashboard.accesosRapidos")}</h2>
           <div className="pn-accesos">
             {quickActions.map(({ label, Icon, screen }) => (
               <BotonAccion key={label} icono={Icon} className="pn-boton--grande" onClick={() => navigate(screen)}>
-                {label}
+                {tf(label)}
               </BotonAccion>
             ))}
           </div>
@@ -1262,28 +1271,28 @@ export function DashboardScreen({
       {/* Últimas ventas */}
       <section>
         <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-          <h2 className="pn-h2">Últimas ventas</h2>
-          <BotonAccion onClick={() => navigate("ventas-pedidos")}>Ver todas las ventas ›</BotonAccion>
+          <h2 className="pn-h2">{t("dashboard.ultimasVentas")}</h2>
+          <BotonAccion onClick={() => navigate("ventas-pedidos")}>{t("dashboard.verTodasVentas")}</BotonAccion>
         </div>
         {estadoCargaVentas ? (
           <EstadoVentas estado={estadoCargaVentas} error={ventasError} />
         ) : ventasRecientes.length === 0 ? (
-          <VacioEstado icono={ShoppingBag} titulo="Todavía no hay ventas registradas">
-            Cuando se registre la primera venta, aparecerá aquí.
+          <VacioEstado icono={ShoppingBag} titulo={t("dashboard.sinVentasTitulo")}>
+            {t("dashboard.sinVentasTexto")}
           </VacioEstado>
         ) : (
           <div className="pn-lista">
             {ventasRecientes.map((venta) => (
               <TarjetaFila
                 key={venta.id}
-                nombre={venta.usuario?.trim() || "Venta general"}
+                nombre={venta.usuario?.trim() || t("dashboard.ventaGeneral")}
                 datos={[
-                  { etiqueta: "Monto", valor: fmt(venta.total) },
-                  { etiqueta: "Hora", valor: formatearHora(horaVenta(venta)) },
+                  { etiqueta: t("dashboard.col.monto"), valor: fmt(venta.total) },
+                  { etiqueta: t("dashboard.col.hora"), valor: horaVisible(horaVenta(venta)) },
                 ]}
                 estado={
                   <EstadoPill tono={ESTADO_VENTA_TONO[venta.estado] ?? "gris"}>
-                    {ESTADO_VENTA_TXT[venta.estado] ?? venta.estado}
+                    {tf(ESTADO_VENTA_TXT[venta.estado] ?? venta.estado)}
                   </EstadoPill>
                 }
               />
@@ -1299,13 +1308,13 @@ export function DashboardScreen({
             <Lock className="w-7 h-7 text-muted-foreground" />
           </div>
           <p className="text-lg font-semibold text-foreground mb-1">
-            {tieneRolActivo ? "Sin módulos asignados" : "Sin rol asignado"}
+            {tieneRolActivo ? t("dashboard.sinModulos") : t("dashboard.sinRol")}
           </p>
           <p className="text-sm text-muted-foreground max-w-sm">
             {tieneRolActivo ? (
-              <>Tu rol <span className="font-semibold">{loggedInRoleName}</span> aún no tiene permisos configurados. Contacta al administrador.</>
+              <>{t("dashboard.tuRol")} <span className="font-semibold">{loggedInRoleName}</span> {t("dashboard.sinPermisos")}</>
             ) : (
-              <>Tu usuario no tiene un rol activo: fue eliminado o está desactivado. Pide al administrador que te asigne uno para poder trabajar.</>
+              <>{t("dashboard.sinRolActivo")}</>
             )}
           </p>
         </div>

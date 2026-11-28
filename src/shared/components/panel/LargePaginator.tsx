@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
+import { useIdioma } from "@/shared/i18n";
 
 export const REGISTROS_POR_PAGINA = 10;
 
@@ -17,18 +18,19 @@ export function PaginadorGrande({
   porPagina?: number;
   onCambiar: (pagina: number) => void;
 }) {
+  const { t } = useIdioma();
   const paginas = Math.max(1, Math.ceil(total / porPagina));
   if (total <= porPagina) return null;
   return (
-    <nav className="pn-paginador" aria-label="Paginación">
+    <nav className="pn-paginador" aria-label={t("comun.paginacion")}>
       <BotonAccion icono={ChevronLeft} disabled={pagina <= 1} onClick={() => onCambiar(pagina - 1)}>
-        Anteriores
+        {t("comun.anteriores")}
       </BotonAccion>
       <span className="pn-paginador__info" aria-live="polite">
-        Página {pagina} de {paginas} · {porPagina} por página
+        {t("comun.pagina", { pagina, paginas, porPagina })}
       </span>
       <BotonAccion disabled={pagina >= paginas} onClick={() => onCambiar(pagina + 1)}>
-        Siguientes
+        {t("comun.siguientes")}
         <ChevronRight size={22} aria-hidden="true" />
       </BotonAccion>
     </nav>

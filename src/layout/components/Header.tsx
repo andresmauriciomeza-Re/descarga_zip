@@ -1,7 +1,9 @@
 import type { Screen } from "@/shared/utils/screen";
 import { useEffect, useState } from "react";
 import { Logo } from "@/shared/components/Logo";
-import { Moon, ShoppingCart, Sun } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
+import { LanguageSelector } from "@/shared/components/LanguageSelector";
 import { m } from "motion/react";
 import type { CartItem } from "@/types/cart";
 import { SERIF } from "@/shared/utils/fonts";
@@ -16,8 +18,6 @@ export function PublicNav({
   loggedInUser,
   perfilPendiente,
   onLogout,
-  darkMode,
-  setDarkMode,
 }: {
   navigate: (s: Screen) => void;
   cart: CartItem[];
@@ -27,9 +27,8 @@ export function PublicNav({
   loggedInUser: { iniciales: string; avatarColor: string } | null;
   perfilPendiente: boolean;
   onLogout: () => void;
-  darkMode: boolean;
-  setDarkMode: (v: boolean) => void;
 }) {
+  const { t } = useIdioma();
   const count = cart.reduce((s, i) => s + i.quantity, 0);
   const [scrolled, setScrolled] = useState(false);
 
@@ -54,9 +53,9 @@ export function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer group min-w-0"
         >
-          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
+          <Logo variante="claro" alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
           {/* Punto 1.1: `min-w-0` + `truncate` — a 375 px el texto cede y se
-              corta con puntos en vez de empujar el botón de tema fuera de la
+              corta con puntos en vez de empujar el selector de idioma fuera de la
               pantalla. */}
           <div className="leading-none min-w-0">
             <p
@@ -66,32 +65,32 @@ export function PublicNav({
               La Sirena
             </p>
             <p className="hidden sm:block text-[11px] text-muted-foreground font-medium tracking-wide mt-0.5 truncate">
-              Pizza · Desde 1994
+              {t("tienda.desde")}
             </p>
           </div>
         </button>
 
         {/* Center nav */}
-        <nav className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+        <nav className="hidden md:flex items-center gap-5 lg:gap-8 absolute left-1/2 -translate-x-1/2">
           <button
             onClick={() => navigate("landing")}
             className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
-            Inicio
+            {t("tienda.inicio")}
           </button>
           <button
             onClick={() => navigate("catalog")}
             {...precargar("catalog")}
             className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
-            Ver Menú
+            {t("tienda.verMenu")}
           </button>
           {isLoggedIn && (
             <button
               onClick={() => navigate("mis-pedidos")}
               className="text-foreground hover:text-[var(--rojo)] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
             >
-              Pedidos
+              {t("tienda.pedidos")}
             </button>
           )}
         </nav>
@@ -103,10 +102,10 @@ export function PublicNav({
             onClick={() => navigate("cart")}
             {...precargar("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[var(--rojo)] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
-            aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
+            aria-label={count > 0 ? t("tienda.verCarritoCon", { n: count }) : t("tienda.verCarrito")}
           >
             <ShoppingCart className="w-4 h-4" />
-            <span className="hidden sm:inline">Carrito</span>
+            <span className="hidden sm:inline">{t("tienda.carrito")}</span>
             {count > 0 && (
               <m.span
                 key={count}
@@ -127,7 +126,7 @@ export function PublicNav({
             <div
               className="hidden md:flex w-10 h-10 rounded-full bg-muted border border-border"
               role="status"
-              aria-label="Cargando perfil"
+              aria-label={t("tienda.cargandoPerfil")}
             />
           ) : (
             <button
@@ -136,7 +135,7 @@ export function PublicNav({
               }
               className={`hidden md:flex w-10 h-10 rounded-full items-center justify-center transition-colors cursor-pointer shadow-sm font-bold text-sm text-white ${loggedInUser?.avatarColor ?? (isStaff ? "bg-primary hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700")
                 }`}
-              title="Mi perfil"
+              title={t("tienda.miPerfil")}
             >
               {(loggedInUser?.iniciales.charAt(0) ?? (isStaff ? "G" : "S")).toUpperCase()}
             </button>
@@ -146,23 +145,12 @@ export function PublicNav({
               {...precargar("login")}
               className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[var(--rojo)] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
-              Iniciar sesión
+              {t("tienda.iniciarSesion")}
             </button>
           )}
 
-          {/* Dark mode */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            className="w-10 h-10 max-md:w-11 max-md:h-11 rounded-full border border-border bg-card flex items-center justify-center text-foreground hover:bg-muted transition-colors cursor-pointer"
-            title="Cambiar tema"
-            aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          >
-            {darkMode ? (
-              <Sun className="w-4 h-4" />
-            ) : (
-              <Moon className="w-4 h-4" />
-            )}
-          </button>
+          {/* Idioma */}
+          <LanguageSelector className="inline-flex items-center gap-1.5 h-10 max-md:h-11 px-2.5 rounded-full border border-border bg-card text-sm font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer" />
         </div>
       </div>
     </header>

@@ -5,9 +5,6 @@ export interface MesDisponible {
 
 export const SERIF = "var(--font-titulo)";
 
-// ── helpers ──────────────────────────────────────────────────────────
-export function fmtCOP(n: number) { return "$" + Math.round(n).toLocaleString("es-CO"); }
-
 // ── Build week structure dynamically (datos reales) ──────────────────
 export interface DayEntry {
   day: number;

@@ -1,5 +1,6 @@
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { BarChart3 } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
 
 // ── Tooltip único de todas las gráficas: valores exactos (COP, unidades o
 // conteos) según la función `formatear` que recibe cada una ───────────
@@ -33,10 +34,11 @@ export function GrafTooltip({
 }
 
 /** Estado vacío de cada gráfica cuando no hay datos en el periodo. */
-export function SinDatos({ texto = "Todavía no hay datos en este periodo" }: { texto?: string }) {
+export function SinDatos({ texto }: { texto?: string }) {
+  const { t } = useIdioma();
   return (
-    <VacioEstado icono={BarChart3} titulo={texto}>
-      Cuando haya movimiento, la gráfica aparecerá aquí.
+    <VacioEstado icono={BarChart3} titulo={texto ?? t("dashboard.sinDatos")}>
+      {t("dashboard.sinDatosAyuda")}
     </VacioEstado>
   );
 }

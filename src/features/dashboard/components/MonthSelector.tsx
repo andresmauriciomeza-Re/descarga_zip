@@ -1,4 +1,5 @@
 import type { Periodo } from "@/shared/utils/dates";
+import { useIdioma } from "@/shared/i18n";
 import type { MesDisponible } from "@/features/dashboard/utils/dashboard";
 
 export function SelectorMes({
@@ -12,6 +13,7 @@ export function SelectorMes({
   meses: MesDisponible[];
   onChange: (mes: string) => void;
 }) {
+  const { idioma, t, formatoFecha } = useIdioma();
   if (periodo !== "mes") return null;
   const indiceEncontrado = meses.findIndex((opcion) => opcion.clave === mes);
   const indice = indiceEncontrado < 0 ? meses.length - 1 : indiceEncontrado;
@@ -21,7 +23,7 @@ export function SelectorMes({
   if (!seleccionado) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Seleccionar mes">
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("dashboard.seleccionarMes")}>
       <button
         type="button"
         onClick={() => {
@@ -30,10 +32,10 @@ export function SelectorMes({
         disabled={indice === 0}
         className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        ‹ Mes anterior
+        {t("dashboard.mesAnterior")}
       </button>
       <span className="min-w-[8rem] text-center text-[1.0625rem] font-semibold text-foreground" aria-live="polite">
-        {seleccionado.etiqueta}
+        {idioma === "es" ? seleccionado.etiqueta : formatoFecha(`${seleccionado.clave}-01`, { month: "long", year: "numeric" })}
       </span>
       <button
         type="button"
@@ -43,7 +45,7 @@ export function SelectorMes({
         disabled={indice === meses.length - 1}
         className="pn-chip disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Mes siguiente ›
+        {t("dashboard.mesSiguiente")}
       </button>
     </div>
   );

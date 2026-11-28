@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { REVEAL_EASE, reveal, inclinarTarjetaProducto, reposarTarjetaProducto, desplazarFotoProducto, reposarFotoProducto } from "@/layout/hooks/useLandingAnimations";
 import { SERIF, MONO } from "@/shared/utils/fonts";
 import { precargar } from "@/shared/utils/lazyScreens";
+import { useIdioma } from "@/shared/i18n";
 
 export function Content({
   navigate,
@@ -39,6 +40,7 @@ export function Content({
   /** Abre el detalle guardando la pantalla de origen. */
   onOpenDetail: (p: Product) => void;
 }) {
+  const { idioma, t, tf } = useIdioma();
   const reduceMotion = useReducedMotion();
   const isMobile = useIsMobile();
   const heroRef = useRef<HTMLElement | null>(null);
@@ -95,7 +97,7 @@ export function Content({
           >
             <img
               src={pizzaHero}
-              alt="Pizza pepperoni artesanal La Sirena recién horneada"
+              alt={t("tienda.altHero")}
               width={1536}
               height={1024}
               {...{ fetchpriority: "high" }}
@@ -131,7 +133,7 @@ export function Content({
                 transition={{ duration: 0.45, delay: 0.06, ease: REVEAL_EASE }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--rojo)] text-white text-sm font-bold rounded-full mb-8 shadow-lg shadow-red-900/30"
               >
-                ⭐ Artesanal · Medellín · Desde 1994
+                {t("tienda.insignia")}
               </m.div>
 
               {/* Main title */}
@@ -144,17 +146,17 @@ export function Content({
               >
                 <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
                   <m.span {...revealHeroLine(0.2)} className="block">
-                    La Sirena
+                    {t("tienda.hero1")}
                   </m.span>
                 </span>
                 <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
                   <m.span {...revealHeroLine(0.3)} className="block text-[var(--rojo)]">
-                    El sabor que
+                    {t("tienda.hero2")}
                   </m.span>
                 </span>
                 <span className="block [overflow-y:clip] pb-[0.1em] -mb-[0.1em]">
                   <m.span {...revealHeroLine(0.4)} className="block">
-                    conquista
+                    {t("tienda.hero3")}
                   </m.span>
                 </span>
               </m.h1>
@@ -166,9 +168,7 @@ export function Content({
                 transition={{ duration: 0.65, delay: 0.24, ease: REVEAL_EASE }}
                 className="text-white/70 text-lg md:text-xl leading-relaxed mb-10"
               >
-                Pizzas artesanales horneadas con tradición
-                familiar. Ingredientes frescos, masa propia y
-                treinta años de amor.
+                {t("tienda.heroTexto")}
               </m.p>
 
               {/* CTAs — en columna solo por debajo de `sm`; en escritorio van
@@ -190,14 +190,14 @@ export function Content({
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[var(--rojo)] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
                 >
                   <ShoppingCart className="w-5 h-5" />
-                  Ordenar ahora
+                  {t("tienda.ordenar")}
                 </button>
                 <button
                   onClick={() => navigate("catalog")}
                   {...precargar("catalog")}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 max-md:bg-black/45 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
                 >
-                  Ver menú completo
+                  {t("tienda.verMenuCompleto")}
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </m.div>
@@ -242,10 +242,10 @@ export function Content({
                       className="text-[clamp(1rem,4.6vw,1.5rem)] font-bold text-white leading-none"
                       style={{ fontFamily: MONO }}
                     >
-                      {value}
+                      {tf(value)}
                     </p>
                     <p className="text-[clamp(0.625rem,2.6vw,0.75rem)] text-white/70 font-medium mt-1.5 leading-snug">
-                      {label}
+                      {tf(label)}
                     </p>
                   </div>
                 ))}
@@ -269,10 +269,10 @@ export function Content({
               className="text-4xl md:text-5xl font-bold text-foreground mb-3"
               style={{ fontFamily: SERIF }}
             >
-              Nuestras categorías
+              {t("tienda.categorias")}
             </h2>
             <p className="text-muted-foreground text-base md:text-lg">
-              Descubre todo lo que tenemos para ti
+              {t("tienda.categoriasTexto")}
             </p>
           </m.div>
 
@@ -327,14 +327,14 @@ export function Content({
               className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
             >
-              Las favoritas de nuestros clientes
+              {t("tienda.favoritas")}
             </h2>
             <button
               onClick={() => navigate("catalog")}
               {...precargar("catalog")}
               className="text-[var(--rojo)] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0 max-md:min-h-11"
             >
-              Ver todas <ArrowRight className="w-4 h-4" />
+              {t("tienda.verTodas")} <ArrowRight className="w-4 h-4" />
             </button>
           </m.div>
 
@@ -411,7 +411,7 @@ export function Content({
                     onClick={() => onOpenDetail(favorita)}
                     role="button"
                     tabIndex={0}
-                    aria-label={`Ver detalles de ${favorita.name}`}
+                    aria-label={t("tienda.verDetallesDe", { nombre: favorita.name })}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
@@ -465,7 +465,7 @@ export function Content({
                           )}
                           <div className="flex items-center gap-1 bg-[var(--rojo)] text-white text-xs font-bold px-2.5 py-1 rounded-lg shadow-md ring-1 ring-white/40">
                             <Star className="w-3 h-3 fill-white text-white" />
-                            Favorita
+                            {t("tienda.favorita")}
                           </div>
                         </div>
                         {noDisponible && (
@@ -495,8 +495,8 @@ export function Content({
                                   key={size.label}
                                   className={agotadoTamano || atenuada ? "text-muted-foreground opacity-60" : "text-[var(--rojo)]"}
                                 >
-                                  {size.label} $ {size.price.toLocaleString("es-CO")} / porción
-                                  {stockTamano !== undefined && (agotadoTamano ? " · Agotado" : ` · Quedan ${stockTamano} porciones`)}
+                                  {t("tienda.porPorcion", { tamano: size.label, precio: size.price.toLocaleString(idioma === "es" ? "es-CO" : "en-US") })}
+                                  {stockTamano !== undefined && (agotadoTamano ? t("tienda.agotadoPunto") : t("tienda.quedan", { n: stockTamano }))}
                                 </p>
                               );
                             })}
@@ -509,7 +509,7 @@ export function Content({
                             size="sm"
                             className="w-full max-md:min-h-11"
                           >
-                            Ver detalle
+                            {t("tienda.verDetalle")}
                           </PrimaryBtn>
                         </div>
                       </div>
@@ -544,7 +544,7 @@ export function Content({
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
                 <m.img
                   src={imagenLocal}
-                  alt="Interior de La Sirena Pizza — Medellín"
+                  alt={t("tienda.altLocal")}
                   width={1200}
                   height={675}
                   loading="lazy"
@@ -580,7 +580,7 @@ export function Content({
                       Gloria Inés Vargas
                     </p>
                     <p className="text-muted-foreground text-[11px] mt-0.5 leading-tight">
-                      Fundadora · La Sirena Pizza 1994
+                      {t("tienda.fundadora")}
                     </p>
                   </div>
                 </div>
@@ -595,7 +595,7 @@ export function Content({
               {/* Badge */}
               <m.div {...reveal(0.06, 14)} className="inline-flex">
                 <span className="px-4 py-1.5 bg-red-50 text-[var(--rojo)] text-sm font-semibold rounded-full border border-red-100">
-                  Nuestra historia
+                  {t("tienda.historia")}
                 </span>
               </m.div>
 
@@ -605,7 +605,7 @@ export function Content({
                 className="text-4xl md:text-5xl font-bold text-foreground leading-[1.1]"
                 style={{ fontFamily: SERIF }}
               >
-                30 años de pasión por la pizza artesanal
+                {t("tienda.historiaTitulo")}
               </m.h2>
 
               {/* Body */}
@@ -613,19 +613,13 @@ export function Content({
                 {...reveal(0.2, 16)}
                 className="text-muted-foreground text-base md:text-lg leading-relaxed"
               >
-                En 1994, Gloria Inés abrió La Sirena con una
-                receta familiar y el sueño de compartir el mejor
-                sabor con Medellín. Hoy, tres décadas después,
-                seguimos horneando cada pizza con el mismo amor
-                de siempre.
+                {t("tienda.historia1")}
               </m.p>
               <m.p
                 {...reveal(0.28, 16)}
                 className="text-muted-foreground text-base md:text-lg leading-relaxed"
               >
-                Masa elaborada a mano, ingredientes
-                seleccionados y el secreto inconfesable de
-                nuestra salsa artesanal. Eso es La Sirena.
+                {t("tienda.historia2")}
               </m.p>
 
               {/* CTAs */}
@@ -635,15 +629,15 @@ export function Content({
                   {...precargar("catalog")}
                   className="inline-flex items-center gap-2 px-6 py-3.5 bg-[var(--rojo)] text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-md shadow-red-900/20 cursor-pointer text-sm"
                 >
-                  🍕 Pedir ahora
+                  {t("tienda.pedirAhora")}
                 </button>
                 <button
                   onClick={() =>
-                    toast.info("Llámanos: 604 234 5678")
+                    toast.info(t("tienda.llamanos"))
                   }
                   className="inline-flex items-center gap-2 px-6 py-3.5 bg-card text-foreground font-semibold rounded-xl border border-border hover:bg-muted active:scale-95 transition-all duration-200 cursor-pointer text-sm"
                 >
-                  📞 Llamar
+                  {t("tienda.llamar")}
                 </button>
               </m.div>
             </m.div>
@@ -659,7 +653,7 @@ export function Content({
             className="text-3xl font-bold text-center mb-12 text-foreground"
             style={{ fontFamily: SERIF }}
           >
-            ¿Por qué La Sirena?
+            {t("tienda.porQue")}
           </m.h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {[
@@ -683,10 +677,10 @@ export function Content({
                   {icon}
                 </div>
                 <h3 className="text-lg font-bold mb-2 text-foreground">
-                  {title}
+                  {tf(title)}
                 </h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  {desc}
+                  {tf(desc)}
                 </p>
               </m.div>
             ))}

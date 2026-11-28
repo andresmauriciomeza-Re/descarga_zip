@@ -36,6 +36,12 @@ export const AUTH_GLASS_BUTTON_SECONDARY =
 
 /** Fondo detrás de un modal: oscurecido y desenfocado, para que el vidrio
  *  se note también sobre pantallas blancas (p. ej. Mi perfil). */
+/** Selector de idioma en las pantallas de acceso: arriba a la derecha en celular
+    (el contenido baja con `max-md:pt-16!`) y arriba a la izquierda desde `md`,
+    donde la tarjeta va a la derecha o al centro. Así no tapa nada. */
+export const AUTH_SELECTOR_IDIOMA =
+  "absolute top-3 right-3 md:right-auto md:left-3 z-30 inline-flex items-center gap-1.5 h-11 px-3 rounded-full border border-border bg-card text-sm font-semibold text-foreground shadow-md hover:bg-muted transition-colors cursor-pointer";
+
 export const AUTH_GLASS_OVERLAY =
   "fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto bg-black/30 backdrop-blur-sm";
 

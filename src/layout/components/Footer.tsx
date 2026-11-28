@@ -6,8 +6,12 @@ import type { Screen } from "@/shared/utils/screen";
 import { SERIF } from "@/shared/utils/fonts";
 import { reveal } from "@/layout/hooks/useLandingAnimations";
 import { DIRECCION_LOCAL, aperturaRecogidaTexto, cierreRecogidaTexto } from "@/shared/utils/storeInfo";
+import { useIdioma } from "@/shared/i18n";
+import { fechaDeHora } from "@/shared/utils/time";
 
 export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
+  const { t, formatoFecha } = useIdioma();
+  const hora = (texto: string) => formatoFecha(fechaDeHora(texto) ?? texto, { hour: "numeric", minute: "2-digit" });
   return (
     <footer
       style={{ backgroundColor: "#000000" }}
@@ -34,15 +38,13 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
               className="text-sm leading-relaxed"
               style={{ color: "rgba(255,255,255,0.55)" }}
             >
-              Desde 1994 horneando las mejores pizzas
-              artesanales de Medellín con receta familiar y
-              amor auténtico.
+              {t("tienda.footerTexto")}
             </p>
           </m.div>
           {/* Contacto */}
           <m.div {...reveal(0.08, 12, 0.15)} className="flex flex-col gap-3">
             <h3 className="font-bold text-white text-sm uppercase tracking-wider">
-              Contacto
+              {t("tienda.contacto")}
             </h3>
             <div
               className="space-y-2 text-sm"
@@ -65,25 +67,25 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
           {/* Horario */}
           <m.div {...reveal(0.16, 12, 0.15)} className="flex flex-col gap-3">
             <h3 className="font-bold text-white text-sm uppercase tracking-wider">
-              Horario de atención
+              {t("tienda.horario")}
             </h3>
             <div
               className="space-y-1.5 text-sm"
               style={{ color: "rgba(255,255,255,0.55)" }}
             >
               <div className="flex justify-between">
-                <span>Lunes – Miércoles</span>
+                <span>{t("tienda.lunMie")}</span>
                 <span
                   className="font-medium"
                   style={{ color: "rgba(255,255,255,0.35)" }}
                 >
-                  Cerrado
+                  {t("tienda.cerrado")}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span>Jueves – Domingo</span>
+                <span>{t("tienda.jueDom")}</span>
                 <span className="font-semibold text-white">
-                  {aperturaRecogidaTexto} – {cierreRecogidaTexto}
+                  {hora(aperturaRecogidaTexto)} – {hora(cierreRecogidaTexto)}
                 </span>
               </div>
               <p
@@ -94,7 +96,7 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
                   color: "rgba(255,255,255,0.4)",
                 }}
               >
-                Solo pedidos presenciales en local
+                {t("tienda.soloPresencial")}
               </p>
             </div>
           </m.div>
@@ -110,15 +112,13 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
             className="text-xs"
             style={{ color: "rgba(255,255,255,0.4)" }}
           >
-            © 2026 La Sirena Pizza · Medellín, Colombia ·
-            Desde 1994
+            {t("tienda.derechos")}
           </p>
           <p
             className="text-xs"
             style={{ color: "rgba(255,255,255,0.4)" }}
           >
-            NIT: 900.123.456-7 · Establecimiento de comercio
-            registrado
+            {t("tienda.nit")}
           </p>
         </m.div>
         <div className="mt-3 flex justify-center md:justify-start">
@@ -132,7 +132,7 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
             }}
             className="inline-flex items-center max-md:min-h-11 rounded-sm text-xs text-white/55 underline-offset-4 transition-colors hover:text-white hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Licencias y reconocimientos
+            {t("tienda.licencias")}
           </a>
         </div>
       </div>

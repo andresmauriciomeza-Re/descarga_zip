@@ -1,7 +1,9 @@
 import type { Screen } from "@/shared/utils/screen";
 import type { Rol } from "@/features/roles/utils/roles";
 import { ETIQUETA_INICIO_EMPLEADO } from "@/shared/utils/screen";
-import { Moon, Store, Sun } from "lucide-react";
+import { Store } from "lucide-react";
+import { useIdioma } from "@/shared/i18n";
+import { LanguageSelector } from "@/shared/components/LanguageSelector";
 import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";
 import { RutaPagina } from "@/shared/components/panel/PageBreadcrumb";
 import { NAV_SECTIONS } from "@/shared/utils/navigation";
@@ -9,8 +11,6 @@ import { NAV_SECTIONS } from "@/shared/utils/navigation";
 export function AdminTopBar({
   current,
   navigate,
-  darkMode,
-  setDarkMode,
   userName,
   roleName,
   homeScreen,
@@ -19,8 +19,6 @@ export function AdminTopBar({
 }: {
   current: Screen;
   navigate: (s: Screen) => void;
-  darkMode: boolean;
-  setDarkMode: (v: boolean) => void;
   userName: string;
   roleName: string;
   homeScreen: Screen;
@@ -29,6 +27,7 @@ export function AdminTopBar({
   rolesParaCambiar?: Rol[]; ordenAEditar?: unknown;
   onCambiarRol?: (rolId: string) => void;
 }) {
+  const { t } = useIdioma();
   const labels: Partial<Record<Screen, string>> = {
     dashboard: "Dashboard",
     inicio: ETIQUETA_INICIO_EMPLEADO,
@@ -90,17 +89,14 @@ export function AdminTopBar({
           )}
           <button type="button" onClick={() => navigate("landing")} className="pn-header__btn">
             <Store size={24} aria-hidden="true" />
-            <span>Ver la tienda</span>
+            <span>{t("menu.verTienda")}</span>
           </button>
-          <button type="button" onClick={() => setDarkMode(!darkMode)} className="pn-header__btn">
-            {darkMode ? <Sun size={24} aria-hidden="true" /> : <Moon size={24} aria-hidden="true" />}
-            <span>{darkMode ? "Modo claro" : "Modo oscuro"}</span>
-          </button>
+          <LanguageSelector className="pn-header__btn" />
           <button
             type="button"
             onClick={() => navigate("profile")}
             className="pn-header__btn"
-            aria-label={`Mi perfil: ${userName}${roleName ? `, ${roleName}` : ""}`}
+            aria-label={`${t("menu.miPerfil", { nombre: userName })}${roleName ? `, ${roleName}` : ""}`}
           >
             <span className="pn-header__avatar" aria-hidden="true">
               {userName.charAt(0).toUpperCase()}

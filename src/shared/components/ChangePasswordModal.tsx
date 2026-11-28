@@ -15,6 +15,7 @@ import {
 } from "@/shared/styles/authGlass";
 import { PasoCodigoVerificacion } from "@/shared/components/VerificationCodeStep";
 import { PasoNuevaContrasena } from "@/shared/components/NewPasswordStep";
+import { useIdioma } from "@/shared/i18n";
 
 const SERIF = "var(--font-titulo)";
 
@@ -41,6 +42,7 @@ export function CambiarContrasenaModal({
   /** El cambio se aplicó: cierra y continúa (toast + logout + precarga). */
   onCambioExitoso: () => void;
 }) {
+  const { t, errorVisible } = useIdioma();
   const [paso, setPaso] = useState<"confirmar" | "codigo" | "password">(
     "confirmar",
   );
@@ -73,11 +75,11 @@ export function CambiarContrasenaModal({
       await solicitarCodigoRecuperacion(correo.trim().toLowerCase());
       setErrorCodigo(undefined);
       setPaso("codigo");
-      toast.success("Si el correo está registrado, te enviamos un código.");
+      toast.success(t("auth.v.codigoSiRegistrado"));
     } catch (e) {
       // 429 (demasiadas solicitudes) y fallo de conexión: el interceptor ya
       // extrajo el texto; no se avanza de paso.
-      toast.error((e as Error).message);
+      toast.error(errorVisible((e as Error).message));
     } finally {
       setEnviando(false);
     }
@@ -110,7 +112,7 @@ export function CambiarContrasenaModal({
       }
       // 429 y fallo de conexión: se avisa y se vuelve al aviso, porque el
       // código no se pudo validar.
-      toast.error(err.message);
+      toast.error(errorVisible(err.message));
       if (err.status === 429) setPaso("confirmar");
     }
   };
@@ -133,7 +135,7 @@ export function CambiarContrasenaModal({
       }
       if (err.status === 429) {
         // Demasiadas solicitudes: se reinicia el flujo desde el aviso.
-        toast.error(err.message);
+        toast.error(errorVisible(err.message));
         setCode(["", "", "", "", "", ""]);
         setPaso("confirmar");
         return;
@@ -166,7 +168,7 @@ export function CambiarContrasenaModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar cambio de contraseña"
+          aria-label={t("auth.cerrarCambio")}
           className={`absolute top-4 right-4 ${AUTH_GLASS_BUTTON_SECONDARY}`}
         >
           <X className="w-5 h-5" />
@@ -183,10 +185,10 @@ export function CambiarContrasenaModal({
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                ¿Estás seguro de cambiar la contraseña?
+                {t("auth.seguroCambiar")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Te enviaremos un código de verificación a{" "}
+                {t("auth.teEnviaremosA")}{" "}
                 <strong className="text-foreground">{correoEnmascarado}</strong>.
               </p>
             </div>
@@ -195,13 +197,13 @@ export function CambiarContrasenaModal({
               disabled={enviando}
               className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60 mb-3"
             >
-              {enviando ? "Enviando..." : "Sí, enviar código"}
+              {enviando ? t("auth.enviando") : t("auth.siEnviarCodigo")}
             </button>
             <button
               onClick={onClose}
               className="w-full py-2.5 max-md:min-h-11 text-sm font-medium text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             >
-              Cancelar
+              {t("comun.cancelar")}
             </button>
           </>
         )}
@@ -229,10 +231,10 @@ export function CambiarContrasenaModal({
                 className="text-xl font-bold text-foreground dark:text-white"
                 style={{ fontFamily: SERIF }}
               >
-                Nueva contraseña
+                {t("auth.nuevaContrasena")}
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Elige una contraseña segura para tu cuenta.
+                {t("auth.eligeSegura")}
               </p>
             </div>
             <PasoNuevaContrasena

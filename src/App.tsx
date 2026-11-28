@@ -74,6 +74,7 @@ import { guardarRetornoCheckout, consumirRetornoCheckout, borrarRetornoCheckout,
 import { SCREEN_META } from "@/shared/utils/navigation";
 import { ROLES_STORAGE_KEY, leerRolesPersistidos, respaldarEmpleadosLocales, respaldarCategoriasLocales, respaldarDatosComprasFase3, respaldarDatosProduccionFase2, respaldarNoConformidadesLocales, MIGRACION_FICHAS_FASE1_KEY, leerProductosParaMigracion, respaldarDatosProductosFase1, AUTH_STORAGE_KEYS } from "@/shared/utils/storage";
 import { ADMIN_SCREENS, SCREEN_PERM_KEY } from "@/shared/utils/navigation";
+import { useIdioma } from "@/shared/i18n";
 
 // ─── Code splitting (React.lazy) ───
 // Estas pantallas se importan SOLO como componente (no comparten constants ni
@@ -187,6 +188,7 @@ export default function App() {
 
 function AppContent() {
   respaldarDatosProductosFase1();
+  const { tf } = useIdioma();
   const {
     sesionArranque, sesionActiva, isLoggedIn, setIsLoggedIn,
     restauracionSesionLista, setRestauracionSesionLista, userRole, setUserRole,
@@ -1012,7 +1014,6 @@ function AppContent() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isAdmin, esMovil, sidebarMovilAbierto]);
-  const [darkMode, setDarkMode] = useState(false);
   const [selectedProduct, setSelectedProduct] =
     useState<Product>(PRODUCTS[0]);
   const [catalogCat, setCatalogCat] = useState<string | null>(null);
@@ -1052,9 +1053,10 @@ function AppContent() {
   const [proveedoresCargando, setProveedoresCargando] = useState(false);
   const [errorProveedores, setErrorProveedores] = useState<string | null>(null);
 
+  // La app queda siempre en claro: se quita la clase si algo la hubiera dejado.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
-  }, [darkMode]);
+    document.documentElement.classList.remove("dark");
+  }, []);
 
   // Cada cambio del carrito se guarda donde corresponde: en la clave de
   // invitado mientras no hay sesión, y en el registro del usuario en cuanto la
@@ -1297,7 +1299,7 @@ function AppContent() {
       .then(({ correo }) => {
         setLoginEmailPre(correo ?? "");
         setLoginMensajeExito("Correo verificado. Ya puedes iniciar sesión");
-        toast.success("Correo verificado. Ya puedes iniciar sesión");
+        toast.success(tf("Correo verificado. Ya puedes iniciar sesión"));
       })
       .catch((error) => {
         toast.error(
@@ -1364,10 +1366,11 @@ function AppContent() {
     const aviso = correoEnviado
       ? "Te enviamos un correo para confirmar tu cuenta"
       : "Tu cuenta quedó creada, pero no pudimos enviar el correo. Inicia sesión y usa «Reenviar correo de confirmación»";
+    // `aviso` se guarda en español; el login lo traduce al pintarlo.
     setLoginEmailPre(correo);
     setLoginMensajeExito(aviso);
-    if (correoEnviado) toast.success(aviso);
-    else toast.warning(aviso);
+    if (correoEnviado) toast.success(tf(aviso));
+    else toast.warning(tf(aviso));
     navigate("login");
   };
 
@@ -1376,7 +1379,7 @@ function AppContent() {
     setActivacionToken(null);
     setLoginEmailPre(correo);
     setLoginMensajeExito("Contraseña creada. Ya puedes iniciar sesión");
-    toast.success("Contraseña creada. Ya puedes iniciar sesión");
+    toast.success(tf("Contraseña creada. Ya puedes iniciar sesión"));
     navigate("login");
   };
 
@@ -2323,8 +2326,6 @@ function AppContent() {
             loggedInUser={avatarParaHeader}
             perfilPendiente={sesionRestaurandose && Boolean(sesionActiva?.userId)}
             onLogout={logout}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
           />
         )}
 
@@ -2336,8 +2337,6 @@ function AppContent() {
                 current={screen}
                 ordenAEditar={ordenAEditar}
                 navigate={navigate}
-                darkMode={darkMode}
-                setDarkMode={setDarkMode}
                 userName={sesionRestaurandose ? "" : loggedInUserName}
                 roleName={sesionRestaurandose ? "" : loggedInRoleName}
                 homeScreen={adminHomeScreen}
@@ -2513,7 +2512,6 @@ function AppContent() {
                       usuarios={usuarios}
                       roles={roles}
                       onUsuarioNuevo={agregarUsuarioLocal}
-                      darkMode={darkMode}
                       loginNotice={loginNotice}
                       initialEmail={loginEmailPre}
                       mensajeExito={loginMensajeExito}
@@ -2527,7 +2525,6 @@ function AppContent() {
                       setUsuarios={setUsuarios}
                       clientes={clientes}
                       setClientes={setClientes}
-                      darkMode={darkMode}
                       onRegistrado={trasRegistrarse}
                     />
                   )}
