@@ -40,6 +40,8 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 4, fuentes locales | Móvil | 62 | 100 | 100 | 100 | 1,0 s | 1,0 s | 5933 ms | 7,3 s | 0 |
 | 4, fuentes locales | Escritorio | 58 | 100 | 100 | 100 | 0,3 s | 1,7 s | 1357 ms | 2,8 s | 0 |
 | 6, imágenes | Móvil | 63 | 100 | 100 | 100 | 0,9 s | 0,9 s | 5188 ms | 6,9 s | 0 |
+| 7, animaciones más livianas | Móvil | 64 | 100 | 100 | 100 | 1,0 s | 1,0 s | 4766 ms | 6,3 s | 0 |
+| 7, animaciones más livianas | Escritorio | 61 | 100 | 100 | 100 | 0,3 s | 1,6 s | 850 ms | 2,3 s | 0 |
 
 ## Línea base
 
@@ -160,3 +162,25 @@ El puntaje queda limitado por el tiempo de bloqueo (mediana de varios segundos e
 El aviso «Mejorar la entrega de imágenes» **no desaparece**: baja de 50 a 43 KiB. 34 KiB son la foto del hero. Recomprimirla ahorra poco sin perder detalle (WebP 55: 98 KB; AVIF 55: 86 KB; actual: 122 KB), así que se dejó igual. Comparación en `D:\Documentos\SIVPRO\lighthouse-informes\hero-comparacion\`.
 
 El puntaje móvil no cambia (64 → 63, 5 corridas alternadas).
+
+## Fase 7: animaciones más livianas
+
+- `LazyMotion` con `domAnimation` envuelve toda la app; los archivos que cargan al arrancar usan `m.*` (incluidos `App.tsx` y `ActivateAccountModal`). Las pantallas del panel siguen con `motion` y traen el resto al abrirse.
+- Archivo principal: 461 kB (148 kB gzip) → 412 kB (134 kB gzip).
+- Comprobado en escritorio y móvil: mismo estado de las animaciones al cargar, con scroll, parallax y al pasar el mouse.
+
+No se agregó `build.target: "es2020"`: cambiaba el CSS y quitaba prefijos `-webkit-` (afecta a Safari antiguo) a cambio de 5 kB. Vite ya compila para navegadores con ES2020 por defecto.
+
+**La meta de bloqueo (200 ms) no se cumple.** Puntaje y bloqueo no cambian de forma apreciable.
+
+Diagnóstico del bloqueo (sin cambiar código):
+
+| Medición | Bloqueo |
+|---|---|
+| Móvil, configuración usada (CPU 4 veces más lenta simulada) | 4,3–5,2 s |
+| Con tarjeta gráfica | 1,4–5,3 s |
+| Con animaciones reducidas | 3,8–5,1 s |
+| La app sin simular CPU lenta | 84–417 ms |
+| Página vacía, configuración usada | 0–136 ms |
+
+El bloqueo lo produce la app, no el método de medición, pero la simulación de CPU lo multiplica en este equipo (índice de rendimiento de Chrome cercano a 1000). La mayor parte es trabajo que Lighthouse clasifica como «otros», no JavaScript; no se identificó su origen.
