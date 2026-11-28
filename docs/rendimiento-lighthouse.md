@@ -28,6 +28,7 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | Antes (modo desarrollo, con extensión; medido por el usuario) | Móvil | 42 | 96 | 100 | 100 | 8,5 s | 16,8 s | 320 ms | 11,0 s | 0 |
 | 0, línea base | Móvil | 36 | 96 | 100 | 100 | 1,6 s | 9,3 s | 3831 ms | 8,3 s | 0,009 |
 | 0, línea base | Escritorio | 58 | 96 | 100 | 100 | 0,7 s | 2,1 s | 554 ms | 2,9 s | 0,008 |
+| 1, contraste | Móvil | 36 | 100 | 100 | 100 | 1,6 s | 9,4 s | 4453 ms | 8,1 s | 0,001 |
 
 ## Línea base
 
