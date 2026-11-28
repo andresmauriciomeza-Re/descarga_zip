@@ -50,7 +50,7 @@ export function TipoPersonaSelector({
   }
 
   return (
-    <div data-prov-campo="tipoPersona" className={className}>
+    <div data-prov-campo="tipoPersona" className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${className}`}>
       <OpcionesBotones
         etiqueta="Tipo de proveedor"
         valor={valor}
@@ -58,10 +58,10 @@ export function TipoPersonaSelector({
         onChange={(v) => onChange?.(v as TipoPersona)}
         opciones={OPCIONES}
       />
-      <p className="pn-campo__ayuda">
+      <p className="pn-campo__ayuda !m-0">
         {disabled ? "Esto no se puede cambiar después de creado el proveedor." : "Según lo que escojas, cambian las preguntas."}
       </p>
-      {error && <p className="pn-campo__error" role="alert"><span>{error}</span></p>}
+      {error && <p className="pn-campo__error !m-0" role="alert"><span>{error}</span></p>}
     </div>
   );
 }

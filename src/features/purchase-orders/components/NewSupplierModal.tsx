@@ -106,16 +106,16 @@ export function NuevoProveedorModal({
         transition={{ duration: 0.15 }}
         // Sin borde exterior (estilo "sin cards con borde"): la separación la
         // dan las líneas divisorias del encabezado y del pie.
-        className="bg-card rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
+        className="pn-prov-dialogo bg-card rounded-2xl w-full max-w-[1600px] shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)]"
       >
         {/* Encabezado FIJO: título + subtítulo y, en la misma fila a la
             derecha (o abajo en móvil), el selector Persona Natural / Persona Jurídica. */}
         <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3 border-b border-border shrink-0">
-          <div className="min-w-[11.25rem] flex-1">
+          <div className="min-w-[11.25rem] flex-1 flex flex-wrap items-baseline gap-x-3">
             <h3 className="text-lg font-bold text-foreground" style={{ fontFamily: SERIF }}>Nuevo Proveedor</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Completa la información de contacto del proveedor.</p>
+            <p className="text-xs text-muted-foreground">Completa la información de contacto del proveedor.</p>
           </div>
-          <div className="flex items-center gap-2 ml-auto shrink-0">
+          <div className="flex items-center gap-2 ml-auto max-w-full">
             <TipoPersonaSelector
               valor={form.values.tipoPersona}
               onChange={(tipo) => {
@@ -130,7 +130,7 @@ export function NuevoProveedorModal({
           </div>
         </div>
         {/* Único contenedor con scroll dentro del modal (prohibido scroll doble). */}
-        <div className="px-4 sm:px-6 py-5 overflow-y-auto flex-1 min-h-0">
+        <div className="px-4 sm:px-6 py-4 overflow-y-auto overflow-x-hidden flex-1 min-h-0">
           {/* Punto 1: mismo formulario de proveedor que el módulo Proveedores. */}
           <ProveedorFormCampos form={form} />
         </div>

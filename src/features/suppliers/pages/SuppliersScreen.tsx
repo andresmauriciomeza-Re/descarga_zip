@@ -1,3 +1,4 @@
+import { BotonRuta } from "@/shared/components/buttons/BreadcrumbButton";
 import React, { useEffect, useState, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import { Plus, ArrowLeft, Truck } from "lucide-react";
@@ -458,10 +459,10 @@ export function SuppliersScreen({
     const formActivo = enAlta || !editItem ? proveedorForm : editForm;
     return (
       <div className="pn-contenido">
-        <div className="pn-recuadro-marco">
-          <div className="mb-3">
+        <div className="pn-recuadro-marco pn-prov-pantalla">
+          <BotonRuta>
             <BotonAccion icono={ArrowLeft} onClick={salirDePantalla}>Salir sin guardar</BotonAccion>
-          </div>
+          </BotonRuta>
           <div className="pn-recuadro">
             <EncabezadoPagina
               titulo={enAlta ? "Agregar un proveedor" : `Cambiar datos de ${editItem?.nombre ?? ""}`}
@@ -470,7 +471,8 @@ export function SuppliersScreen({
                 : "Aquí cambias los datos del proveedor. El documento o NIT no se puede cambiar."}
             />
             <div className="grid">
-              <SeccionFormulario plano numero={1} titulo="¿Es empresa o persona?">
+              <div className="pn-prov-tipo">
+                <h2>1 · ¿Es empresa o persona?</h2>
                 <TipoPersonaSelector
                   valor={formActivo.values.tipoPersona}
                   disabled={!enAlta}
@@ -480,13 +482,12 @@ export function SuppliersScreen({
                   }}
                   error={formActivo.obtenerError("tipoPersona")}
                 />
-              </SeccionFormulario>
+              </div>
 
               {enAlta || !editItem ? (
-                <ProveedorFormCampos plano form={proveedorForm} />
+                <ProveedorFormCampos form={proveedorForm} />
               ) : (
                 <ProveedorFormCampos
-                  plano
                   form={editForm}
                   autoFocusNombre={false}
                   // El NIT queda congelado: es la regla del módulo.
@@ -494,7 +495,7 @@ export function SuppliersScreen({
                 />
               )}
 
-              <div className="pn-dialogo__botones pn-dialogo__botones--fin pn-seccion pn-seccion--plana">
+              <div className="pn-dialogo__botones pn-dialogo__botones--fin pn-prov-botones">
                 <BotonAccion variante="normal" onClick={salirDePantalla}>Cancelar</BotonAccion>
                 <BotonAccion
                   variante="principal"
