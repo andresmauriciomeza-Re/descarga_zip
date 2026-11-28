@@ -865,7 +865,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) setViewItem(null); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 56.25rem)" }}>
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 56.25rem)" }} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">Reporte N.° {viewItem.id} · {viewItem.nombre}</Dialog.Title>
                 <EstadoPill tono={viewItem.estado === "Pendiente" ? "ambar" : "verde"}>{viewItem.estado === "Pendiente" ? "Falta completar" : "Cerrado"}</EstadoPill>
@@ -928,11 +928,11 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) { setShowCreate(false); setEditItem(null); } }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
+            <Dialog.Content className="pn-modal pn-modal--formulario" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">{editItem ? `Cambiar el reporte N.° ${editItem.id}` : "Reportar algo que salió mal"}</Dialog.Title>
               </div>
-              <div style={{ maxWidth: "56.25rem" }}>
+              <div>
                 {renderFormBody(false, editItem?.id, !!editItem)}
                 <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                   <BotonAccion variante="normal" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</BotonAccion>

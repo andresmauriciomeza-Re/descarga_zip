@@ -17,7 +17,7 @@ export function DetalleCargo({ rol, onClose, onCambiar, onIrAEmpleados, puedeCam
     <Dialog.Root open onOpenChange={abierto => { if (!abierto) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="pn-dialogo-fondo" />
-        <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+        <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
           <div className="pn-modal__cab">
             <Dialog.Title className="pn-modal__titulo">Cargo: {rol.nombre}</Dialog.Title>
             <EstadoPill tono={rol.activo ? "verde" : "gris"}>{rol.activo ? "Encendido" : "Apagado"}</EstadoPill>

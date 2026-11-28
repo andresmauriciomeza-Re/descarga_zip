@@ -251,11 +251,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         { header: "Tipo", valor: (i) => (i.tipo === "ProductoInsumo" ? "Producto insumo" : "Insumo") },
         { header: "Categoría", valor: (i) => categoriaDe(i.categoriaId) },
         { header: "Nombre", valor: (i) => i.nombre },
-        { header: "Unidad", valor: (i) => i.unidadMedida },
-        { header: "Stock Actual", valor: (i) => i.stockActual, alineacion: "right" },
-        { header: "Stock Mínimo", valor: (i) => i.stockMinimo, alineacion: "right" },
+        { header: "Unidad de medida", valor: (i) => i.unidadMedida },
+        { header: "Stock actual", valor: (i) => i.stockActual, alineacion: "right" },
+        { header: "Stock mínimo", valor: (i) => i.stockMinimo, alineacion: "right" },
         { header: "Costo Unitario", valor: (i) => (i.tipo === "ProductoInsumo" ? "-" : i.costoUnitario), numFmt: "$#,##0", alineacion: "right" },
-        { header: "Estado", valor: (i) => (i.estado === "activo" ? "Activo" : "Inactivo"), esEstado: true },
+        { header: "Estado", valor: (i) => (i.estado === "activo" ? "Habilitado" : "Deshabilitado"), esEstado: true },
       ],
     });
     void archivo;
@@ -313,13 +313,13 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         e.contenidoPresentacion = "El contenido debe ser mayor a 0.";
       // Peso de medida: obligatorio al crear. En edición se tolera vacío
       // SOLO si el registro ya tenía NULL (insumos antiguos) y no se cambió.
-      if (pesoMedida < 0) e.pesoMedida = "El peso de medida no puede ser negativo.";
+      if (pesoMedida < 0) e.pesoMedida = "El contenido por paquete no puede ser negativo.";
       else if (!(pesoMedida > 0)) {
         const pesoOriginal = editingId
           ? insumos.find(i => i.id === editingId)?.pesoMedida ?? null
           : null;
         if (!(editingId && pesoOriginal == null))
-          e.pesoMedida = "El peso de medida es obligatorio.";
+          e.pesoMedida = "El contenido por paquete es obligatorio.";
       }
     }
     return e;
@@ -393,7 +393,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
 
   const openEdit = (insumo: Insumo) => {
     if (insumo.estado === "inactivo") {
-      toast.error("Activa el insumo para editarlo.");
+      toast.error("Habilita el insumo para editarlo.");
       return;
     }
     limpiarFormulario();
@@ -595,8 +595,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
     setConfirmState({
       tipo: "cambiar-estado",
       mensaje: nuevoEstado === "inactivo"
-        ? `¿Deseas inactivar el insumo "${insumo.nombre}"?`
-        : `¿Deseas activar el insumo "${insumo.nombre}"?`,
+        ? `¿Deseas deshabilitar el insumo "${insumo.nombre}"?`
+        : `¿Deseas habilitar el insumo "${insumo.nombre}"?`,
       id,
       nuevoEstado,
     });
@@ -759,7 +759,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       try {
         const actualizado = await cambiarEstadoInsumo(id, nuevoEstado === "activo");
         setInsumos(prev => prev.map(i => (i.id === id ? actualizado : i)));
-        toast.success(`Estado actualizado`);
+        toast.success(nuevoEstado === "inactivo" ? "Insumo deshabilitado" : "Insumo habilitado");
       } catch (error) {
         toast.error(mensajeErrorInsumos(error, "No se pudo actualizar el estado."));
       } finally {
@@ -817,7 +817,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
   // ─────────────────────────── Render ───────────────────────────
   const etiquetaTipo = (i: Insumo) => (i.tipo === "ProductoInsumo" ? "Lo preparamos aquí" : "Se compra");
 
-  /** Barra de stock: roja si hay que comprar, verde si alcanza y gris si está apagado. */
+  /** Barra de stock: roja si hay que comprar, verde si alcanza y gris si está deshabilitado. */
   const barraStock = (insumo: Insumo) => {
     const stock = estadoStock(insumo);
     const apagado = insumo.estado === "inactivo";
@@ -826,20 +826,20 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       ? Math.max(0, Math.min(1, insumo.stockActual / insumo.stockMinimo))
       : insumo.stockActual > 0 ? 1 : 0;
     const frase = apagado
-      ? "Apagado · no se cuenta para comprar"
+      ? "Deshabilitado · no se cuenta para comprar"
       : stock === "sin-stock" ? "Se acabó · comprar"
         : stock === "bajo" ? "Por debajo del mínimo · comprar"
           : "Alcanza bien";
     return (
       <div className="pn-stock">
         <div className="pn-stock__nums">
-          <span>Hay {fmtCant(insumo.stockActual, insumo.unidadMedida)}</span>
-          <span>Mínimo {fmtCant(insumo.stockMinimo, insumo.unidadMedida)}</span>
+          <span>Stock actual: {fmtCant(insumo.stockActual, insumo.unidadMedida)}</span>
+          <span>Stock mínimo: {fmtCant(insumo.stockMinimo, insumo.unidadMedida)}</span>
         </div>
         <div
           className="pn-stock__barra"
           role="img"
-          aria-label={`Hay ${fmtCant(insumo.stockActual, insumo.unidadMedida)} y el mínimo es ${fmtCant(insumo.stockMinimo, insumo.unidadMedida)}`}
+          aria-label={`Stock actual ${fmtCant(insumo.stockActual, insumo.unidadMedida)} y stock mínimo ${fmtCant(insumo.stockMinimo, insumo.unidadMedida)}`}
         >
           <div style={{ width: `${Math.round(relleno * 100)}%`, background: color }} />
         </div>
@@ -853,14 +853,15 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
   // Un solo grupo de botones para los filtros de siempre (estado, tipo, aviso de
   // stock bajo) más la categoría.
   const chip = filtroStockBajo ? "comprar"
-    : filtroEstado === "inactivos" ? "apagados"
+    : filtroEstado === "inactivos" ? "deshabilitados"
+    : filtroEstado === "activos" ? "habilitados"
       : filtroTipo === "insumos" ? "compra"
         : filtroTipo === "productos" ? "preparamos"
           : filtroCategoria ? `cat:${filtroCategoria}` : "todos";
   const cambiarChip = (v: string) => {
     setPage(1);
     setFiltroStockBajo(v === "comprar");
-    setFiltroEstado(v === "apagados" ? "inactivos" : "todos");
+    setFiltroEstado(v === "deshabilitados" ? "inactivos" : v === "habilitados" ? "activos" : "todos");
     setFiltroTipo(v === "compra" ? "insumos" : v === "preparamos" ? "productos" : "todos");
     setFiltroCategoria(v.startsWith("cat:") ? v.slice(4) : "");
   };
@@ -942,7 +943,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
             ...categoriasActivas.map(c => ({ valor: `cat:${c.id}`, etiqueta: c.nombre })),
             { valor: "compra", etiqueta: "Se compra" },
             { valor: "preparamos", etiqueta: "Lo preparamos aquí" },
-            { valor: "apagados", etiqueta: "Apagados" },
+            { valor: "habilitados", etiqueta: "Habilitados" },
+            { valor: "deshabilitados", etiqueta: "Deshabilitados" },
           ]}
         />
       </div>
@@ -971,7 +973,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                 nombre={insumo.nombre}
                 detalle={`${categoriaDe(insumo.categoriaId)} · ${etiquetaTipo(insumo)}`}
                 centro={barraStock(insumo)}
-                estado={<EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>}
+                estado={<EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Deshabilitado" : "Habilitado"}</EstadoPill>}
                 acciones={
                   <BotonAccion variante="normal" onClick={() => { setDetalleItem(insumo); setShowDetalleModal(true); }}>
                     Ver y cambiar
@@ -990,14 +992,14 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         <Dialog.Root open onOpenChange={abierto => { if (!abierto) (esPI ? handleCancelarProducto() : cerrarModal()); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
+            <Dialog.Content className="pn-modal pn-modal--formulario" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">
                   {editingId ? `Cambiar «${nombre}»` : "Agregar un insumo"}
                 </Dialog.Title>
               </div>
 
-              <div className="grid gap-5" style={{ maxWidth: "61.25rem" }}>
+              <div className="grid gap-5">
                 <SeccionFormulario numero={1} titulo="¿Cómo se consigue?" ayuda={editingId ? "Esto no se puede cambiar después de creado." : undefined}>
                   <OpcionesBotones
                     etiqueta="Cómo se consigue"
@@ -1011,8 +1013,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   />
                 </SeccionFormulario>
 
-                <SeccionFormulario numero={2} titulo="Sus datos" ayuda={editingId ? (editandoProducto ? "Aquí solo se puede cambiar la receta." : "Aquí solo se puede cambiar cuánto trae cada paquete y el mínimo.") : undefined}>
-                  <div className="pn-grilla">
+                <SeccionFormulario numero={2} titulo="Sus datos" ayuda={editingId ? (editandoProducto ? "Aquí solo se puede cambiar la receta." : "Aquí solo se puede cambiar el contenido por paquete y el stock mínimo.") : undefined}>
+                  <div className="pn-grilla pn-grilla--dos">
                     <CampoFormulario etiqueta="Nombre" error={errorDe("nombre", errores.nombre)}>
                       {(p) => (
                         <input
@@ -1045,7 +1047,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     </CampoFormulario>
 
                     <CampoFormulario
-                      etiqueta="Se mide en"
+                      etiqueta="Unidad de medida"
+                      ayuda="Cómo se cuenta este insumo: kilos, litros, unidades…"
                       error={esPI ? errorDe("unidad", errores.unidad) : undefined}
                     >
                       <div className="flex items-start gap-2">
@@ -1058,7 +1061,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           disabled={!!editingId}
                           unidades={UNIDADES_Y_PRESENTACIONES_INSUMO}
                           placeholder="Escoge la unidad"
-                          ariaLabel="Se mide en"
+                          ariaLabel="Unidad de medida"
                           dataField={esPI ? "unidad" : undefined}
                           mostrarValorSeleccionadoCorto
                           fieldClassName={`h-[3.75rem] border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-[1.25rem] ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
@@ -1089,7 +1092,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
 
                     {!esPI && (
                       <CampoFormulario
-                        etiqueta="¿Cuánto trae cada paquete?"
+                        etiqueta="Contenido por paquete"
                         ayuda={`En ${unidadPeso === "g" ? "gramos" : unidadPeso === "ml" ? "mililitros" : unidadPeso}. Ej.: una bolsa de 500 g`}
                         error={errorDe("pesoMedida", errores.pesoMedida)}
                       >
@@ -1118,8 +1121,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     )}
 
                     <CampoFormulario
-                      etiqueta={`Avísame cuando quede menos de${sufijoMinimo}`}
-                      ayuda={presentacionForm ? `${formatoCantidad.format(stockMinimo)} × ${esPI ? etiquetaContenidoProducto : etiquetaContenido(unidad, presentacionForm.contenido, presentacionForm.unidadBase)} = ${formatoCantidad.format(stockMinimo * presentacionForm.contenido)} ${presentacionForm.unidadBase}` : undefined}
+                      etiqueta={`Stock mínimo${sufijoMinimo}`}
+                      ayuda={`Cuando en bodega quede menos de esta cantidad, el sistema avisa que hay que comprar.${presentacionForm ? ` ${formatoCantidad.format(stockMinimo)} × ${esPI ? etiquetaContenidoProducto : etiquetaContenido(unidad, presentacionForm.contenido, presentacionForm.unidadBase)} = ${formatoCantidad.format(stockMinimo * presentacionForm.contenido)} ${presentacionForm.unidadBase}` : ""}`}
                       error={errorDe("stockMinimo", errores.stockMinimo)}
                     >
                       {(p) => (
@@ -1142,7 +1145,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     </CampoFormulario>
 
                     {!esPI && editingId && (
-                      <CampoFormulario etiqueta="Hay ahora en bodega" ayuda="Esto lo mueven las compras y la cocina, no se cambia aquí.">
+                      <CampoFormulario etiqueta="Stock actual" ayuda="Esto lo mueven las compras y la cocina, no se cambia aquí.">
                         {(p) => <input {...p} type="number" value={stockActual === 0 ? "" : stockActual} placeholder="0" disabled />}
                       </CampoFormulario>
                     )}
@@ -1180,7 +1183,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   </SeccionFormulario>
                 )}
 
-                <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+                <div className="pn-dialogo__botones pn-dialogo__botones--fin">
                   <BotonAccion variante="normal" onClick={esPI ? handleCancelarProducto : cerrarModal}>Cancelar</BotonAccion>
                   <BotonAccion
                     variante="principal"
@@ -1209,11 +1212,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           <Dialog.Root open onOpenChange={abierto => { if (!abierto) cerrarDetalle(); }}>
             <Dialog.Portal>
               <Dialog.Overlay className="pn-dialogo-fondo" />
-              <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+              <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
                 <div className="pn-modal__cab">
                   <Dialog.Title className="pn-modal__titulo">{d.nombre}</Dialog.Title>
                   {apagado
-                    ? <EstadoPill tono="gris">Apagado</EstadoPill>
+                    ? <EstadoPill tono="gris">Deshabilitado</EstadoPill>
                     : <EstadoPill tono={stock === "ok" ? "verde" : "rojo"}>{stock === "ok" ? "Alcanza bien" : "Hay que comprar"}</EstadoPill>}
                 </div>
                 <p className="pn-seccion__ayuda" style={{ marginTop: "-0.375rem" }}>{categoriaDe(d.categoriaId)} · {etiquetaTipo(d)}</p>
@@ -1221,10 +1224,11 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                 <div className="grid gap-4">
                   <SeccionFormulario titulo="Cuánto hay">
                     <DatosDetalle datos={[
-                      { etiqueta: "Hay en bodega", valor: fmtCant(d.stockActual, d.unidadMedida) },
-                      { etiqueta: "Mínimo en bodega", valor: fmtCant(d.stockMinimo, d.unidadMedida) },
+                      { etiqueta: "Unidad de medida", valor: d.unidadMedida },
+                      { etiqueta: "Stock actual", valor: fmtCant(d.stockActual, d.unidadMedida) },
+                      { etiqueta: "Stock mínimo", valor: fmtCant(d.stockMinimo, d.unidadMedida) },
                       ...(!esProd ? [
-                        { etiqueta: "Cada paquete trae", valor: d.pesoMedida != null ? `${formatoCantidad.format(d.pesoMedida)} ${d.unidadMedida}` : "—" },
+                        { etiqueta: "Contenido por paquete", valor: d.pesoMedida != null ? `${formatoCantidad.format(d.pesoMedida)} ${d.unidadMedida}` : "—" },
                         { etiqueta: "Costo", valor: fmtCOP(d.costoUnitario) },
                         { etiqueta: "IVA", valor: d.iva !== null ? `${d.iva}%` : "—" },
                       ] : [
@@ -1258,7 +1262,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       variante="principal"
                       icono={ChefHat}
                       disabled={!fichaVigente(fichas, d) || apagado}
-                      title={apagado ? "Está apagado" : !fichaVigente(fichas, d) ? "Registra su receta primero" : undefined}
+                      title={apagado ? "Está deshabilitado" : !fichaVigente(fichas, d) ? "Registra su receta primero" : undefined}
                       onClick={() => { cerrarDetalle(); abrirOrdenProduccion?.(d.id); }}
                     >
                       Programar una tanda
@@ -1267,18 +1271,18 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   <BotonAccion
                     variante="normal"
                     disabled={apagado}
-                    title={apagado ? "Enciéndelo para poder cambiarlo" : undefined}
+                    title={apagado ? "Habilítalo para poder cambiarlo" : undefined}
                     onClick={() => { cerrarDetalle(); openEdit(d); }}
                   >
                     Cambiar datos
                   </BotonAccion>
                   <BotonAccion variante="normal" onClick={() => { cerrarDetalle(); toggleEstado(d.id); }}>
-                    {apagado ? "Encender" : "Apagar"}
+                    {apagado ? "Habilitar" : "Deshabilitar"}
                   </BotonAccion>
                   <BotonAccion variante="peligro" onClick={() => { cerrarDetalle(); intentarEliminar(d.id); }}>Borrar</BotonAccion>
                   <BotonAccion variante="oscuro" onClick={cerrarDetalle}>Cerrar</BotonAccion>
                 </div>
-                {apagado && <p className="pn-campo__ayuda" style={{ marginTop: "0.625rem" }}>Para cambiar sus datos, primero enciéndelo.</p>}
+                {apagado && <p className="pn-campo__ayuda" style={{ marginTop: "0.625rem" }}>Para cambiar sus datos, primero habilítalo.</p>}
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>
@@ -1292,8 +1296,8 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           abierto
           onCambiarAbierto={a => { if (!a) cerrarBloqueo(); }}
           titulo={`No se puede borrar «${bloqueo.nombre}»`}
-          porQueNo={[...bloqueo.razones, "Lo que ya tiene movimientos no se borra: se apaga y queda guardado"]}
-          textoAlternativa={regBloqueo?.estado === "activo" ? "Apagarlo en vez de borrarlo" : undefined}
+          porQueNo={[...bloqueo.razones, "Lo que ya tiene movimientos no se borra: se deshabilita y queda guardado"]}
+          textoAlternativa={regBloqueo?.estado === "activo" ? "Deshabilitarlo en vez de borrarlo" : undefined}
           onAlternativa={() => { if (bloqueo.id) toggleEstado(bloqueo.id); }}
         />
       ) : confirmState.tipo === "eliminar" ? (
@@ -1310,19 +1314,19 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
           <DialogoConfirmacion
             abierto
             onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
-            titulo={`¿Apagar «${nombreConfirm}»?`}
-            queVaAPasar={["Deja de salir en las listas y en las recetas nuevas", "Lo que hay en bodega no se borra", "Lo puedes volver a encender cuando quieras"]}
-            textoAccion="Sí, apagar"
+            titulo={`¿Deshabilitar «${nombreConfirm}»?`}
+            queVaAPasar={["Deja de salir en las listas y en las recetas nuevas", "Lo que hay en bodega no se borra", "Lo puedes volver a habilitar cuando quieras"]}
+            textoAccion="Sí, deshabilitar"
             onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
           />
         ) : (
           <DialogoConfirmacion
             abierto
             onCambiarAbierto={a => { if (!a) cancelarConfirmacion(); }}
-            titulo={`¿Volver a encender «${nombreConfirm}»?`}
+            titulo={`¿Volver a habilitar «${nombreConfirm}»?`}
             queVaAPasar={["Vuelve a salir en las listas y en las recetas nuevas", "Se cuenta de nuevo para saber qué hay que comprar"]}
-            textoSeguro="No, dejarlo apagado"
-            textoAccion="Sí, encender"
+            textoSeguro="No, dejarlo deshabilitado"
+            textoAccion="Sí, habilitar"
             onConfirmar={() => { if (!guardando) void ejecutarConfirmacion(); }}
           />
         )

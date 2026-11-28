@@ -674,11 +674,11 @@ const hoyFecha = () => {
     return (
       <>
         <div className="pn-dialogo-fondo" onClick={onClose} />
-        <div className="pn-modal" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
+        <div className="pn-modal pn-modal--formulario" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
           <div className="pn-modal__cab">
             <h2 id="titulo-venta-local" className="pn-modal__titulo">Registrar venta del local</h2>
           </div>
-          <div className="grid gap-5" style={{ maxWidth: "61.25rem" }}>
+          <div className="grid gap-5">
             <SeccionFormulario numero={1} titulo="¿Quién compra?">
               <div className="pn-campo space-y-4">
             <div className="min-w-0">

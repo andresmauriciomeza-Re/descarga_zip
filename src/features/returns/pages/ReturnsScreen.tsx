@@ -1591,7 +1591,7 @@ export function DevolucionesScreen({
         <Dialog.Root open onOpenChange={(a) => { if (!a) setDetalleDevolucion(null); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 51.25rem)", zIndex: 70 }}>
+            <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined} style={{ width: "min(96vw, 51.25rem)", zIndex: 70 }} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">Devolución del pedido #{devolucionDetalle.id}</Dialog.Title>
                 <EstadoPill tono={devolucionDetalle.devolucionResuelta ? "verde" : "ambar"}>

@@ -147,6 +147,12 @@ body:has([data-panel-texto-grande]) {
 .pn-seccion h2 { font: 700 1.5rem/1.3 var(--font-titulo); margin: 0; }
 .pn-seccion__ayuda { font-size: 1.125rem; color: var(--gris-texto); margin: 0.25rem 0 1.125rem; }
 .pn-grilla { display: grid; gap: 1.125rem 1.375rem; grid-template-columns: repeat(auto-fit, minmax(min(16.25rem, 100%), 1fr)); }
+/* Grilla fija de 2 columnas: la ayuda o el error de un campo no mueven al vecino. */
+.pn-grilla.pn-grilla--dos { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@media (max-width: 640px) { .pn-grilla.pn-grilla--dos { grid-template-columns: minmax(0, 1fr); } }
+.pn-dialogo__botones.pn-dialogo__botones--fin { justify-content: flex-end; }
+.pn-dialogo__botones--fin .pn-boton { flex: 0 1 auto; min-width: 13.75rem; }
+@media (max-width: 640px) { .pn-dialogo__botones--fin .pn-boton { flex: 1 1 100%; } }
 
 /* ── Datos y línea de tiempo ── */
 .pn-datos { display: grid; gap: 1rem 1.5rem; margin: 0; grid-template-columns: repeat(auto-fit, minmax(min(13.75rem, 100%), 1fr)); }
@@ -253,6 +259,8 @@ body:has([data-panel-texto-grande]) {
 .pn-nota { font-size: 1.125rem; color: var(--gris-texto); margin: 1.375rem 0 0; }
 .pn-modal { position: fixed; z-index: 61; inset: 1rem; overflow-y: auto; background: var(--crema); color: var(--texto); border-radius: 1.375rem; padding: 1.5rem 1.75rem 2rem; font-family: var(--font-texto); }
 .pn-modal--medio { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(96vw, 60rem); max-height: 94dvh; }
+/* Formularios de crear/editar: caja centrada; solo hace scroll si no cabe. */
+.pn-modal--formulario { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(96vw, 56rem); max-height: 94dvh; }
 .pn-modal__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-bottom: 1.125rem; }
 .pn-modal__titulo { font: 700 1.875rem/1.2 var(--font-titulo); margin: 0; }
 .pn-cargo-form { display: grid; grid-template-columns: minmax(0, 1fr) 23.75rem; gap: 1.375rem; align-items: start; }
@@ -284,7 +292,7 @@ body:has([data-panel-texto-grande]) {
 .pn-permisos__fila--no { background: var(--gris-suave); color: var(--gris-texto); }
 @media (max-width: 820px) {
   .pn-modal { inset: 0; border-radius: 0; padding: 1.125rem 0.875rem 1.75rem; }
-  .pn-modal--medio { inset: 0; left: 0; top: 0; transform: none; width: 100%; max-height: none; }
+  .pn-modal--medio, .pn-modal--formulario { inset: 0; left: 0; top: 0; transform: none; width: 100%; max-height: none; }
   .pn-modal__titulo { font-size: 1.5rem; }
   .pn-cargo-form, .pn-cargo-detalle { grid-template-columns: minmax(0, 1fr); }
   .pn-cargo-form__der { position: static; }
@@ -293,7 +301,7 @@ body:has([data-panel-texto-grande]) {
 
 /* ═══════════ Insumos ═══════════ */
 .pn-fila__centro { flex: 2 1 18.75rem; min-width: 0; }
-.pn-stock__nums { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 1.125rem; font-weight: 600; margin-bottom: 0.375rem; }
+.pn-stock__nums { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 0.75rem; font-size: 1.125rem; font-weight: 600; margin-bottom: 0.375rem; }
 .pn-stock__barra { height: 0.875rem; border-radius: 62.4375rem; background: var(--gris-suave); overflow: hidden; }
 .pn-stock__barra > div { height: 100%; border-radius: 62.4375rem; }
 .pn-stock__frase { font-size: 1.0625rem; font-weight: 600; margin: 0.375rem 0 0; }
