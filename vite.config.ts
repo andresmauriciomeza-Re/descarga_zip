@@ -51,7 +51,7 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,tsx,webp}', 'icons/*.png'],
+        globPatterns: ['**/*.{js,css,html,tsx,webp,woff2}', 'icons/*.png'],
         // Excel se descarga solo al exportar: no se guarda por adelantado.
         globIgnores: ['**/img/**', '**/vendor-excel-*.js'],
         navigateFallback: '/index.html',
@@ -60,30 +60,6 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 3.5 * 1024 * 1024,
         runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts-stylesheets',
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365,
-              },
-            },
-          },
           {
             urlPattern: ({ url }) =>
               url.origin === self.location.origin &&

@@ -19,10 +19,11 @@
     <!-- Foto del hero (la pide antes de ejecutar el JS) -->
     <link rel="preload" as="image" href="/src/assets/img/image-23.webp" fetchpriority="high" />
 
-    <!-- Fuentes: Montserrat (títulos) y Poppins (texto) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Fuentes que usa el hero, pedidas antes de leer el CSS: así el texto no salta -->
+    <link rel="preload" as="font" type="font/woff2" href="/node_modules/@fontsource/poppins/files/poppins-latin-400-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/node_modules/@fontsource/poppins/files/poppins-latin-500-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/node_modules/@fontsource/poppins/files/poppins-latin-600-normal.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/node_modules/@fontsource/montserrat/files/montserrat-latin-700-normal.woff2" crossorigin />
 
     <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
   </head>

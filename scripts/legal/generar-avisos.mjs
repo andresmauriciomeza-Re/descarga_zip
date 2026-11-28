@@ -211,7 +211,7 @@ Fuente: https://github.com/shadcn-ui/ui/blob/main/LICENSE.md
 
 ${manual("shadcn-ui.txt")}
 
-${titulo("D. TIPOGRAFÍAS (servidas por Google Fonts)")}
+${titulo("D. TIPOGRAFÍAS (incluidas en la aplicación mediante Fontsource)")}
 ${SUBREGLA}
 Montserrat — https://github.com/google/fonts/blob/main/ofl/montserrat/OFL.txt
 ${SUBREGLA}
