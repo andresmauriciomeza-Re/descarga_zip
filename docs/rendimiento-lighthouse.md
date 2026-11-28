@@ -19,6 +19,8 @@ Plan: `SDD-lighthouse-sivpro-v2.md`. Rama: `perf/lighthouse`, creada desde `refa
 - La API (`.env.production`) se despierta antes de cada corrida: el primer pedido llegó a tardar 16,7 s.
 - Informes HTML y JSON en `D:\Documentos\SIVPRO\lighthouse-informes\`, fuera del repositorio.
 
+En escritorio el puntaje llega a variar 15 puntos entre corridas del mismo código. Para comparar dos versiones hay que alternar las corridas y servirlas las dos en el puerto 4173: la API no acepta otros puertos locales y la página carga sin menú.
+
 Los números sirven para comparar entre fases con este mismo método. DevTools en otro equipo puede dar valores distintos; el tiempo de bloqueo es el que más varía.
 
 ## Mediciones
@@ -31,6 +33,8 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 1, contraste | Móvil | 36 | 100 | 100 | 100 | 1,6 s | 9,4 s | 4453 ms | 8,1 s | 0,001 |
 | 2, pantallas bajo demanda | Móvil | 42 | 100 | 100 | 100 | 1,6 s | 6,1 s | 2956 ms | 6,3 s | 0,009 |
 | 2, pantallas bajo demanda | Escritorio | 79 | 100 | 100 | 100 | 0,6 s | 1,6 s | 263 ms | 2,5 s | 0 |
+| 3, Excel al exportar | Móvil | 43 | 100 | 100 | 100 | 1,6 s | 5,8 s | 2467 ms | 6,2 s | 0,009 |
+| 3, Excel al exportar | Escritorio | 59 | 100 | 100 | 100 | 0,6 s | 1,7 s | 977 ms | 2,7 s | 0 |
 
 ## Línea base
 
@@ -65,3 +69,28 @@ Desvíos del plan:
 Para la Fase 3: un `import()` de Excel que falle también dispararía esa recarga. Hay que tratarlo para que muestre el aviso de error en su lugar.
 
 El service worker todavía guarda en segundo plano todos los archivos, Excel incluido (136 entradas, 6,8 MB). Se trata en la Fase 3.
+
+## Fase 3: Excel solo al exportar
+
+- `exceljs`, `xlsx` y `jspdf` se piden al descargar (`shared/utils/optionalImport.ts`).
+- Si no se pueden bajar, sale un aviso de error y la página no se recarga. La precarga al pasar el mouse tampoco recarga.
+- `vendor-excel` quedó fuera de lo que la PWA guarda por adelantado: de 6,8 MB a 5,6 MB.
+- Los 7 módulos descargan un Excel con las mismas hojas, celdas, estilos y anchos que antes (datos simulados).
+
+La fila de escritorio (59) se midió justo después de compilar. Comparando las fases 2 y 3 alternadas, 5 corridas cada una:
+
+| Versión | Rend. (mediana y rango) | TBT | LCP |
+|---|---|---|---|
+| Fase 2 | 79 (65–84) | 192 ms | 1,6 s |
+| Fase 3 | 70 (66–75) | 366 ms | 1,8 s |
+
+Los rangos se solapan: con esta medición no se distinguen.
+
+Consecuencias:
+
+- Sin conexión ya no se puede descargar un Excel desde la app instalada.
+- `xlsx` sigue instalado; reemplazarlo queda como tarea aparte.
+
+## Observado, sin cambiar
+
+En móvil, al volver del detalle de un producto, el menú queda a veces en la posición anterior y a veces centra la tarjeta (unos 130 px de diferencia). También pasa en la versión anterior a estas fases.
