@@ -56,7 +56,7 @@ import {
 import { SearchInput } from "@/shared/components/SearchInput";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import { estadoDe } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import { estadoDe } from "@/features/product-categories/utils/product-categories";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 // Bloque 2.3: las reglas de una bebida (nombre único, contenido ml/L y
 // unidades por paca/caja) viven en `erroresBebida`, compartido con el

@@ -30,12 +30,7 @@ import {
 import { GRUPOS_ICONOS } from "@/features/product-categories/services/categoryIcons";
 import { useProductCategories } from "@/features/product-categories/hooks/useProductCategories";
 import type { CategoriaProducto, EstadoCategoria } from "@/features/product-categories/utils/product-categories";
-
-// ─────────────────────────── CATEGORÍA PRODUCTO ───────────────────────────
-
-/** Estado de una categoría, con el que no lo tiene todavía: Activo. */
-export const estadoDe = (c?: CategoriaProducto): EstadoCategoria =>
-  c?.estado ?? "Activo";
+import { estadoDe } from "@/features/product-categories/utils/product-categories";
 
 /** Opciones de la pill de estado: mismos colores que Proveedores/Usuarios. Se
     usan en el selector del listado y, en solo lectura (Ver detalle y modal de
