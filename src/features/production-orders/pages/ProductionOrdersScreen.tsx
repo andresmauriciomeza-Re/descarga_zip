@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu";
 import { ChefHat, Download } from "lucide-react";
 import { AvisoBanner } from "@/shared/components/panel/NoticeBanner";
 import { BotonAccion } from "@/shared/components/buttons/ActionButton";
@@ -1264,7 +1266,7 @@ export function OrdenProduccionScreen({
         detalle={paraQuien}
         datos={[{ etiqueta: "Tiempo", valor: <span style={{ color: o.estadoOrden === "en-proceso" ? "var(--azul-texto)" : o.estadoOrden === "completada" ? "var(--verde-texto)" : undefined }}>{tiempo}</span> }]}
         estado={
-          <div className="grid gap-2 justify-items-start">
+          <div className="flex flex-wrap items-center gap-2">
             <EstadoPill tono={TONO_ESTADO[o.estadoOrden]}>{ESTADO_GLORIA[o.estadoOrden]}</EstadoPill>
             {falt.length > 0 && <EstadoPill tono="ambar">Faltan insumos</EstadoPill>}
             <EstimacionPedido orden={o} />
@@ -1291,11 +1293,23 @@ export function OrdenProduccionScreen({
               <BotonAccion variante="principal" onClick={() => setDetailItem(o)}>Ver qué se usó</BotonAccion>
             )}
             <BotonAccion variante="normal" onClick={() => setDetailItem(o)}>Ver la orden</BotonAccion>
+            {/* Acciones secundarias, con las mismas condiciones de siempre. */}
             {(o.estadoOrden === "pendiente" || o.estadoOrden === "en-proceso") && (
-              <BotonAccion variante="peligro" onClick={() => openDarBaja(o)}>Dar de baja</BotonAccion>
-            )}
-            {canDelete && o.estadoOrden === "pendiente" && o.tipo !== "pedido" && (
-              <BotonAccion variante="peligro" onClick={() => setDeleteId(o.id)}>Borrar</BotonAccion>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger type="button" className="pn-boton pn-boton--normal">
+                  Más acciones <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-48">
+                  <DropdownMenuItem className="py-2.5 text-base cursor-pointer text-red-700" onSelect={() => openDarBaja(o)}>
+                    Dar de baja
+                  </DropdownMenuItem>
+                  {canDelete && o.estadoOrden === "pendiente" && o.tipo !== "pedido" && (
+                    <DropdownMenuItem className="py-2.5 text-base cursor-pointer text-red-700" onSelect={() => setDeleteId(o.id)}>
+                      Borrar
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </>
         }
@@ -1307,7 +1321,7 @@ export function OrdenProduccionScreen({
     lista.length === 0 ? null : (
       <section key={titulo} style={{ marginBottom: "1.75rem" }}>
         <h2 className="pn-h2" style={{ marginBottom: "0.75rem" }}>{titulo}</h2>
-        <div className="pn-lista">{lista.map(tarjetaOrden)}</div>
+        <div className="pn-lista pn-ordenes">{lista.map(tarjetaOrden)}</div>
       </section>
     );
 
@@ -1416,7 +1430,7 @@ export function OrdenProduccionScreen({
               {otras.length === 0 ? (
                 <p className="pn-nota">No hay más órdenes con estos filtros.</p>
               ) : (
-                <div className="pn-lista">{pagedOtras.map(tarjetaOrden)}</div>
+                <div className="pn-lista pn-ordenes">{pagedOtras.map(tarjetaOrden)}</div>
               )}
               <PaginadorGrande pagina={page} total={otras.length} porPagina={PER_PAGE} onCambiar={setPage} />
             </section>
@@ -1956,7 +1970,7 @@ export function OrdenProduccionScreen({
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
             <motion.div initial={{ scale: .95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: .95, opacity: 0 }} transition={{ duration: .15 }}
-              className="bg-card rounded-2xl w-full max-w-2xl shadow-2xl border border-border my-4 max-h-[90vh] flex flex-col">
+              className="pn-orden bg-card rounded-2xl w-full max-w-[1152px] shadow-2xl border border-border max-h-[calc(100dvh-1.5rem)] flex flex-col">
               <div className="shrink-0 flex items-start justify-between gap-3 px-5 py-4 border-b border-border">
                 <div className="min-w-0">
                   <h3 style={{ font: "700 1.625rem/1.2 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>
@@ -1971,7 +1985,8 @@ export function OrdenProduccionScreen({
                 </div>
                 <BotonAccion variante="normal" onClick={() => setDetailItem(null)}>Cerrar</BotonAccion>
               </div>
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div className="pn-orden__cuerpo">
+                <div className="pn-orden__col">
                 {/* Los tres pasos de la cocina */}
                 <ol className="pn-pasos" aria-label="En qué paso va la orden" style={{ margin: 0 }}>
                   {(["Recibida", "En la cocina", "Lista para entregar"] as const).map((paso, i) => {
@@ -2060,7 +2075,7 @@ export function OrdenProduccionScreen({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="pn-orden__fechas">
                   {[
                     ...(detailItem.ventaLocal ? [] : [{ l: "Fecha/hora solicitada", v: formatearFechaHora(detailItem.fechaSolicitada, detailItem.horaSolicitada) }]),
                     { l: "Inicio de producción", v: formatearFechaHora(detailItem.inicioProduccion) },
@@ -2177,8 +2192,10 @@ export function OrdenProduccionScreen({
                   </div>
                 </div>
 
+                </div>
+                <div className="pn-orden__col">
                 {detailItem.tipo === "preparacion" && (
-                  <div>
+                  <div className="pn-orden__insumos">
                     <p className="text-base font-semibold text-muted-foreground mb-1.5">Insumos usados</p>
                     <TablaInsumosRequeridos
                       requeridos={detailItem.insumosRequeridos}
@@ -2191,6 +2208,9 @@ export function OrdenProduccionScreen({
                   </div>
                 )}
 
+                {/* Los pedidos no tienen tabla de insumos: van abiertos. */}
+                <details key={detailItem.id} className="pn-orden__extras" open={detailItem.tipo === "pedido" || undefined}>
+                <summary className="pn-boton pn-boton--normal">Costo, preparación e historial</summary>
                 <div>
                   <p className="text-base font-semibold text-muted-foreground mb-1.5">Costo de la orden</p>
                   {parametrosCostosError ? (
@@ -2418,8 +2438,10 @@ export function OrdenProduccionScreen({
                     <>{lineaTiempos}{observacion}</>
                   );
                 })()}
+                </details>
+                </div>
               </div>
-              <div className="shrink-0 px-5 py-4 border-t border-border flex gap-3">
+              <div className="shrink-0 px-5 py-3 border-t border-border flex gap-3">
                 <button onClick={() => setDetailItem(null)} className="w-32 shrink-0 py-2.5 bg-muted rounded-xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors">Cerrar</button>
                 <button onClick={() => setVerFicha({ ordenId: detailItem.id, lineaIdx: 0 })} className="flex-1 py-2.5 max-md:min-h-11 bg-primary rounded-xl text-lg font-semibold text-white hover:bg-red-700 cursor-pointer transition-colors">Ver ficha del producto</button>
               </div>

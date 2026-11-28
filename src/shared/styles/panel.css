@@ -609,6 +609,84 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
   .pn-permisos__fila { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ═══════════ Cambiar producto ═══════════
+   Las dos columnas dependen del ancho que queda (no del de la ventana): si no
+   caben, se apilan y hace scroll el conjunto. */
+.pn-prod { container: prod / inline-size; }
+.pn-prod .pn-precios { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
+.pn-prod .pn-precios > * { grid-column: auto; min-width: 0; }
+.pn-prod .pn-precios > :first-child { grid-column: 1 / -1; }
+.pn-prod .truncate { white-space: normal; }
+.pn-prod .pn-receta-alta { flex-wrap: wrap; }
+.pn-prod .pn-receta-alta > :first-child { flex: 1 1 12rem; min-width: 0; }
+@container prod (width < 80rem) {
+  .pn-prod__cols { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+  .pn-prod__cols > .pn-prod__col { flex: none; width: 100%; min-width: 0; min-height: auto; }
+  .pn-prod__cols > .pn-prod__col > * { flex: none; overflow: visible; min-height: auto; }
+  .pn-prod__cols > .w-0 { display: none; }
+}
+@container prod (width >= 80rem) {
+  .pn-prod__cols > .pn-prod__col { flex: 0 0 50%; min-width: 0; }
+  .pn-prod__cols > .pn-prod__col.flex-1 { flex: 1 1 0; }
+}
+@container prod (max-width: 40rem) {
+  .pn-prod__cols table, .pn-prod__cols tbody { display: block; }
+  .pn-prod__cols thead { display: none; }
+  .pn-prod__cols tr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; padding: 0.5rem; }
+  .pn-prod__cols td { display: block; min-width: 0; padding: 0; }
+  .pn-prod__cols td:first-child, .pn-prod__cols td:last-child { flex: 1 0 100%; }
+  .pn-prod__cols td:last-child > * { flex-wrap: wrap; }
+}
+
+/* ═══════════ Ver la orden de producción ═══════════ */
+.pn-orden__cuerpo { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 0.75rem 1.25rem; }
+.pn-orden__col { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+.pn-orden__col > * { flex: none; }
+.pn-orden__col > .pn-pasos { padding: 0.5rem 0.875rem; }
+.pn-orden__fechas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); gap: 0.5rem 1rem; }
+.pn-orden table :is(th, td) { padding: 0.375rem 0.75rem; }
+.pn-orden .pn-pill { white-space: nowrap; }
+.pn-orden .pn-insumos__fila { grid-template-columns: minmax(0, 1fr) 6rem 6rem 11rem; }
+.pn-orden .pn-insumos__fila > :first-child { grid-column: auto; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .pn-orden .pn-insumos__fila { grid-template-columns: repeat(3, minmax(0, auto)); }
+  .pn-orden .pn-insumos__fila > :first-child { grid-column: 1 / -1; }
+  .pn-orden .pn-insumos__cab > :first-child { display: none; }
+}
+.pn-orden__extras > summary { width: 100%; list-style: none; }
+.pn-orden__extras > summary::after { content: "▾"; }
+.pn-orden__extras[open] > summary::after { content: "▴"; }
+.pn-orden__extras > :not(summary) { margin-top: 0.625rem; }
+/* Al desplegarlos en una preparación, ocupan el lugar de la tabla. */
+.pn-orden__col:has(> .pn-orden__extras[open]) > .pn-orden__insumos { display: none; }
+/* Dos columnas: el modal no hace scroll; la lista de insumos sí, si es larga. */
+@media (min-width: 1024px) {
+  .pn-orden__cuerpo { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  .pn-orden__col { min-height: 0; overflow-y: auto; }
+  .pn-orden__col > .pn-orden__insumos { flex: 1 1 11rem; min-height: 9rem; overflow-y: auto; }
+  .pn-orden .pn-insumos__tabla { overflow: visible; }
+  .pn-orden .pn-insumos__cab { position: sticky; top: 0; z-index: 1; background: var(--muted); }
+}
+
+/* ═══════════ Listados de órdenes de producción ═══════════ */
+.pn-ordenes .pn-fila { gap: 0.5rem 1rem; padding: 0.625rem 0.875rem; }
+.pn-ordenes .pn-fila--resaltada { padding: 0.5625rem 0.8125rem; }
+.pn-ordenes .pn-fila__id { flex: 1 1 16rem; }
+.pn-ordenes .pn-fila__nombre { font-size: 1.125rem; }
+.pn-ordenes .pn-fila__detalle { font-size: 1rem; }
+.pn-ordenes .pn-fila__dato { min-width: 0; flex: 0 1 11rem; }
+.pn-ordenes .pn-fila__dato dd { font-size: 1rem; }
+.pn-ordenes .pn-fila__dato + div { flex: 0 1 14rem; }
+.pn-ordenes .pn-pill { white-space: nowrap; }
+.pn-ordenes .pn-fila__acciones { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.pn-ordenes .pn-boton { min-height: 2.75rem; padding: 0 0.875rem; font-size: 1rem; width: auto; }
+@media (max-width: 820px) {
+  .pn-ordenes .pn-fila__id { flex-basis: 100%; }
+  .pn-ordenes .pn-fila__dato, .pn-ordenes .pn-fila__dato + div { flex: 1 1 10rem; }
+  .pn-ordenes .pn-fila__acciones { justify-content: flex-start; }
+  .pn-ordenes .pn-fila__acciones .pn-boton { width: auto; flex: 1 1 auto; }
+}
+
 /* ═══════════ Insumos ═══════════ */
 .pn-fila__centro { flex: 2 1 18.75rem; min-width: 0; }
 .pn-stock__nums { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 0.75rem; font-size: 1.125rem; font-weight: 600; margin-bottom: 0.375rem; }

@@ -44,9 +44,9 @@ export function TablaInsumosRequeridos({
   const hayAviso = (onIrCompras || onPreparar || onIrInsumos)
     && (faltantesCompra.length > 0 || inactivos.length > 0);
   return (
-    <div className="space-y-3">
-    <div className="rounded-xl border border-border overflow-hidden">
-      <div className="grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-base font-bold uppercase tracking-wide text-muted-foreground">
+    <div className="pn-insumos space-y-3">
+    <div className="pn-insumos__tabla rounded-xl border border-border overflow-hidden">
+      <div className="pn-insumos__fila pn-insumos__cab grid grid-cols-5 gap-2 px-3 py-2 bg-muted/60 text-base font-bold uppercase tracking-wide text-muted-foreground">
         <span className="col-span-2">Insumo</span>
         <span className="text-right">Requerido</span>
         <span className="text-right">Stock actual</span>
@@ -67,7 +67,7 @@ export function TablaInsumosRequeridos({
           ? calculoFaltante?.falta ?? 0
           : 0;
         return (
-          <div key={r.insumoId} className={`grid grid-cols-5 gap-2 px-3 py-2 text-base border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
+          <div key={r.insumoId} className={`pn-insumos__fila grid grid-cols-5 gap-2 px-3 py-2 text-base border-t border-border items-center ${!descontados && (noExiste || inactivo || unidadIncompatible) ? "bg-amber-50/60" : falta > 0 ? "bg-red-50/60" : ""}`}>
             <span className="col-span-2 font-medium text-foreground truncate">{r.nombre}</span>
             <span className="text-right tabular-nums font-semibold text-foreground">{fmtCant(r.cantidad, r.unidad)}</span>
             <span className="text-right tabular-nums text-muted-foreground">{noExiste ? "—" : fmtCant(stock, insumo?.unidadMedida ?? r.unidad)}</span>

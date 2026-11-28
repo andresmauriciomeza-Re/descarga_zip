@@ -906,7 +906,7 @@ export function FichaTecnicaEditor({
             ) : (
               <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
             )}
-            <div className="shrink-0 flex flex-nowrap items-end gap-2">
+            <div className="pn-receta-alta shrink-0 flex flex-nowrap items-end gap-2">
               <InsumoSearchField
                 insumos={catalogo}
                 valor={nombre}
