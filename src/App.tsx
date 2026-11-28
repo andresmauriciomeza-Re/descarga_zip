@@ -23,7 +23,8 @@ import { CategoriaProductoScreen, type CategoriaGuardar } from "@/features/produ
 import type { CategoriaProducto, EstadoCategoria } from "@/features/product-categories/utils/product-categories";
 import type { Cliente } from "@/features/customers/utils/customers";
 import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/PurchasesScreen";
-import { GestionConfigScreen, fullAccesos } from "@/features/roles/pages/RolesScreen";
+import { GestionConfigScreen } from "@/features/roles/pages/RolesScreen";
+import { fullAccesos } from "@/features/roles/utils/roles";
 import { KEY, ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
 import { GestionEmpleadosScreen } from "@/features/employees/pages/EmployeesScreen";
 import type { Contratacion } from "@/features/employees/utils/employees";
