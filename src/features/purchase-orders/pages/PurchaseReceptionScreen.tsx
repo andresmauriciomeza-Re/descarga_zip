@@ -63,9 +63,9 @@ import type { OrdenCompra, Recepcion, ItemRecibido, GestionCompra, OrdenItem, Es
 const SERIF = "var(--font-titulo)";
 
 const iCls =
-  "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 min-h-[2.875rem] bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 const compactInputCls =
-  "w-full px-2.5 py-2 max-md:min-h-11 bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
+  "w-full px-2.5 py-2 min-h-[2.875rem] bg-muted border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30";
 
 function fmtCOP(n: number) {
   return new Intl.NumberFormat("es-CO", {
@@ -1185,7 +1185,7 @@ export function RecepcionCompraScreen({
                                     onChange={(unidad) => updPresentacionFila(item.rowId, unidad)}
                                     ariaLabel={`Presentación de ${item.nombre}`}
                                     unidades={opcionesPresentacionDe(item)}
-                                    fieldClassName="bg-background border border-border text-foreground h-9 rounded-lg text-base"
+                                    fieldClassName="bg-background border border-border text-foreground rounded-lg text-base"
                                   />
                                 )}
                                 <label htmlFor={campo} className="sr-only">Cantidad recibida de {item.nombre}</label>
@@ -1202,7 +1202,7 @@ export function RecepcionCompraScreen({
                                       numeroDeInput(limpiarNumeroInput(e.target.value))
                                     )
                                   }
-                                  className="w-full min-h-14 px-3 py-2 bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                  className="w-full min-h-[2.875rem] px-3 py-2 bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                                 />
                                 {pendiente > 0.000001 ? (
                                   <p className="text-base text-amber-800 dark:text-amber-300">Faltan {pendiente.toLocaleString("es-CO", { maximumFractionDigits: 6 })} {item.unidad}: quedan pendientes en la orden.</p>
@@ -1235,7 +1235,7 @@ export function RecepcionCompraScreen({
                                     numeroDeInput(limpiarNumeroInput(e.target.value))
                                   )
                                 }
-                                className="w-full max-w-32 px-2 py-2 max-md:min-h-11 bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
+                                className="w-full max-w-32 px-2 py-2 min-h-[2.875rem] bg-background border border-border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30"
                               />
                               {/* Punto 3 + ajuste: el costo de referencia CON
                                   IVA POR UNIDAD con el que se valida el
@@ -1279,7 +1279,7 @@ export function RecepcionCompraScreen({
                                         : numeroDeInput(limpiarNumeroInput(e.target.value)),
                                     )
                                   }
-                                  className={`w-16 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-base text-center ${
+                                  className={`w-16 px-2 py-2 min-h-[2.875rem] bg-background border rounded-lg text-base text-center ${
                                     item.iva == null ? "border-red-400" : "border-border"
                                   }`}
                                 />
@@ -1334,7 +1334,7 @@ export function RecepcionCompraScreen({
                                         numeroDeInput(limpiarNumeroInput(e.target.value))
                                       )
                                     }
-                                    className={`w-full max-w-32 px-2 py-2 max-md:min-h-11 bg-background border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
+                                    className={`w-full max-w-32 px-2 py-2 min-h-[2.875rem] bg-background border rounded-lg text-base text-center focus:outline-none focus:ring-1 focus:ring-primary/30 ${
                                       errorPvDe(item)
                                         ? "border-red-400 focus:ring-red-300"
                                         : "border-border"

@@ -73,7 +73,7 @@ export function OrdenDetallePageContenido({
   );
 
   return (
-    <div className="pn-contenido" style={{ maxWidth: "68.75rem" }}>
+    <div className="pn-contenido pn-detalle">
       <BotonRuta>
         <BotonAccion icono={ArrowLeft} onClick={onBack}>Volver a la lista</BotonAccion>
       </BotonRuta>

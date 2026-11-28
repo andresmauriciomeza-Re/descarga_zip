@@ -12,7 +12,9 @@ import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm,
 import { toast } from "sonner";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import { motion, AnimatePresence } from "motion/react";
-import { FORM_MAXW } from "@/features/purchase-orders/utils/purchase-orders";
+import { CLASES_DOS_PANELES, CabeceraLista, BarraTotalCelular } from "@/shared/components/panel/FormSection";
+import { InsumosSolicitadosTable } from "@/features/purchases/components/RequestedSuppliesTable";
+import { FORM_MAXW, FORM_MAXW_PAGINA } from "@/features/purchase-orders/utils/purchase-orders";
 import { NuevoProveedorModal } from "@/features/purchase-orders/components/NewSupplierModal";
 import { ArrowLeft, X, Ban, Search, Plus, Check } from "lucide-react";
 import { EstadoBadge } from "@/features/purchases/components/StatusBadge";
@@ -698,19 +700,44 @@ export function CompraForm({
       ? "Registra una factura de proveedor"
       : "";
 
+  /** Pantalla de anotar: dos paneles, igual que «Hacer un pedido». */
+  const dosPaneles = isPage && !isView;
+  const botonesPagina = (
+    <>
+      <button onClick={salir} className="pn-boton pn-boton--normal flex-1">
+        Cancelar
+      </button>
+      <button onClick={guardar} disabled={!botonGuardarOk} className="pn-boton pn-boton--principal flex-[2]">
+        <Check className="w-4 h-4" />
+        Guardar y sumar a la bodega
+      </button>
+    </>
+  );
+  const itemsConUnidad = items.map((item) => ({
+    ...item,
+    unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
+    pesoMedida: insumos.find((i) => i.id === item.idInsumo)?.pesoMedida ?? null,
+    tamanoUnidad: tamanoDeFila(item),
+  }));
+  const contadorItems = `${items.length} ${items.length === 1 ? "ítem" : "ítems"}` + (nProductos > 0
+    ? ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${nProductos === 1 ? "producto" : "productos"}`
+    : "");
+
   return (
     <>
       <div
         className={
           isPage
-            ? `w-full px-4 sm:px-6 pt-4 ${isView ? "pb-4" : "pn-pagina-con-barra"}`
+            ? dosPaneles
+              ? `w-full px-4 pt-4 pb-4 ${FORM_MAXW_PAGINA} mx-auto ${CLASES_DOS_PANELES.pagina}`
+              : "w-full px-4 sm:px-6 pt-4 pb-4"
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full"
+              ? CLASES_DOS_PANELES.interior
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -719,15 +746,15 @@ export function CompraForm({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${isPage ? "max-w-[75rem]" : FORM_MAXW}${
+            className={`flex flex-col w-full ${dosPaneles ? FORM_MAXW_PAGINA : isPage ? "max-w-[75rem]" : FORM_MAXW}${
               isPage
-                ? ""
+                ? dosPaneles ? ` ${CLASES_DOS_PANELES.caja}` : ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
             {/* Cabecera: ← + título + subtítulo en pantalla completa; X en el
                 modal. Volver pide confirmación si hay datos escritos. */}
-            <div className={`flex items-center justify-between gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
+            <div className={`flex items-center justify-between gap-3 ${dosPaneles ? "px-0" : "px-5"} ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
               <div className="flex items-center gap-3 min-w-0">
                 {isPage && (
                   <button
@@ -765,7 +792,9 @@ export function CompraForm({
 
             <div
               className={
-                isPage
+                dosPaneles
+                  ? CLASES_DOS_PANELES.cuerpo
+                  : isPage
                   ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : isView
                     // Detalle: el modal se AJUSTA al contenido (sin
@@ -786,7 +815,9 @@ export function CompraForm({
                   el pie Cancelar/Guardar. */}
                <div
                 className={
-                  isPage
+                  dosPaneles
+                    ? CLASES_DOS_PANELES.formulario
+                    : isPage
                     ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
@@ -868,7 +899,7 @@ export function CompraForm({
                 <div
                   className={`grid gap-4 shrink-0 ${
                     isPage
-                      ? "grid-cols-1 sm:grid-cols-2"
+                      ? "grid-cols-1 sm:grid-cols-2 items-start"
                       : "grid-cols-1 md:grid-cols-3"
                   }`}
                 >
@@ -892,9 +923,27 @@ export function CompraForm({
                       />
                     )}
                     {!isView && (tocado.numeroFactura || facturaTocada || intentoGuardar) && errorNumeroFactura && (
-                      <p className={isPage ? "absolute left-0 top-full text-base text-red-500" : "text-base text-red-500 mt-1 ml-0.5"}>{errorNumeroFactura}</p>
+                      <p className="text-base text-red-500 mt-1 ml-0.5">{errorNumeroFactura}</p>
                     )}
                   </div>
+
+                  {!isView && isPage && (
+                      <div className="relative">
+                        <label className={labelCls}>
+                          Fecha de factura <span className="text-red-500">*</span>
+                        </label>
+                        <CalendarDropdown
+                          value={fechaFactura}
+                          onChange={(v) => setFechaFactura(v)}
+                          max={today}
+                          error={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
+                          onBlur={() => marcarTocado("fechaFactura")}
+                        />
+                        {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
+                          <p className="text-base text-red-500 mt-1 ml-0.5">{errorFechaFactura}</p>
+                        )}
+                      </div>
+                  )}
 
                   <div className="relative">
                     <label className={labelCls}>
@@ -972,25 +1021,9 @@ export function CompraForm({
                       {!isView && isPage && (
                     <>
                       <div className="relative">
-                        <label className={labelCls}>
-                          Fecha de factura <span className="text-red-500">*</span>
-                        </label>
-                        <CalendarDropdown
-                          value={fechaFactura}
-                          onChange={(v) => setFechaFactura(v)}
-                          max={today}
-                          error={!!((tocado.fechaFactura || intentoGuardar) && errorFechaFactura)}
-                          onBlur={() => marcarTocado("fechaFactura")}
-                        />
-                        {(tocado.fechaFactura || intentoGuardar) && errorFechaFactura && (
-                          <p className="absolute left-0 top-full text-base text-red-500">{errorFechaFactura}</p>
-                        )}
-                      </div>
-
-                      <div className="relative">
                         <label className={labelCls}>Estado</label>
                         {/* Badge "Recibido" alineado a la izquierda, centrado verticalmente a la altura del input */}
-                        <div className="h-10 flex items-center">
+                        <div className="h-[2.875rem] flex items-center">
                           <EstadoBadge e="Recibido" />
                         </div>
                       </div>
@@ -1248,31 +1281,14 @@ export function CompraForm({
                   botones. Separada de la izquierda por una línea vertical. */}
               <div
                 className={
-                  isPage
+                  dosPaneles
+                    ? CLASES_DOS_PANELES.lista
+                    : isPage
                     ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
                 }
               >
-                {/* Cabecera de la tabla: contador y, debajo, un recordatorio
-                    de la opción de precios elegida. */}
-                {isPage && !isView && (
-                  <div className="shrink-0">
-                    <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
-                      <p className="text-base leading-none font-bold uppercase tracking-widest text-muted-foreground">
-                        Ítems de la factura
-                      </p>
-                      {/* P14: el contador desglosa por tipo para que se vea
-                          de insumos y de cuántos productos se trata. */}
-                      <span className="text-base font-medium text-muted-foreground">
-                        {items.length} {items.length === 1 ? "ítem" : "ítems"}
-                        {nProductos > 0 &&
-                          ` · ${nInsumos} ${nInsumos === 1 ? "insumo" : "insumos"} · ${nProductos} ${
-                            nProductos === 1 ? "producto" : "productos"
-                          }`}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                {dosPaneles && <CabeceraLista titulo="Ítems de la factura" contador={contadorItems} />}
 
               {isView ? (
                 <div className="flex flex-col gap-3 shrink-0">
@@ -1414,46 +1430,40 @@ export function CompraForm({
                     </span>
                   </div>
                 </div>
+              ) : dosPaneles ? (
+                // La misma tabla compacta de «Hacer un pedido»: calcula con
+                // `calcularLineaIva`, igual que los totales que se guardan.
+                <InsumosSolicitadosTable
+                  items={itemsConUnidad}
+                  sinScrollX
+                  onEdit={(row) => {
+                    const original = items.find((i) => i.rowId === row.rowId);
+                    if (original) editarItem(original);
+                  }}
+                  onRemove={eliminarItem}
+                  rowEditando={editando}
+                  enPagina
+                  className="flex-1"
+                  subtotalLabel="Sin IVA"
+                  totalLabel="Total pagado"
+                  textoVacioPagina="Aún no has agregado ítems"
+                  piePanel={<div className="pn-pedido__botones flex flex-wrap gap-3">{botonesPagina}</div>}
+                />
               ) : (
-                // P14: tabla propia con la columna "Tipo": muestra insumos y
-                // productos con cantidad, monto e IVA, y suma LOS DOS con la
-                // misma fórmula (`calcularLineaIva`), así el total de la
-                // factura nunca se queda corto.
                 <TablaItemsFactura
-                  items={items.map((item) => ({
-                    ...item,
-                    unidadBase: item.unidadBase ?? insumos.find((i) => i.id === item.idInsumo)?.unidadMedida,
-                    pesoMedida: insumos.find((i) => i.id === item.idInsumo)?.pesoMedida ?? null,
-                    tamanoUnidad: tamanoDeFila(item),
-                  }))}
+                  items={itemsConUnidad}
                   onEdit={editarItem}
                   onRemove={eliminarItem}
-                  enPagina={isPage}
-                  ocultarTotal={isPage}
                   rowEditando={editando}
-                  className=""
                 />
               )}
               </div>
             </div>
 
-            {/* Pantalla completa: barra fija abajo con el total y las acciones. */}
-            {isPage && !isView && (
-              <div className="pn-barra-guardar">
-                <p className="pn-barra-guardar__total">
-                  <span>Total pagado</span>
-                  <strong>{fmtCOP(totalPagado)}</strong>
-                </p>
-                <div className="pn-barra-guardar__botones">
-                  <button onClick={salir} className="pn-boton pn-boton--normal">
-                    Cancelar
-                  </button>
-                  <button onClick={guardar} disabled={!botonGuardarOk} className="pn-boton pn-boton--principal">
-                    <Check className="w-4 h-4" />
-                    Guardar y sumar a la bodega
-                  </button>
-                </div>
-              </div>
+            {dosPaneles && (
+              <BarraTotalCelular etiqueta="Total pagado" total={fmtCOP(totalPagado)}>
+                {botonesPagina}
+              </BarraTotalCelular>
             )}
 
             {/* Footer del modal — solo en creación; en detalle se cierra con

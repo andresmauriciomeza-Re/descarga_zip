@@ -23,6 +23,16 @@ body:has([data-panel-texto-grande]) {
 .dark .panel-admin :focus-visible { outline-color: #fff; }
 
 .pn-contenido { padding: 1.75rem 2rem 3rem; }
+/* Pantallas de detalle: centradas y con el mismo ancho máximo. */
+.pn-detalle { width: 100%; max-width: 68.75rem; margin-inline: auto; }
+/* Detalle de empleado en escritorio: datos e historial a dos columnas, para
+   verlo sin scroll en 1366×768. */
+@media (min-width: 821px) {
+  .pn-detalle-empleado .pn-seccion { padding: 1rem 1.25rem; }
+  .pn-detalle-empleado .pn-seccion h2 { margin-bottom: 0.75rem; }
+  .pn-detalle-empleado :is(.pn-datos, .pn-permisos) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; }
+  .pn-detalle-empleado .pn-permisos__fila { min-height: 2.75rem; font-size: 1rem; }
+}
 
 /* ── Botón de acción ── */
 .pn-boton {
@@ -70,10 +80,11 @@ body:has([data-panel-texto-grande]) {
 /* ── Buscador y campos ── */
 .pn-etiqueta { display: block; font-size: 1.125rem; font-weight: 600; color: var(--texto); margin-bottom: 0.5rem; }
 .pn-buscador { position: relative; }
-.pn-buscador svg { position: absolute; left: 1.125rem; bottom: 1.1875rem; color: var(--gris-texto); pointer-events: none; }
-.pn-buscador input { width: 100%; height: 3.875rem; padding: 0 1.125rem 0 3.375rem; font-size: 1.1875rem; border: 2px solid var(--borde-campo); border-radius: 1rem; background: #fff; color: var(--texto); }
-.pn-campo input, .pn-campo select, .pn-campo textarea { width: 100%; height: 3.75rem; padding: 0 1rem; font-size: 1.25rem; border: 2px solid var(--borde-campo); border-radius: 0.875rem; background: #fff; color: var(--texto); }
-.pn-campo textarea { height: auto; min-height: 7.5rem; padding: 0.875rem 1rem; }
+/* Icono de 1.5rem centrado en el campo de 2.875rem: (2.875 - 1.5) / 2. */
+.pn-buscador svg { position: absolute; left: 0.875rem; bottom: 0.6875rem; color: var(--gris-texto); pointer-events: none; }
+.pn-buscador input { width: 100%; height: 2.875rem; padding: 0 0.875rem 0 2.875rem; font-size: 1rem; border: 2px solid var(--borde-campo); border-radius: 0.75rem; background: #fff; color: var(--texto); }
+.pn-campo input, .pn-campo select, .pn-campo textarea { width: 100%; height: 2.875rem; padding: 0 0.75rem; font-size: 1rem; border: 2px solid var(--borde-campo); border-radius: 0.75rem; background: #fff; color: var(--texto); }
+.pn-campo textarea { height: auto; min-height: 5.5rem; padding: 0.625rem 0.75rem; }
 .pn-campo--error input, .pn-campo--error select, .pn-campo--error textarea { border-color: var(--rojo); }
 .pn-campo__ayuda { font-size: 1rem; color: var(--gris-texto); margin: 0.375rem 0 0; }
 .pn-campo__error { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 1rem; font-weight: 600; color: var(--rojo-texto); margin: 0.375rem 0 0; }
@@ -84,7 +95,7 @@ body:has([data-panel-texto-grande]) {
 .pn-filtros__titulo { font-size: 1.125rem; font-weight: 600; color: var(--gris-texto); margin-right: 0.25rem; }
 .pn-chip, .pn-opcion { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; font: 600 1.125rem var(--font-texto); background: #fff; color: var(--texto); border: 2px solid var(--borde-campo); cursor: pointer; }
 .pn-chip { min-height: 3.125rem; padding: 0 1.375rem; border-radius: 62.4375rem; }
-.pn-opcion { min-height: 3.5rem; padding: 0 1.375rem; border-radius: 1rem; }
+.pn-opcion { min-height: 2.875rem; padding: 0 1rem; border-radius: 0.75rem; font-size: 1rem; }
 .pn-chip[aria-pressed="true"], .pn-opcion[aria-pressed="true"] { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
 .pn-opcion:disabled { opacity: .65; cursor: not-allowed; }
 .pn-opciones { display: flex; flex-wrap: wrap; gap: 0.625rem; }
@@ -105,7 +116,7 @@ body:has([data-panel-texto-grande]) {
 .pn-lineas-marco:has([class*="top-full"]) { z-index: 40; }
 .pn-lineas { display: grid; gap: 0.75rem 0.5rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .pn-lineas > * { min-width: 0; grid-column: 1 / -1; }
-.pn-lineas input, .pn-lineas button[role="combobox"], .pn-lineas [title="La medida la define el ítem del catálogo"] { height: 3.5rem; }
+.pn-lineas input, .pn-lineas button[role="combobox"], .pn-lineas [title="La medida la define el ítem del catálogo"] { height: 2.875rem; }
 @media (min-width: 641px) {
   .pn-lineas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pn-lineas > * { grid-column: auto; }
@@ -157,6 +168,64 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
   .pn-barra-guardar .pn-boton { flex: 1 1 0; min-width: 0; padding: 0 0.5rem; }
 }
 
+/* ── Hacer / cambiar un pedido: dos paneles ── */
+.pn-pedido__form { container-type: inline-size; }
+.pn-pedido__form > * { flex: none; }
+@media (min-width: 641px) {
+  .pn-pedido .pn-lineas { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .pn-pedido .pn-lineas > :is(.pn-c6, .pn-c9, .pn-c12) { grid-column: 1 / -1; }
+  .pn-pedido .pn-lineas > .pn-c3 { grid-column: span 3; }
+  .pn-pedido .pn-lineas > .pn-c4 { grid-column: span 2; }
+  .pn-pedido .pn-lineas > .pn-c4.pn-nueva-fila { grid-column: 1 / span 2; }
+  /* Si no caben en 3 columnas, van en 2. */
+  @container (max-width: 34rem) {
+    .pn-pedido .pn-lineas > .pn-c4 { grid-column: span 3; }
+    .pn-pedido .pn-lineas > .pn-c4.pn-nueva-fila { grid-column: 1 / span 3; }
+  }
+}
+@media (min-width: 821px) {
+  .pn-pedido .pn-tabla-compra td { font-size: 1rem; }
+  .pn-pedido .pn-tabla-compra .pn-boton { min-height: 2.25rem; padding: 0 0.5rem; border-radius: 0.625rem; }
+}
+/* Celular: cada ítem en una tarjeta baja (nombre y botones; debajo, los
+   datos en una fila) y el total con las acciones fijos abajo. */
+.pn-pedido__barra { display: none; }
+@media (max-width: 820px) {
+  .pn-pedido { padding-bottom: 0; }
+  .pn-pedido__barra { display: flex; margin-inline: -1rem; }
+  .pn-pedido :is(.pn-pedido__total, .pn-pedido__botones) { display: none; }
+  .pn-pedido .pn-tabla-compra tbody { padding: 0.5rem; gap: 0.5rem; }
+  .pn-pedido .pn-tabla-compra tr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.625rem; padding: 0.5rem; }
+  /* Salto de línea entre la fila del nombre y la de los datos. */
+  .pn-pedido .pn-tabla-compra tr::after { content: ""; order: 1; flex-basis: 100%; }
+  .pn-pedido .pn-tabla-compra td { padding: 0; font-size: 1rem; }
+  .pn-pedido .pn-tabla-compra td:first-child { flex: 1 1 0; }
+  .pn-pedido .pn-tabla-compra td:first-child > div { display: inline; margin-right: 0.375rem; }
+  .pn-pedido .pn-tabla-compra td:last-child:not(:first-child) { flex: none; }
+  .pn-pedido .pn-tabla-compra td[data-etiqueta] { order: 2; flex: 0 0 auto; align-self: flex-start; }
+  .pn-pedido .pn-tabla-compra td[data-etiqueta="Cantidad"] { flex: 1 1 4rem; min-width: 0; }
+  .pn-pedido .pn-tabla-compra td[data-etiqueta="Cantidad"] > span { display: inline; margin-right: 0.25rem; }
+  .pn-pedido .pn-tabla-compra td[data-etiqueta="IVA"] > span { padding-block: 0; }
+  .pn-pedido .pn-tabla-compra .pn-boton { min-height: 2.25rem; padding: 0 0.5rem; border-radius: 0.625rem; }
+}
+/* Teléfono: el nombre usa todo el ancho y los botones van debajo, a la derecha. */
+@media (max-width: 640px) {
+  .pn-pedido .pn-tabla-compra td:first-child { flex-basis: 100%; }
+  .pn-pedido .pn-tabla-compra td:last-child:not(:first-child) { order: 3; flex: 1 0 100%; }
+  .pn-pedido .pn-tabla-compra td:last-child > div { justify-content: flex-end; }
+}
+/* Lado a lado: la pantalla ocupa el alto libre; solo hacen scroll el
+   formulario o la tabla, nunca la página. */
+@media (min-width: 1200px) {
+  div:has(> main .pn-pedido) { height: 100dvh; }
+  main:has(.pn-pedido) { flex: 1 1 0; min-height: 0; }
+  .pn-pedido { height: 100%; display: flex; flex-direction: column; }
+  .pn-pedido > div { flex: 1; min-height: 0; }
+  .pn-pedido > div > div { display: flex; flex-direction: column; }
+  .pn-pedido__tabla { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  .pn-pedido__tabla th { position: sticky; top: 0; z-index: 1; background: var(--muted); }
+}
+
 /* ── Tarjeta fila ── */
 .pn-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; background: #fff; border: 2px solid var(--borde-suave); border-radius: 1.125rem; padding: 1.125rem 1.375rem; color: var(--texto); }
 .pn-fila--resaltada { border-width: 3px; padding: 1.0625rem 1.3125rem; }
@@ -190,7 +259,9 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 .pn-dialogo__caja strong { display: block; font-size: 1.1875rem; margin-bottom: 0.375rem; }
 .pn-dialogo__caja ul { margin: 0; padding-left: 1.375rem; }
 .pn-dialogo__botones { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
-.pn-dialogo__botones .pn-boton { flex: 1 1 13.75rem; min-height: 3.875rem; }
+.pn-dialogo__botones .pn-boton { flex: 1 1 13.75rem; }
+/* Botones de formularios, en proporción con los campos de 2.875rem. */
+:where(.pn-seccion, .pn-recuadro, .pn-modal, .pn-dialogo, .pn-barra-guardar, .pn-dialogo__botones) .pn-boton:where(:not(.pn-boton--grande)) { min-height: 2.875rem; padding-inline: 1.125rem; border-radius: 0.75rem; font-size: 1rem; }
 
 /* ── Formulario ── */
 .pn-seccion { background: #fff; border: 2px solid var(--borde-suave); border-radius: 1.375rem; padding: 1.5rem 1.625rem; color: var(--texto); }
@@ -213,9 +284,121 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 /* Sin aire de sobra al final del recuadro (no al final de cada grupo interno). */
 .pn-recuadro > .pn-seccion--plana:last-child, .pn-recuadro > div:last-child > .pn-seccion--plana:last-child { padding-bottom: 0; }
 .pn-recuadro .pn-datos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.pn-recuadro .pn-lectura { min-height: 3.75rem; }
 @media (max-width: 820px) { .pn-recuadro { padding: 1rem; } }
 @media (max-width: 640px) { .pn-recuadro .pn-datos { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── Formulario de proveedor (pantalla y diálogo de Compras) ── */
+.pn-prov { container-type: inline-size; }
+.pn-prov__columnas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem 1.5rem; align-items: start; }
+.pn-prov__columnas > p, .pn-prov__franja { grid-column: 1 / -1; }
+.pn-prov__seccion { container-type: inline-size; min-width: 0; }
+.pn-prov__seccion h2 { font: 700 1.25rem/1.3 var(--font-titulo); margin: 0 0 0.625rem; }
+.pn-prov .pn-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem 0.75rem; align-items: start; }
+.pn-prov .pn-grilla > * { min-width: 0; }
+.pn-prov button[role="combobox"] > span { min-width: 0; line-height: 1.15; overflow-wrap: anywhere; }
+@container (max-width: 22rem) { .pn-prov .pn-grilla { grid-template-columns: minmax(0, 1fr); } }
+.pn-prov .pn-etiqueta { font-size: 1rem; margin-bottom: 0.25rem; }
+.pn-prov :is(.pn-campo__ayuda, .pn-campo__error) { margin-top: 0.25rem; line-height: 1.3; overflow-wrap: anywhere; }
+.pn-prov__franja { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem 1.5rem; align-items: end; border-top: 1px solid var(--borde-suave); padding-top: 0.75rem; }
+.pn-prov__camara h2 { margin-bottom: 0.375rem; }
+@container (min-width: 40rem) {
+  .pn-prov__franja { grid-template-columns: minmax(0, 1fr) auto; }
+  .pn-prov__camara .pn-campo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0.75rem; align-items: center; }
+  .pn-prov__camara .pn-campo > :is(label, .pn-campo__error) { grid-column: 1 / -1; }
+}
+@container (min-width: 44rem) {
+  .pn-prov__columnas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pn-prov__columnas--empresa { grid-template-columns: minmax(0, 1fr); }
+}
+@container (min-width: 66rem) {
+  .pn-prov__columnas--empresa { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pn-prov__columnas > section + section { border-left: 1px solid var(--borde-suave); padding-left: 1.5rem; }
+  .pn-prov__franja > section { border: 0; padding: 0; }
+}
+
+/* Pantalla Agregar / Cambiar datos: recuadro ancho y cabecera baja. */
+.pn-contenido:has(> .pn-prov-pantalla) { padding-block: 0.75rem; }
+.pn-recuadro-marco.pn-prov-pantalla { max-width: 1600px; }
+.pn-prov-pantalla .pn-recuadro { padding: 1rem 1.25rem; }
+.pn-prov-pantalla .pn-encabezado { margin-bottom: 0.5rem; }
+.pn-prov-pantalla .pn-encabezado > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 1rem; }
+.pn-prov-pantalla .pn-encabezado h1 { font-size: 1.625rem; }
+.pn-prov-pantalla .pn-encabezado p { font-size: 1rem; margin: 0; }
+.pn-prov-tipo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding-block: 0.5rem; margin-bottom: 0.75rem; border-block: 1px solid var(--borde-suave); }
+.pn-prov-tipo h2 { font: 700 1.25rem/1.3 var(--font-titulo); margin: 0; }
+.pn-dialogo__botones.pn-prov-botones { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--borde-suave); }
+
+/* Escritorio: campos y botones más grandes, solo en este formulario (pantalla
+   y diálogo de Compras). En ventanas de menos de 768px de alto el diálogo no
+   cabría sin scroll y conserva los tamaños de antes. */
+@media (min-width: 821px) and (min-height: 768px) {
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) { --prov-alto: 3.5rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov :is(.pn-campo input, .pn-campo select, .pn-campo button[role="combobox"], .pn-lectura) { height: var(--prov-alto); min-height: var(--prov-alto); font-size: 1.125rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov .pn-campo input[type="file"] { padding-block: 0; line-height: var(--prov-alto); }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov input::placeholder { font-size: 1rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov .pn-etiqueta { font-size: 1.125rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov .pn-grilla { row-gap: 1rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov__columnas { row-gap: 1.25rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov__seccion h2 { margin-bottom: 0.875rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov__camara h2 { margin-bottom: 0.5rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-opcion { min-height: var(--prov-alto); padding-inline: 1.375rem; font-size: 1.125rem; }
+  .pn-prov-pantalla .pn-prov-botones .pn-boton,
+  .pn-prov-dialogo > div:last-child button { height: var(--prov-alto); min-height: var(--prov-alto); font-size: 1.125rem; }
+
+  /* Con errores a la vista se junta todo un poco para que siga sin scroll. */
+  :is(.pn-prov-pantalla, .pn-prov-dialogo):has(.pn-campo__error) .pn-campo__error { gap: 0.25rem; line-height: 1.15; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo):has(.pn-campo__error) .pn-campo__error svg { width: 1rem; height: 1rem; }
+}
+@media (min-width: 821px) and (min-height: 768px) and (max-height: 879px) {
+  :is(.pn-prov-pantalla, .pn-prov-dialogo):has(.pn-campo__error) .pn-prov .pn-grilla { row-gap: 0.625rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo):has(.pn-campo__error) .pn-prov__columnas { row-gap: 0.75rem; }
+  .pn-prov-pantalla:has(.pn-campo__error) .pn-prov-tipo { padding-block: 0.25rem; margin-bottom: 0.5rem; }
+  .pn-prov-pantalla:has(.pn-campo__error) .pn-prov-botones { margin-top: auto; padding-top: 0.5rem; }
+}
+/* Pantalla en ventanas bajas (portátil con las barras del navegador). */
+@media (min-width: 821px) and (max-height: 767px) {
+  .pn-prov-pantalla .pn-prov :is(.pn-campo input, .pn-campo select, .pn-campo button[role="combobox"], .pn-lectura) { height: 3.125rem; min-height: 3.125rem; }
+  .pn-prov-pantalla .pn-prov .pn-campo input[type="file"] { padding-block: 0; line-height: 3.125rem; }
+  .pn-prov-pantalla .pn-opcion,
+  .pn-prov-pantalla .pn-prov-botones .pn-boton { min-height: 3.125rem; }
+  .pn-prov-pantalla .pn-prov-tipo { padding-block: 0.25rem; margin-bottom: 0.5rem; }
+  .pn-prov-pantalla .pn-dialogo__botones.pn-prov-botones { padding-top: 0.5rem; }
+}
+/* Pantallas altas: más aire entre filas. */
+@media (min-width: 821px) and (min-height: 880px) {
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov .pn-grilla { row-gap: 1.75rem; }
+  :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov__seccion h2 { margin-bottom: 1.25rem; }
+}
+/* Columna angosta: «Nombre comercial (opcional)» ocupa dos líneas; la etiqueta
+   vecina toma el mismo alto para que los dos campos queden alineados. */
+@media (min-width: 821px) and (min-height: 768px) {
+  @container (max-width: 31rem) {
+    :is(.pn-prov-pantalla, .pn-prov-dialogo) .pn-prov__columnas--empresa > section:first-child .pn-grilla > :nth-child(-n+2) > label { display: block; min-height: 2lh; align-content: end; }
+  }
+}
+/* Pantalla: el recuadro llega hasta abajo; el espacio libre se reparte entre
+   las secciones y los botones quedan pegados al borde inferior. */
+@media (min-width: 821px) {
+  main:has(.pn-prov-pantalla) { flex: 1 0 auto; display: flex; flex-direction: column; }
+  main:has(.pn-prov-pantalla) > div { flex: 1 0 auto; height: auto; display: flex; flex-direction: column; }
+  .pn-contenido:has(> .pn-prov-pantalla),
+  .pn-recuadro-marco.pn-prov-pantalla,
+  .pn-prov-pantalla .pn-recuadro,
+  .pn-prov-pantalla .pn-recuadro > .grid,
+  .pn-prov-pantalla .pn-prov { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .pn-recuadro-marco.pn-prov-pantalla { width: 100%; }
+  .pn-prov-pantalla .pn-prov__columnas { flex: 1 0 auto; align-content: space-evenly; }
+  .pn-dialogo__botones.pn-prov-botones { margin-top: auto; }
+}
+/* Persona natural: las columnas empiezan arriba y el espacio libre queda sobre
+   los botones. */
+@media (min-width: 821px) {
+  .pn-prov-pantalla .pn-prov__columnas:not(.pn-prov__columnas--empresa) { align-content: start; }
+  .pn-prov-pantalla .pn-prov__columnas:not(.pn-prov__columnas--empresa) .pn-grilla { row-gap: 1.5rem; }
+}
+@media (min-width: 821px) and (min-height: 880px) {
+  .pn-prov-pantalla .pn-prov__columnas:not(.pn-prov__columnas--empresa) .pn-grilla { row-gap: 2.25rem; }
+}
 
 /* ── Datos y línea de tiempo ── */
 .pn-datos { display: grid; gap: 1rem 1.5rem; margin: 0; grid-template-columns: repeat(auto-fit, minmax(min(13.75rem, 100%), 1fr)); }
@@ -273,6 +456,16 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 .pn-header__nombre span:first-child { font-size: 1.125rem; font-weight: 600; }
 .pn-header__nombre span:last-child { font-size: 1rem; color: var(--gris-texto); }
 
+/* Ventana angosta con el menú abierto: una sola línea. Se oculta el rol bajo el
+   nombre y, si aún no cabe, el nombre se corta con puntos. */
+@media (min-width: 821px) and (max-width: 1100px) {
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__solo-escritorio { display: none; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__acciones { flex-wrap: nowrap; min-width: 0; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__acciones > :not(.pn-header__perfil) { flex: none; }
+  [class*="ml-[var(--ancho-menu)]"] :is(.pn-header__perfil, .pn-header__nombre) { min-width: 0; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__nombre span:first-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}
+
 /* ═══════════ Celular y tableta (≤ 820px) ═══════════ */
 .pn-tira { display: none; }
 @media (max-width: 820px) {
@@ -326,6 +519,58 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 .pn-modal--formulario { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(96vw, 56rem); max-height: 94dvh; }
 /* Alto fijo en escritorio: al crecer el contenido el modal no se mueve. */
 @media (min-width: 821px) { .pn-modal.pn-modal--alto-fijo { height: 94dvh; } }
+/* Modales a dos columnas. 1280px: con la letra base de 12px del panel, 80rem
+   serían solo 960px. En celular siguen a pantalla completa y en una columna. */
+.pn-dos-columnas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+.pn-columna { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.pn-miniatura { width: 8rem; height: 6rem; object-fit: cover; border-radius: 0.75rem; border: 2px solid var(--borde-suave); }
+.pn-modal--ancho { overflow-x: hidden; }
+.pn-modal--ancho .pn-seccion { padding: 1rem 1.25rem; min-width: 0; }
+.pn-modal--ancho .pn-seccion h2 { font-size: 1.25rem; margin-bottom: 0.625rem; }
+.pn-modal--ancho .pn-seccion__ayuda { font-size: 1rem; margin: -0.375rem 0 0.625rem; }
+.pn-modal--ancho .pn-seccion > .grid { gap: 0.75rem; }
+.pn-modal--ancho .pn-grilla { gap: 0.75rem 1rem; }
+.pn-modal--ancho .pn-campo textarea { min-height: 4rem; }
+.pn-modal--ancho .pn-chip { min-height: 2.5rem; padding: 0 0.875rem; font-size: 1rem; }
+.pn-modal--ancho .pn-dibujos { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.25rem, 1fr)); gap: 0.5rem; max-height: 14rem; overflow-y: auto; padding: 0.25rem; }
+.pn-modal--ancho .pn-dibujo { width: 100%; height: 3.25rem; font-size: 1.75rem; border-radius: 0.75rem; }
+@media (min-width: 821px) {
+  .pn-modal.pn-modal--ancho { width: min(96vw, 1280px); padding: 1rem 1.25rem; }
+  .pn-modal--ancho .pn-modal__cab { margin-bottom: 0.75rem; }
+  .pn-modal--ancho .pn-modal__titulo { font-size: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .pn-modal--ancho .pn-dos-columnas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Receta: el modal no hace scroll; lo hace la lista de insumos (y, si la
+     ventana es muy baja, la columna de datos). */
+  .pn-modal.pn-modal--receta { display: flex; flex-direction: column; }
+  .pn-modal--receta .pn-modal__cab { flex: none; }
+  .pn-modal--receta .pn-modal__cuerpo { display: flex; flex-direction: column; min-height: 0; }
+  .pn-modal--receta .pn-dos-columnas { min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .pn-modal--receta .pn-columna { min-height: 0; overflow-y: auto; }
+  .pn-modal--receta .pn-columna > * { flex: none; }
+  .pn-modal--receta .pn-columna--receta > .pn-seccion { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pn-modal--receta .pn-ficha { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .pn-modal--receta .pn-ficha > div { flex: 1 1 auto; min-height: 0; }
+}
+/* Ventanas bajas (portátil con las barras del navegador): menos aire. */
+@media (min-width: 1024px) and (max-height: 700px) {
+  .pn-modal--ancho .pn-seccion { padding: 0.625rem 1rem; }
+  .pn-modal--ancho .pn-seccion h2 { margin-bottom: 0.375rem; }
+  .pn-modal--ancho .pn-seccion > .grid, .pn-modal--ancho .pn-grilla { gap: 0.375rem 1rem; }
+  .pn-modal--ancho .pn-campo textarea { height: 3.5rem; min-height: 3.5rem; padding-block: 0.25rem; }
+  .pn-modal--ancho .pn-etiqueta { margin-bottom: 0.25rem; }
+  .pn-modal--ancho .pn-campo__ayuda { margin-top: 0.125rem; line-height: 1.25; }
+}
+/* Celular: la receta pasa de tabla a filas apiladas, sin scroll lateral. */
+@media (max-width: 640px) {
+  .pn-modal--receta .pn-ficha :is(table, tbody) { display: block; }
+  .pn-modal--receta .pn-ficha thead { display: none; }
+  .pn-modal--receta .pn-ficha tr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; padding: 0.5rem; }
+  .pn-modal--receta .pn-ficha td { display: block; min-width: 0; padding: 0; }
+  .pn-modal--receta .pn-ficha td:first-child, .pn-modal--receta .pn-ficha td:last-child { flex: 1 0 100%; }
+  .pn-modal--receta .pn-ficha td:last-child > * { flex-wrap: wrap; }
+}
 .pn-modal__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1rem; margin-bottom: 1.125rem; }
 .pn-modal__titulo { font: 700 1.875rem/1.2 var(--font-titulo); margin: 0; }
 .pn-cargo-form { display: grid; grid-template-columns: minmax(0, 1fr) 23.75rem; gap: 1.375rem; align-items: start; }
@@ -364,6 +609,122 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
   .pn-permisos__fila { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ═══════════ Registrar venta del local ═══════════
+   1440px: 90rem a letra normal (con la base de 12px del panel serían 1080px). */
+.pn-venta__cuerpo, .pn-venta__col { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.pn-venta__nuevo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); gap: 0.75rem; align-items: start; }
+.pn-venta__catalogo-caja { display: flex; flex-direction: column; }
+.pn-venta__pie { display: flex; flex-direction: column; gap: 0.5rem; }
+.pn-venta__pie .pn-dialogo__botones { margin-top: 0; }
+/* Apilado: el catálogo no pasa de media pantalla, para llegar a lo que lleva. */
+@media (max-width: 1023px) {
+  .pn-venta__catalogo.pn-seccion { padding: 0.5rem; }
+  .pn-venta__grilla { max-height: 55dvh; overflow-y: auto; overflow-x: hidden; }
+  /* Total y acciones fijos abajo. Las columnas se disuelven para que la barra
+     se pegue al modal completo; el relleno de enfoque evita que tape campos. */
+  .pn-modal.pn-venta { padding-bottom: 0; scroll-padding-bottom: 10rem; }
+  .pn-venta__col { display: contents; }
+  .pn-venta__pie { position: sticky; bottom: 0; z-index: 20; margin-inline: -0.875rem; padding: 0.625rem 0.875rem 0.75rem; background: var(--crema); border-top: 2px solid var(--borde-suave); }
+  .pn-venta__pie .pn-dialogo__botones { flex-wrap: nowrap; }
+  .pn-venta__pie .pn-dialogo__botones .pn-boton { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; }
+}
+@media (min-width: 821px) {
+  .pn-modal.pn-modal--ancho.pn-venta { width: min(96vw, 1440px); }
+}
+/* Dos columnas: el modal no hace scroll; lo hacen el catálogo y la lista de
+   elegidos, así agregar productos no mueve el catálogo. */
+@media (min-width: 1024px) {
+  .pn-modal.pn-venta { display: flex; flex-direction: column; overflow: hidden; }
+  .pn-venta .pn-modal__cab { flex: none; }
+  .pn-venta__cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-rows: minmax(0, 1fr); }
+  .pn-venta__col { min-height: 0; overflow-y: auto; }
+  .pn-venta__col > * { flex: none; }
+  .pn-venta__col > .pn-venta__catalogo { flex: 1 1 14rem; min-height: 14rem; display: flex; flex-direction: column; }
+  .pn-venta__catalogo-caja { flex: 1; min-height: 0; }
+  .pn-venta__grilla { flex: 1; min-height: 0; overflow-y: auto; }
+  .pn-venta__col > .pn-venta__lleva { flex: 1 1 9rem; min-height: 9rem; display: flex; flex-direction: column; }
+  .pn-venta__lista { flex: 1; min-height: 0; overflow-y: auto; }
+  .pn-venta__pie { position: sticky; bottom: 0; background: var(--crema); }
+}
+
+/* ═══════════ Cambiar producto ═══════════
+   Las dos columnas dependen del ancho que queda (no del de la ventana): si no
+   caben, se apilan y hace scroll el conjunto. */
+.pn-prod { container: prod / inline-size; }
+.pn-prod .pn-precios { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
+.pn-prod .pn-precios > * { grid-column: auto; min-width: 0; }
+.pn-prod .pn-precios > :first-child { grid-column: 1 / -1; }
+.pn-prod .truncate { white-space: normal; }
+.pn-prod .pn-receta-alta { flex-wrap: wrap; }
+.pn-prod .pn-receta-alta > :first-child { flex: 1 1 12rem; min-width: 0; }
+@container prod (width < 80rem) {
+  .pn-prod__cols { flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+  .pn-prod__cols > .pn-prod__col { flex: none; width: 100%; min-width: 0; min-height: auto; }
+  .pn-prod__cols > .pn-prod__col > * { flex: none; overflow: visible; min-height: auto; }
+  .pn-prod__cols > .w-0 { display: none; }
+}
+@container prod (width >= 80rem) {
+  .pn-prod__cols > .pn-prod__col { flex: 0 0 50%; min-width: 0; }
+  .pn-prod__cols > .pn-prod__col.flex-1 { flex: 1 1 0; }
+}
+@container prod (max-width: 40rem) {
+  .pn-prod__cols table, .pn-prod__cols tbody { display: block; }
+  .pn-prod__cols thead { display: none; }
+  .pn-prod__cols tr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; padding: 0.5rem; }
+  .pn-prod__cols td { display: block; min-width: 0; padding: 0; }
+  .pn-prod__cols td:first-child, .pn-prod__cols td:last-child { flex: 1 0 100%; }
+  .pn-prod__cols td:last-child > * { flex-wrap: wrap; }
+}
+
+/* ═══════════ Ver la orden de producción ═══════════ */
+.pn-orden__cuerpo { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 0.75rem 1.25rem; }
+.pn-orden__col { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+.pn-orden__col > * { flex: none; }
+.pn-orden__col > .pn-pasos { padding: 0.5rem 0.875rem; }
+.pn-orden__fechas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); gap: 0.5rem 1rem; }
+.pn-orden table :is(th, td) { padding: 0.375rem 0.75rem; }
+.pn-orden .pn-pill { white-space: nowrap; }
+.pn-orden .pn-insumos__fila { grid-template-columns: minmax(0, 1fr) 6rem 6rem 11rem; }
+.pn-orden .pn-insumos__fila > :first-child { grid-column: auto; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .pn-orden .pn-insumos__fila { grid-template-columns: repeat(3, minmax(0, auto)); }
+  .pn-orden .pn-insumos__fila > :first-child { grid-column: 1 / -1; }
+  .pn-orden .pn-insumos__cab > :first-child { display: none; }
+}
+.pn-orden__extras > summary { width: 100%; list-style: none; }
+.pn-orden__extras > summary::after { content: "▾"; }
+.pn-orden__extras[open] > summary::after { content: "▴"; }
+.pn-orden__extras > :not(summary) { margin-top: 0.625rem; }
+/* Al desplegarlos en una preparación, ocupan el lugar de la tabla. */
+.pn-orden__col:has(> .pn-orden__extras[open]) > .pn-orden__insumos { display: none; }
+/* Dos columnas: el modal no hace scroll; la lista de insumos sí, si es larga. */
+@media (min-width: 1024px) {
+  .pn-orden__cuerpo { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  .pn-orden__col { min-height: 0; overflow-y: auto; }
+  .pn-orden__col > .pn-orden__insumos { flex: 1 1 11rem; min-height: 9rem; overflow-y: auto; }
+  .pn-orden .pn-insumos__tabla { overflow: visible; }
+  .pn-orden .pn-insumos__cab { position: sticky; top: 0; z-index: 1; background: var(--muted); }
+}
+
+/* ═══════════ Listados de órdenes de producción ═══════════ */
+.pn-ordenes .pn-fila { gap: 0.5rem 1rem; padding: 0.625rem 0.875rem; }
+.pn-ordenes .pn-fila--resaltada { padding: 0.5625rem 0.8125rem; }
+.pn-ordenes .pn-fila__id { flex: 1 1 16rem; }
+.pn-ordenes .pn-fila__nombre { font-size: 1.125rem; }
+.pn-ordenes .pn-fila__detalle { font-size: 1rem; }
+.pn-ordenes .pn-fila__dato { min-width: 0; flex: 0 1 11rem; }
+.pn-ordenes .pn-fila__dato dd { font-size: 1rem; }
+.pn-ordenes .pn-fila__dato + div { flex: 0 1 14rem; }
+.pn-ordenes .pn-pill { white-space: nowrap; }
+.pn-ordenes .pn-fila__acciones { flex-direction: row; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.pn-ordenes .pn-boton { min-height: 2.75rem; padding: 0 0.875rem; font-size: 1rem; width: auto; }
+@media (max-width: 820px) {
+  .pn-ordenes .pn-fila__id { flex-basis: 100%; }
+  .pn-ordenes .pn-fila__dato, .pn-ordenes .pn-fila__dato + div { flex: 1 1 10rem; }
+  .pn-ordenes .pn-fila__acciones { justify-content: flex-start; }
+  .pn-ordenes .pn-fila__acciones .pn-boton { width: auto; flex: 1 1 auto; }
+}
+
 /* ═══════════ Insumos ═══════════ */
 .pn-fila__centro { flex: 2 1 18.75rem; min-width: 0; }
 .pn-stock__nums { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 0.75rem; font-size: 1.125rem; font-weight: 600; margin-bottom: 0.375rem; }
@@ -374,7 +735,7 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 /* Editor de recetas (ficha técnica) con letra y campos grandes */
 .pn-ficha .text-xs, .pn-ficha .text-\[0\.6875rem\], .pn-ficha .text-\[0\.625rem\] { font-size: 1rem !important; }
 .pn-ficha .text-sm { font-size: 1.125rem !important; }
-.pn-ficha input:not([type="checkbox"]), .pn-ficha select { min-height: 3.5rem; font-size: 1.125rem !important; border: 2px solid var(--borde-campo); border-radius: 0.875rem; background: #fff; }
+.pn-ficha input:not([type="checkbox"]), .pn-ficha select { min-height: 2.875rem; font-size: 1rem !important; border: 2px solid var(--borde-campo); border-radius: 0.75rem; background: #fff; }
 .pn-ficha table { font-size: 1.125rem; }
 .pn-ficha table td, .pn-ficha table th { padding-top: 0.625rem; padding-bottom: 0.625rem; }
 .pn-ficha button { font-size: 1.0625rem; }
@@ -382,9 +743,9 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 .pn-ficha .pn-cambiar { border: 2px solid #1a1a1a; color: var(--texto); border-radius: 0.75rem; padding: 0 0.875rem; min-height: 2.875rem; font-weight: 600; background: #fff; display: inline-flex; align-items: center; gap: 0.375rem; }
 
 /* ═══════════ Proveedores / formularios compartidos ═══════════ */
-.pn-lectura { display: flex; align-items: center; min-height: 3.75rem; padding: 0 1rem; font-size: 1.25rem; background: var(--gris-suave); border: 2px solid var(--borde-suave); border-radius: 0.875rem; color: var(--gris-texto); }
-.pn-campo button[role="combobox"] { min-height: 3.75rem; font-size: 1.25rem; border: 2px solid var(--borde-campo); border-radius: 0.875rem; background: #fff; color: var(--texto); padding: 0 1rem; }
-.pn-campo input[type="file"] { height: auto; min-height: 3.75rem; padding: 0.5rem 0.75rem; font-size: 1.125rem; }
+.pn-lectura { display: flex; align-items: center; min-height: 2.875rem; padding: 0 0.75rem; font-size: 1rem; background: var(--gris-suave); border: 2px solid var(--borde-suave); border-radius: 0.75rem; color: var(--gris-texto); }
+.pn-campo button[role="combobox"] { min-height: 2.875rem; font-size: 1rem; border: 2px solid var(--borde-campo); border-radius: 0.75rem; background: #fff; color: var(--texto); padding: 0 0.75rem; }
+.pn-campo input[type="file"] { height: auto; min-height: 2.875rem; padding: 0.375rem 0.75rem; font-size: 1rem; }
 .pn-prov-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(26.25rem, 100%), 1fr)); }
 .pn-tarjeta { display: flex; flex-direction: column; gap: 0.875rem; background: #fff; border: 2px solid var(--borde-suave); border-radius: 1.25rem; padding: 1.25rem 1.375rem; color: var(--texto); }
 .pn-tarjeta__nombre { font: 700 1.4375rem/1.25 var(--font-titulo); margin: 0; overflow-wrap: anywhere; }

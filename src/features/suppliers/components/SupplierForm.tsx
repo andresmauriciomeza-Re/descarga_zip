@@ -28,24 +28,21 @@ import {
 // orden exacto de la especificación:
 //   · Persona Natural → Tipo de documento, Número de documento, Nombre
 //     completo, Teléfono, Email, Dirección y Estado. SIN NIT y SIN DV.
-//   · Persona Jurídica → secciones APILADAS una debajo de la otra (Representante
-//     legal, Razón social, Contacto comercial y Cámara de Comercio), cada una
-//     con DOS inputs por fila.
+//   · Persona Jurídica → Datos de la empresa, Representante legal y Contacto
+//     comercial en columnas; Cámara de Comercio y Estado en una franja abajo.
 // Como los tres módulos renderizan ESTE componente, el cambio se propaga solo.
 //
 // Estilo: títulos Montserrat (los de pantalla), textos/labels e inputs Poppins
 // 14px (`labelCls` + `text-sm`), fondo claro por tokens y SIN cards con borde:
-// las secciones se separan con una línea divisoria (`seccionCls`), no con caja.
+// las secciones se separan con una línea divisoria (`.pn-prov` en panel.css).
 
-// Layout compacto (tarea "sin scroll"): inputs de ~36px (py-2), labels con
-// menos margen y rejillas de 2 columnas iguales desde 768px (`md:`).
+// El alto de los campos lo fija el panel (.pn-campo en panel.css).
 const inputCls =
-  "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2 min-h-[2.875rem] bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 const lecturaCls = "pn-lectura";
 
-/** Rejilla de cada bloque: 2 columnas del mismo ancho en >= 768px y 1 en
-    móvil. Con cantidad impar, el último campo queda solo a la izquierda. */
+/** Rejilla de cada sección: 2 campos por fila cuando caben. */
 const gridCls = "pn-grilla";
 
 /** Label de cada campo: 14px (Poppins heredado del body). */
@@ -104,27 +101,21 @@ function Campo({
 }
 
 /**
- * Sección del formulario: título en versalitas con una LÍNEA divisoria debajo
- * (el estilo pedido es "sin cards con borde, solo líneas divisorias").
+ * Sección (columna) del formulario con su título.
  * Vive fuera del componente para que React no remonte los inputs en cada render.
  */
 function Bloque({
   titulo,
   children,
   className = "",
-  plano = false,
 }: {
   titulo: ReactNode;
-  /** Sin tarjeta propia: subtítulo + línea divisoria. */
-  plano?: boolean;
-  /** Ya no se usa (las secciones llevan número, no ícono); se acepta por compatibilidad. */
-  icono?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`pn-seccion ${plano ? "pn-seccion--plana" : ""} ${className}`}>
-      <h2 style={{ marginBottom: "1rem" }}>{titulo}</h2>
+    <section className={`pn-prov__seccion ${className}`}>
+      <h2>{titulo}</h2>
       {children}
     </section>
   );
@@ -157,6 +148,7 @@ function SelectCampo({
   etiquetas,
   ariaLabel,
   className = "",
+  autoFocus = false,
 }: {
   form: ProveedorFormApi;
   label: ReactNode;
@@ -177,6 +169,8 @@ function SelectCampo({
    */
   ariaLabel?: string;
   className?: string;
+  /** Recibe el cursor al aparecer. */
+  autoFocus?: boolean;
 }) {
   const etiquetaDe = (op: string) => (etiquetas ? etiquetas(op) : op);
 
@@ -191,6 +185,7 @@ function SelectCampo({
       >
         <RadixSelect.Trigger
           aria-label={ariaLabel}
+          autoFocus={autoFocus}
           className={`${inputCls} flex w-full cursor-pointer items-center justify-between gap-2 text-left transition-colors ${form.campoCls(campo)}`}
         >
           <RadixSelect.Value placeholder={vacio} />
@@ -232,12 +227,8 @@ export function ProveedorFormCampos({
   form,
   autoFocusNombre = true,
   nitLectura,
-  plano = false,
 }: {
   form: ProveedorFormApi;
-  /** Dentro del recuadro único del módulo Proveedores: secciones sin tarjeta
-   *  y grilla fija de 2 columnas. */
-  plano?: boolean;
   autoFocusNombre?: boolean;
   /**
    * Modo edición del módulo Proveedores: si se pasa, el NIT se pinta como
@@ -307,16 +298,15 @@ export function ProveedorFormCampos({
   // En edición no hay input de NIT (queda congelado): el módulo no permite
   // modificarlo después de creado el proveedor.
   const pideNit = nitLectura === undefined;
-  const grilla = plano ? `${gridCls} pn-grilla--dos` : gridCls;
 
   return (
-    // CONTENEDOR CENTRADO (max-w-4xl, mx-auto): secciones apiladas con barra de
-    // título (ícono + nombre) y rejilla de 2 columnas iguales desde 768px
-    // (`md:grid-cols-2`); en móvil, 1 columna.
+    // Columnas lado a lado cuando el recuadro es ancho; si no, apiladas. El orden
+    // del DOM (y del Tab) va sección por sección.
     //
     // El selector "Tipo de persona" vive en el ENCABEZADO de cada pantalla/modal
     // con `TipoPersonaSelector` (misma fila del título).
-    <div className={plano ? "grid" : "grid gap-5 mx-auto max-w-4xl"}>
+    <div className="pn-prov">
+    <div className={`pn-prov__columnas${esJuridica ? " pn-prov__columnas--empresa" : ""}`}>
       {!hayTipo && (
         <p className={avisoCls}>
           Escoge arriba si es empresa o persona natural para ver las preguntas.
@@ -329,8 +319,8 @@ export function ProveedorFormCampos({
               el mismo ancho que los demás (así lo pinta el grid). ─────────── */}
           {esNatural && (
             <>
-            <Bloque plano={plano} titulo="2 · Datos de la persona">
-              <div className={grilla}>
+            <Bloque titulo="2 · Datos de la persona">
+              <div className={gridCls}>
                 {pideNit ? (
                   <>
                     {/* 1. Tipo de documento */}
@@ -343,6 +333,7 @@ export function ProveedorFormCampos({
                       etiquetas={etiquetaTipoDocumento}
                       vacio="Elegir documento"
                       ariaLabel="Tipo de documento"
+                      autoFocus={autoFocusNombre}
                     />
                     {/* 2. Número de documento */}
                     <Campo form={form} label={<>Número de documento {req}</>} campo="numeroDocumento">
@@ -388,7 +379,6 @@ export function ProveedorFormCampos({
                       onChange={alEscribir("nombreCompleto", soloLetras)}
                       onBlur={alTocar("nombreCompleto")}
                       placeholder="Nombre y apellidos"
-                      autoFocus={autoFocusNombre}
                       className={`${inputCls} transition-colors ${form.campoCls("nombreCompleto")}`}
                     />
                   </Campo>
@@ -403,8 +393,8 @@ export function ProveedorFormCampos({
                 )}
               </div>
             </Bloque>
-            <Bloque plano={plano} titulo="3 · ¿Con quién hablamos para pedir?">
-              <div className={grilla}>
+            <Bloque titulo="3 · ¿Con quién hablamos para pedir?">
+              <div className={gridCls}>
                 {/* 4. Teléfono */}
                 <Campo form={form} label={<>Teléfono {req}</>} campo="telefono">
                   <input
@@ -461,8 +451,8 @@ export function ProveedorFormCampos({
           {esJuridica && (
             <>
                 {/* Sección 2 — Razón social */}
-                <Bloque plano={plano} titulo="2 · Datos de la empresa">
-                  <div className={grilla}>
+                <Bloque titulo="2 · Datos de la empresa">
+                  <div className={gridCls}>
                     {pideNit ? (
                       <Campo form={form} label={<>Nombre o razón social {req}</>} campo="razonSocial">
                         <input
@@ -470,6 +460,7 @@ export function ProveedorFormCampos({
                           onChange={alEscribir("razonSocial", (x) => x)}
                           onBlur={alTocar("razonSocial")}
                           placeholder="Ej: Quesos del Norte S.A.S."
+                          autoFocus={autoFocusNombre}
                           className={`${inputCls} transition-colors ${form.campoCls("razonSocial")}`}
                         />
                       </Campo>
@@ -487,7 +478,7 @@ export function ProveedorFormCampos({
                         value={v.nombreComercial ?? ""}
                         onChange={alEscribir("nombreComercial", (x) => x)}
                         onBlur={alTocar("nombreComercial")}
-                        placeholder="Nombre con el que te conocen"
+                        placeholder="Como lo conocen"
                         className={`${inputCls} transition-colors ${form.campoCls("nombreComercial")}`}
                       />
                     </Campo>
@@ -499,13 +490,14 @@ export function ProveedorFormCampos({
                           value={v.nit}
                           onChange={alEscribir("nit", filtrarNit)}
                           onBlur={alTocar("nit")}
-                          placeholder="Ej: 9001234561 (sin el número de verificación)"
+                          placeholder="Ej: 9001234561"
                           inputMode="numeric"
                           // Sin maxLength: truncaría un NIT pegado con formato
                           // ("900.123.456-1" → "900.123.45") ANTES de poder
                           // quitarle los signos. El tope de 10 lo aplica filtrarNit.
                           className={`${inputCls} transition-colors ${form.campoCls("nit")}`}
                         />
+                        <p className={ayudaCls}>Sin el número de verificación</p>
                       </Campo>
                     ) : (
                       nitLectura !== undefined && nitLectura.trim() !== "" && (
@@ -526,15 +518,15 @@ export function ProveedorFormCampos({
                       campo="tipoSociedad"
                       valor={v.tipoSociedad ?? ""}
                       opciones={TIPOS_SOCIEDAD}
-                      vacio="Selecciona el tipo de sociedad"
+                      vacio="Elige el tipo"
                       ariaLabel="Tipo de sociedad"
                     />
                   </div>
                 </Bloque>
 
                 {/* Sección 1 — Representante legal */}
-                <Bloque plano={plano} titulo="3 · Representante legal">
-                  <div className={grilla}>
+                <Bloque titulo="3 · Representante legal">
+                  <div className={gridCls}>
                     <SelectCampo
                       form={form}
                       label={<>Tipo de documento {req}</>}
@@ -564,7 +556,6 @@ export function ProveedorFormCampos({
                         onChange={alEscribir("repLegalNombreCompleto", soloLetras)}
                         onBlur={alTocar("repLegalNombreCompleto")}
                         placeholder="Nombre y apellidos"
-                        autoFocus={autoFocusNombre}
                         className={`${inputCls} transition-colors ${form.campoCls("repLegalNombreCompleto")}`}
                       />
                     </Campo>
@@ -586,7 +577,7 @@ export function ProveedorFormCampos({
                         value={v.repLegalEmail ?? ""}
                         onChange={alEscribir("repLegalEmail", (x) => x)}
                         onBlur={alTocar("repLegalEmail")}
-                        placeholder="representante@proveedor.co"
+                        placeholder="nombre@proveedor.co"
                         className={`${inputCls} transition-colors ${form.campoCls("repLegalEmail")}`}
                       />
                     </Campo>
@@ -594,8 +585,8 @@ export function ProveedorFormCampos({
                 </Bloque>
 
                 {/* Sección 3 — Contacto comercial */}
-                <Bloque plano={plano} titulo="4 · ¿Con quién hablamos para pedir?">
-                  <div className={grilla}>
+                <Bloque titulo="4 · ¿Con quién hablamos para pedir?">
+                  <div className={gridCls}>
                     <Campo form={form} label={<>Teléfono celular {req}</>} campo="contactoTelefono">
                       <input
                         type="tel"
@@ -651,9 +642,10 @@ export function ProveedorFormCampos({
                   </div>
                 </Bloque>
 
+              <div className="pn-prov__franja">
               {/* Sección 4 — Cámara de Comercio */}
-              <Bloque plano={plano} titulo="5 · Cámara de Comercio">
-                <div className={grilla}>
+              <Bloque titulo="5 · Cámara de Comercio" className="pn-prov__camara">
+                <div>
                   <Campo
                     form={form}
                     label={<>Archivo de la Cámara de Comercio <span className="font-normal">(opcional)</span></>}
@@ -664,9 +656,9 @@ export function ProveedorFormCampos({
                       accept="application/pdf,image/jpeg,image/png,image/webp"
                       onChange={alAdjuntar}
                       disabled={subiendo}
-                      className={`${inputCls} file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-muted file:text-base file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
+                      className={`${inputCls} file:mr-3 file:py-0 file:px-4 file:rounded-lg file:border-0 file:bg-muted file:text-base file:font-semibold file:text-foreground cursor-pointer ${form.campoCls("camaraComercioArchivo")} ${subiendo ? "opacity-50 cursor-not-allowed" : ""}`}
                     />
-                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                    <div className="flex items-center justify-between gap-2 min-w-0">
                       <span className="text-base text-muted-foreground truncate" title={v.camaraComercioNombre || ""}>
                         {subiendo ? "Subiendo..." : (v.camaraComercioNombre || "PDF o imagen (JPG, PNG, WEBP) hasta 5 MB")}
                       </span>
@@ -685,9 +677,8 @@ export function ProveedorFormCampos({
                 </div>
               </Bloque>
 
-              {/* Estado: último elemento del formulario en fila propia sin barra de título */}
-              <div className={plano ? `${grilla} pn-seccion--plana pn-seccion` : gridCls}>
-                <div>
+              {/* Estado: último elemento del formulario, sin barra de título */}
+              <div>
                   <p className={labelCls}>¿El proveedor está activo?</p>
                   <OpcionesBotones
                     etiqueta="Estado del proveedor"
@@ -695,10 +686,11 @@ export function ProveedorFormCampos({
                     onChange={(nuevoEstado) => form.setCampo("estado", nuevoEstado as "activo" | "inactivo")}
                     opciones={OPCIONES_ESTADO}
                   />
-                </div>
+              </div>
               </div>
             </>
           )}
+    </div>
     </div>
   );
 }

@@ -49,6 +49,7 @@ export function GestionEmpleadosScreen({
   const [sortBy,      setSortBy]    = useState("id");
   const [page,        setPage]      = useState(1);
   const [detailItem,  setDetailItem] = useState<Empleado | null>(null);
+  const [verTodoHistorial, setVerTodoHistorial] = useState(false);
   const [editItem,    setEditItem]  = useState<Empleado | null>(null);
   const [showCreate,  setShowCreate] = useState(false);
 
@@ -497,7 +498,7 @@ export function GestionEmpleadosScreen({
 
   /** Botones de una persona según la regla de siempre. */
   const botonesEmpleado = (e: Empleado) => {
-    const verDatos = <BotonAccion key="ver" variante="normal" onClick={() => setDetailItem(e)}>Ver datos</BotonAccion>;
+    const verDatos = <BotonAccion key="ver" variante="normal" onClick={() => { setVerTodoHistorial(false); setDetailItem(e); }}>Ver datos</BotonAccion>;
     if (invitacionesPendientes.has(e.numeroDocumento)) {
       return (
         <>
@@ -796,7 +797,7 @@ export function GestionEmpleadosScreen({
     const d = detailItem;
     const anteriores = detalleHistorial.slice(1);
     return (
-      <div className="pn-contenido" style={{ maxWidth: "59.375rem" }}>
+      <div className="pn-contenido pn-detalle">
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
@@ -810,7 +811,7 @@ export function GestionEmpleadosScreen({
             <p className="pn-seccion__ayuda" style={{ margin: "0.375rem 0 0" }}>{cargoTexto(d.rolIds)} · {contratoTexto(d).toLowerCase()}</p>
           </div>
         </div>
-        <div className="grid gap-5 mt-6">
+        <div className="pn-detalle-empleado grid gap-4 mt-4 lg:grid-cols-2">
           <SeccionFormulario titulo="Sus datos">
             <DatosDetalle datos={[
               { etiqueta: "Documento", valor: documentoLegible(d.tipoDocumento, d.numeroDocumento) },
@@ -829,21 +830,33 @@ export function GestionEmpleadosScreen({
               { etiqueta: "Termina", valor: d.fechaFinal ? fechaLarga(d.fechaFinal) : "Sin fecha de fin" },
             ]} />
           </SeccionFormulario>
+          <div className="lg:col-span-2">
           <SeccionFormulario titulo="Contratos anteriores">
             {anteriores.length === 0 ? (
               <p className="pn-seccion__ayuda">Todavía no tiene contratos anteriores.</p>
             ) : (
               <div className="pn-permisos">
-                {anteriores.map(c => (
+                {(verTodoHistorial ? anteriores : anteriores.slice(0, 3)).map(c => (
                   <div key={c.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,2fr)" }}>
                     <strong>{cargoTexto(c.rolIds)}</strong>
                     <span>{fechaLarga(c.fechaInicio)} → {c.fechaFinal ? fechaLarga(c.fechaFinal) : "sin fecha de fin"}</span>
                   </div>
                 ))}
+                {anteriores.length > 3 && (
+                  <button
+                    type="button"
+                    className="pn-boton pn-boton--normal justify-self-start self-center"
+                    aria-expanded={verTodoHistorial}
+                    onClick={() => setVerTodoHistorial(v => !v)}
+                  >
+                    {verTodoHistorial ? "Ver menos" : `Ver todos (${anteriores.length})`}
+                  </button>
+                )}
               </div>
             )}
           </SeccionFormulario>
-          <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>{botonesEmpleado(d)}</div>
+          </div>
+          <div className="pn-dialogo__botones lg:col-span-2" style={{ justifyContent: "flex-start" }}>{botonesEmpleado(d)}</div>
         </div>
         {dialogos}
         {formularios}

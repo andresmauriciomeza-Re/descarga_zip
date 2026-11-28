@@ -97,6 +97,9 @@ export function PublicNav({
 
         {/* Right actions */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Idioma */}
+          <LanguageSelector className="inline-flex items-center justify-center gap-1.5 max-[361px]:min-w-11 max-[361px]:[&>:not(:first-child)]:hidden h-10 max-md:h-11 px-2.5 rounded-xl border border-border bg-card text-sm font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer" />
+
           {/* Cart */}
           <button
             onClick={() => navigate("cart")}
@@ -148,9 +151,6 @@ export function PublicNav({
               {t("tienda.iniciarSesion")}
             </button>
           )}
-
-          {/* Idioma */}
-          <LanguageSelector className="inline-flex items-center gap-1.5 h-10 max-md:h-11 px-2.5 rounded-full border border-border bg-card text-sm font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer" />
         </div>
       </div>
     </header>

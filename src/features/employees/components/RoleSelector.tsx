@@ -43,7 +43,7 @@ export function SelectorRoles({
           disabled={disabled || disponibles.every(rol => seleccion.includes(rol.id))}
           value=""
           onChange={event => onChange([...seleccion, event.target.value])}
-          className="w-full rounded-xl border-2 border-border bg-background px-4 text-lg min-h-14"
+          className="w-full rounded-xl border-2 border-border bg-background px-3 text-base min-h-[2.875rem]"
         >
           <option value="" disabled>Agregar un cargo</option>
           {disponibles.filter(rol => !seleccion.includes(rol.id)).map(rol => (

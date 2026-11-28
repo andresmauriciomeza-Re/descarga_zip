@@ -620,7 +620,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-4 min-h-[3.5rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-3 min-h-[2.875rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   /** Nombre visible de una categoría: el del listado del módulo Categoría de
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
@@ -1335,7 +1335,7 @@ export function GestionProductosScreen({
     }
   };
 
-  const roCls = "w-full px-4 min-h-[3.5rem] flex items-center bg-[var(--gris-suave)] rounded-[0.875rem] border-2 border-[var(--borde-suave)] text-lg text-foreground cursor-not-allowed";
+  const roCls = "w-full px-3 min-h-[2.875rem] flex items-center bg-[var(--gris-suave)] rounded-[0.875rem] border-2 border-[var(--borde-suave)] text-base text-foreground cursor-not-allowed";
   const recomendadosPizza = (
     f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
     idCategoria: string,
@@ -1490,7 +1490,7 @@ export function GestionProductosScreen({
             costo (costoUnitario) no se edita aquí. Al CREAR una bebida el
             precio no se pide (se define en Compras) y el nombre ocupa todo. */}
         <div className="sm:col-span-2">
-          <div className={`grid grid-cols-1 ${esPizza ? "sm:grid-cols-10" : "sm:grid-cols-5"} gap-2`}>
+          <div className={`pn-precios grid grid-cols-1 ${esPizza ? "sm:grid-cols-10" : "sm:grid-cols-5"} gap-2`}>
             <div className={mostrarPrecio ? (esPizza ? "sm:col-span-4" : "sm:col-span-3") : esPizza ? "sm:col-span-10" : "sm:col-span-5"}>
               <label className="pn-etiqueta">
                 Nombre
@@ -1757,7 +1757,7 @@ export function GestionProductosScreen({
          dentro, nunca la página. */
       <div
         ref={raizCrearRef}
-        className="crear-producto-vista h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden"
+        className="crear-producto-vista h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden pn-prod"
       >
         {/* CSS local de ESTA vista: quita las flechas (spinners) de todos sus
             inputs numéricos —Precio de venta, Contenido y los de la ficha
@@ -1805,12 +1805,12 @@ export function GestionProductosScreen({
         {/* Dos columnas de tarjetas: el fondo `bg-muted/30` y el `p-4` de cada
             columna son el aire alrededor (ya no hay línea divisoria). Cada
             columna scrollea por dentro, nunca la página. */}
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+        <div className="pn-prod__cols flex-1 min-h-0 flex">
 
           {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
           {/* Con la ficha oculta, las tarjetas ocupan el ancho (max-w-2xl
               centrado); la animación de 0,2 s la da transition-all. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} p-4 flex flex-col min-h-0 transition-all duration-200`}>
+          <div className={`pn-prod__col ${fichaOculta ? "flex-1" : ""} p-4 flex flex-col min-h-0 transition-all duration-200`}>
             <div className={`flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
               {/* Datos mantiene su alto natural; Imágenes crece (llenarAlto)
                   solo cuando hay dos columnas con el editor visible, para que
@@ -1863,7 +1863,7 @@ export function GestionProductosScreen({
               sin configuración). Al ocultarla, la columna colapsa con una
               animación de 0,2 s y NO se borra lo diligenciado. */}
           <div className={`flex flex-col min-h-0 transition-all duration-200 ${
-            fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
+            fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "pn-prod__col p-4 opacity-100"
           }`}>
             {/* Sin ficha definitiva (o categoría sin elegir): tarjeta compacta
                 con el mensaje del caso, sin botón de guardar. */}
@@ -1990,7 +1990,7 @@ export function GestionProductosScreen({
          AdminTopBar (h-14) y el footer del admin; fondo bg-muted/30 y cada
          columna con sus tarjetas, scrolleando por dentro solo como respaldo.
          La página NUNCA desplaza. */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden pn-prod">
         <div className="shrink-0 bg-card border-b-2 border-border px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
@@ -2039,12 +2039,12 @@ export function GestionProductosScreen({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+        <div className="pn-prod__cols flex-1 min-h-0 flex">
 
           {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
           {/* Todo va en tarjetas (igual que Crear y Editar); la columna
               scrollea por dentro si algo no cabe, nunca la página. */}
-          <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
+          <div className="pn-prod__col p-4 flex flex-col min-h-0">
             <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full">
               <Tarjeta titulo="Datos del producto y cuánto queda" className="shrink-0">
                 {FormFields({
@@ -2209,7 +2209,7 @@ export function GestionProductosScreen({
               mensaje del caso (igual que Crear y Editar). El Producto insumo
               muestra la ficha vigente o la versión elegida en las pastillas,
               con scroll interno en el cuerpo. */}
-          <div className="w-full md:w-1/2 p-4 flex flex-col min-h-0">
+          <div className="pn-prod__col p-4 flex flex-col min-h-0">
             {!llevaFichaDetalle ? (
               <Tarjeta titulo="Receta (ficha técnica)">
                 <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
@@ -2279,7 +2279,7 @@ export function GestionProductosScreen({
       /* Misma estructura que Crear Producto: alto fijo sobre el viewport
          (AdminTopBar h-14 + footer del admin), fondo bg-muted/30 y cada
          columna scrollea por dentro; la página nunca scrollea. */
-      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden">
+      <div className="h-[calc(100dvh-3.5rem)] md:h-[calc(100dvh-3.5rem-7.25rem)] xl:h-[calc(100dvh-3.5rem-4.3125rem)] bg-muted/30 flex flex-col overflow-hidden pn-prod">
         {/* Cabecera fija: no crece ni genera scroll */}
         <div className="shrink-0 bg-card border-b border-border px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="min-w-0">
@@ -2314,12 +2314,12 @@ export function GestionProductosScreen({
         {/* Dos columnas de tarjetas: el fondo `bg-muted/30` y el `p-4` de cada
             columna son el aire alrededor (ya no hay línea divisoria). Cada
             columna scrollea por dentro, nunca la página. */}
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+        <div className="pn-prod__cols flex-1 min-h-0 flex">
 
           {/* ── COLUMNA IZQUIERDA: tarjeta de datos + tarjeta de imágenes ── */}
           {/* Con la ficha oculta, las tarjetas ocupan el ancho (max-w-2xl
               centrado); la animación de 0,2 s la da transition-all. */}
-          <div className={`${fichaOculta ? "flex-1" : "w-full md:w-1/2"} p-4 flex flex-col min-h-0 transition-all duration-200`}>
+          <div className={`pn-prod__col ${fichaOculta ? "flex-1" : ""} p-4 flex flex-col min-h-0 transition-all duration-200`}>
             <div className={`flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto w-full ${fichaOculta ? "max-w-2xl mx-auto" : ""}`}>
               <Tarjeta titulo="Datos del producto" className="shrink-0">
                 {FormFields({
@@ -2376,7 +2376,7 @@ export function GestionProductosScreen({
               animación de 0,2 s sin borrar lo diligenciado. */}
           {!llevaFichaEditar ? (
             <div className={`flex flex-col min-h-0 transition-all duration-200 ${
-              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
+              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "pn-prod__col p-4 opacity-100"
             }`}>
               <Tarjeta titulo="Receta (ficha técnica)">
                 <div className="flex flex-col items-center justify-center text-center bg-muted/40 rounded-xl border border-border p-5 select-none">
@@ -2389,7 +2389,7 @@ export function GestionProductosScreen({
             </div>
           ) : (
             <div className={`flex flex-col min-h-0 transition-all duration-200 ${
-              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "w-full md:w-1/2 p-4 opacity-100"
+              fichaOculta ? "w-0 p-0 opacity-0 overflow-hidden" : "pn-prod__col p-4 opacity-100"
             }`}>
               <Tarjeta
                 titulo="Receta (ficha técnica)"

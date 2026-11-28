@@ -31,7 +31,7 @@ export function resolverInsumo(insumos: Insumo[], texto: string): Insumo | null 
 // Estilo de los inputs de Ficha Técnica (rounded-xl / text-sm), que es el
 // lenguaje visual del formulario donde se inserta este buscador.
 const inputCls =
-  "w-full px-4 min-h-[3.5rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 min-h-[2.875rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 export interface InsumoSearchFieldProps {
   insumos: Insumo[];

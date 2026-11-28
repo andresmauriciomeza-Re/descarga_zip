@@ -22,6 +22,7 @@ import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
 import { SearchInput } from "@/shared/components/SearchInput";
+import { VisorImagen } from "@/shared/components/ImageViewer";
 import { Paginador } from "@/shared/components/Paginator";
 import { ActionIcons } from "@/shared/components/buttons/ActionIcons";
 import { SegmentadoButtons } from "@/shared/components/buttons/SegmentedButtons";
@@ -205,6 +206,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
 
   const { search, setSearch, filterEst, setFilterEst, filtroOrigen, setFiltroOrigen, page, setPage, allItems, filtered, paged } = useNonConformingProducts(noConformidades);
   const [viewItem, setViewItem] = useState<NoConformidad | null>(null);
+  const [visorFoto, setVisorFoto] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   // Edición (solo Pendiente): reutiliza el formulario con los datos de
   // identidad (producto, cantidad, motivo…) en solo lectura.
@@ -423,7 +425,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
       ) : null;
 
     return (
-      <div className="grid gap-5">
+      <div className="pn-dos-columnas">
         <SeccionFormulario numero={1} titulo="¿Qué pasó?">
           <div className="grid gap-5">
             <div>
@@ -577,6 +579,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
           </div>
         </SeccionFormulario>
 
+        <div className="pn-columna">
         {!fijo && (
           <SeccionFormulario titulo="Cómo se solucionó" ayuda="Si todavía no lo sabes, déjalo vacío: lo completas después.">
             <div className="grid gap-4">
@@ -601,8 +604,9 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <SeccionFormulario numero={2} titulo="Foto">
           <input type="file" accept="image/jpeg,image/png,image/webp" ref={fileRef} className="hidden" onChange={handleFile} disabled={subiendo} />
           {f.evidencia ? (
-            <div className="grid gap-3 justify-items-start">
-              <img src={f.evidencia} alt="Foto del reporte" style={{ maxWidth: "100%", maxHeight: "17.5rem", borderRadius: "1rem", border: "2px solid var(--borde-suave)" }} />
+            <div className="flex flex-wrap items-center gap-3">
+              <img src={f.evidencia} alt="Foto del reporte" className="pn-miniatura" />
+              <BotonAccion variante="normal" onClick={() => setVisorFoto(true)}>Ver foto</BotonAccion>
               <BotonAccion variante="peligro" onClick={() => set({ evidencia: undefined })}>Quitar la foto</BotonAccion>
             </div>
           ) : (
@@ -614,6 +618,7 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
             </div>
           )}
         </SeccionFormulario>
+        </div>
       </div>
     );
   };
@@ -928,19 +933,29 @@ export function ProductosPerecederosScreen({ ventasSugeridas, insumos, productos
         <Dialog.Root open onOpenChange={(a) => { if (!a) { setShowCreate(false); setEditItem(null); } }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--formulario" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
+            <Dialog.Content className="pn-modal pn-modal--formulario pn-modal--ancho" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">{editItem ? `Cambiar el reporte N.° ${editItem.id}` : "Reportar algo que salió mal"}</Dialog.Title>
               </div>
               <div>
                 {renderFormBody(false, editItem?.id, !!editItem)}
-                <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
+                <div className="pn-dialogo__botones pn-dialogo__botones--fin">
                   <BotonAccion variante="normal" onClick={() => { setShowCreate(false); setEditItem(null); }}>Cancelar</BotonAccion>
                   <BotonAccion variante="principal" disabled={guardando || subiendo} onClick={() => void (editItem ? handleEdit() : handleCreate())}>
                     {guardando ? "Guardando…" : editItem ? "Guardar cambios" : "Guardar el reporte"}
                   </BotonAccion>
                 </div>
               </div>
+              {/* Foto en grande: diálogo anidado, así Escape y la X cierran
+                  solo el visor y el reporte sigue abierto. */}
+              <Dialog.Root open={visorFoto} onOpenChange={setVisorFoto}>
+                <Dialog.Portal>
+                  <Dialog.Content aria-describedby={undefined}>
+                    <Dialog.Title className="sr-only">Foto del reporte</Dialog.Title>
+                    <VisorImagen src={form.evidencia ?? null} alt="Foto del reporte" onClose={() => setVisorFoto(false)} />
+                  </Dialog.Content>
+                </Dialog.Portal>
+              </Dialog.Root>
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>

@@ -852,7 +852,7 @@ export function FichaTecnicaEditor({
                 onClick={addInsumo}
                 title="Agregar insumo"
                 disabled={!puedeAgregarInsumo}
-                className="h-14 shrink-0 inline-flex items-center justify-center gap-2 px-4 bg-primary text-white rounded-xl text-base font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+                className="h-[2.875rem] shrink-0 inline-flex items-center justify-center gap-2 px-4 bg-primary text-white rounded-xl text-base font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
               >
                 <Plus className="w-5 h-5" /> Agregar otro insumo
               </button>
@@ -864,7 +864,7 @@ export function FichaTecnicaEditor({
               <p className="shrink-0 text-xs text-red-500 dark:text-red-400 leading-tight">{errorInsumos}</p>
             )}
             {ficha.insumos.length > 0 ? (
-              <div className="mt-4 min-h-0 lg:flex-1">
+              <div className="mt-4 min-h-0 lg:flex-1 lg:min-h-[8rem]">
                 <InsumosFichaTable
                   insumos={ficha.insumos}
                   editable
@@ -877,6 +877,7 @@ export function FichaTecnicaEditor({
                   onPresentationChange={guardarPresentacionFila}
                                     contenedorRef={insumosScrollRef}
                   stickyHeader
+                  contenedorClassName="lg:max-h-full lg:overflow-y-auto"
                   insumosCatalogo={insumos}
                 />
               </div>
@@ -905,7 +906,7 @@ export function FichaTecnicaEditor({
             ) : (
               <p className="text-xs text-muted-foreground italic mb-3">Sin insumos agregados</p>
             )}
-            <div className="shrink-0 flex flex-nowrap items-end gap-2">
+            <div className="pn-receta-alta shrink-0 flex flex-nowrap items-end gap-2">
               <InsumoSearchField
                 insumos={catalogo}
                 valor={nombre}

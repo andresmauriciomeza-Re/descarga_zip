@@ -79,23 +79,24 @@ export function AdminTopBar({
   return (
     <>
       <header className="pn-header">
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-3 max-md:gap-2">
+        <div className="pn-header__acciones ml-auto flex flex-wrap items-center justify-end gap-3 max-md:gap-2">
           {onCambiarRol && (
             <CambiarRolMenu
               roles={rolesParaCambiar}
               rolActivoNombre={roleName}
               onSelect={onCambiarRol}
+              claseBoton="pn-header__btn"
             />
           )}
+          <LanguageSelector className="pn-header__btn" />
           <button type="button" onClick={() => navigate("landing")} className="pn-header__btn">
             <Store size={24} aria-hidden="true" />
             <span>{t("menu.verTienda")}</span>
           </button>
-          <LanguageSelector className="pn-header__btn" />
           <button
             type="button"
             onClick={() => navigate("profile")}
-            className="pn-header__btn"
+            className="pn-header__btn pn-header__perfil"
             aria-label={`${t("menu.miPerfil", { nombre: userName })}${roleName ? `, ${roleName}` : ""}`}
           >
             <span className="pn-header__avatar" aria-hidden="true">
