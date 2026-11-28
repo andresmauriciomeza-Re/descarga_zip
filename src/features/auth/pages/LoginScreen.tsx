@@ -75,7 +75,8 @@ export function LoginScreen({
    *  iniciar sesión." al llegar de la invitación de empleado). */
   mensajeExito?: string;
 }) {
-  // `errors` y `rechazo` guardan español; se traducen al pintarlos (tf / MensajeError).
+  // `errors` guarda español y se traduce al pintar (MensajeError). `rechazo`
+  // distingue el origen: texto de la web (tf) o del backend (errorVisible).
   const { t, tf, errorVisible } = useIdioma();
   const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
@@ -89,7 +90,7 @@ export function LoginScreen({
   }>({});
   // Motivo por el que App rechazó el login (sin roles activos, sin pantallas…):
   // se muestra como mensaje en la propia pantalla en lugar de un toast de éxito.
-  const [rechazo, setRechazo] = useState<string | null>(null);
+  const [rechazo, setRechazo] = useState<{ texto: string; delServidor: boolean } | null>(null);
   const [showForgot, setShowForgot] = useState(false);
   // Cuenta pendiente (403 "Tu cuenta aún no está activada"): se ofrece
   // "Reenviar correo de confirmación", con 60 s de espera entre envíos (el
@@ -184,7 +185,7 @@ export function LoginScreen({
         // El login fue RECHAZADO en App: muestra el motivo y no navega.
         borrarToken();
         const mensaje = respuesta.mensaje ?? "Tu cuenta no tiene roles activos. Contacta al administrador.";
-        setRechazo(mensaje);
+        setRechazo({ texto: mensaje, delServidor: false });
         toast.error(tf(mensaje));
         return;
       }
@@ -196,7 +197,7 @@ export function LoginScreen({
       });
     } catch (err) {
       const status = (err as ApiErrorConEstado).status;
-      const mensaje = err instanceof Error ? err.message : t("auth.v.sinConexion");
+      const mensaje = err instanceof Error ? err.message : "No se pudo conectar con el servidor.";
       if (status === 401) {
         setErrors({
           email: "Credenciales incorrectas",
@@ -206,7 +207,7 @@ export function LoginScreen({
         // Cuenta sin activar (empleado invitado o cliente que aún no confirma
         // su correo): el backend manda el motivo ("Tu cuenta aún no está
         // activada. Revisa tu correo.") y se ofrece reenviar la confirmación.
-        setRechazo(mensaje);
+        setRechazo({ texto: mensaje, delServidor: true });
         setCuentaPendiente(true);
       } else {
         // 429 (mensaje del backend) y fallo de conexión: el interceptor ya
@@ -380,7 +381,7 @@ export function LoginScreen({
 
         {rechazo && (
           <p className="text-center text-sm font-semibold text-red-600 mb-3">
-            {tf(rechazo)}
+            {rechazo.delServidor ? errorVisible(rechazo.texto) : tf(rechazo.texto)}
           </p>
         )}
 

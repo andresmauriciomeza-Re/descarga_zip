@@ -42,9 +42,11 @@ export function PasoCodigoVerificacion({
   idPrefijo?: string;
 }) {
   const { t, errorVisible } = useIdioma();
-  const [errorCodigo, setErrorCodigo] = useState<string | undefined>(
-    errorInicial,
-  );
+  // `err` = validación de la web; `delServidor` = lo que respondió el backend.
+  // `errorInicial` siempre viene del backend.
+  const [errorCodigo, setErrorCodigo] = useState<
+    { err?: string; delServidor?: string } | undefined
+  >(errorInicial ? { delServidor: errorInicial } : undefined);
   const [verificando, setVerificando] = useState(false);
   const [reenviando, setReenviando] = useState(false);
   const [cooldown, setCooldown] = useState(30);
@@ -73,7 +75,7 @@ export function PasoCodigoVerificacion({
     if (verificando) return;
     const completo = codigo.join("");
     if (completo.length < 6) {
-      setErrorCodigo("Ingresa el código completo");
+      setErrorCodigo({ err: "Ingresa el código completo" });
       const primeraVacia = codigo.findIndex((c) => !c);
       document
         .getElementById(`${idPrefijo}-${primeraVacia < 0 ? 5 : primeraVacia}`)
@@ -86,7 +88,7 @@ export function PasoCodigoVerificacion({
       await onVerificar(completo);
       // Éxito: quien llama cambia de paso (este componente se desmonta).
     } catch (e) {
-      setErrorCodigo((e as Error).message);
+      setErrorCodigo({ delServidor: (e as Error).message });
     } finally {
       setVerificando(false);
     }
@@ -131,11 +133,11 @@ export function PasoCodigoVerificacion({
           tieneError={Boolean(errorCodigo)}
           idPrefijo={idPrefijo}
           describedBy="code-error"
-          onCodigoIncompleto={() => setErrorCodigo("Ingresa el código completo")}
+          onCodigoIncompleto={() => setErrorCodigo({ err: "Ingresa el código completo" })}
         />
       </div>
       <div className="-mt-4 mb-4">
-        <MensajeError id="code-error" err={errorCodigo} />
+        <MensajeError id="code-error" {...errorCodigo} />
       </div>
       <button
         onClick={() => void verificar()}

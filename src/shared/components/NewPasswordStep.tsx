@@ -114,7 +114,8 @@ export function PasoNuevaContrasena({
           <RequisitosContrasena valor={nueva} />
           <MensajeError
             id={validacion.idError("newPass")}
-            err={passwordError ?? errorGuardado ?? undefined}
+            err={passwordError ?? undefined}
+            delServidor={errorGuardado ?? undefined}
           />
         </div>
         <div>

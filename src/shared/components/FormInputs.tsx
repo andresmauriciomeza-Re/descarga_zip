@@ -36,13 +36,16 @@ export function inputCls(err?: string, base: string = ""): string {
  * error (ver hook `useValidacionFormulario`). El rojo lleva variante `dark`
  * para mantener contraste legible sobre fondo oscuro.
  */
-export function MensajeError({ err, id }: { err?: string; id?: string }) {
-  // `err` llega en español; lo que no esté en el diccionario (backend) sale igual.
-  const { tf } = useIdioma();
-  if (!err) return null;
+export function MensajeError({ err, delServidor, id }: { err?: string; delServidor?: string; id?: string }) {
+  // `err` es una validación propia de la web (se traduce con tf). `delServidor`
+  // es un mensaje del backend o de la conexión: va por errorVisible para que
+  // nunca se traduzca por coincidencia. Si llegan los dos, manda `err`.
+  const { tf, errorVisible } = useIdioma();
+  const texto = err ? tf(err) : delServidor ? errorVisible(delServidor) : "";
+  if (!texto) return null;
   return (
     <p id={id} className="text-xs text-red-500 dark:text-red-400 mt-1 ml-0.5 leading-tight">
-      {tf(err)}
+      {texto}
     </p>
   );
 }

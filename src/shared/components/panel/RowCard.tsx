@@ -50,8 +50,8 @@ export function TarjetaFila({
         {detalle && <div className="pn-fila__detalle">{detalle}</div>}
       </div>
       {centro && <div className="pn-fila__centro">{centro}</div>}
-      {datos.slice(0, 3).map((d) => (
-        <dl key={d.etiqueta} className="pn-fila__dato" style={{ margin: 0 }}>
+      {datos.slice(0, 3).map((d, i) => (
+        <dl key={i}className="pn-fila__dato" style={{ margin: 0 }}>
           <dt>{d.etiqueta}</dt>
           <dd>{d.valor}</dd>
         </dl>
