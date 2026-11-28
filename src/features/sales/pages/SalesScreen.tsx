@@ -17,7 +17,7 @@ import { formatearFechaHora, formatearHora } from "@/shared/utils/time";
 import { tiempoRestante, useRefrescarAlVencer } from "@/shared/hooks/useRefreshOnExpire";
 import { disponiblePizza } from "@/shared/utils/pizzaStock";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, X, ChevronDown, ChevronLeft, Check, CheckCircle2, Clock, AlertCircle, ShieldCheck, ShieldX, Printer, FileText, ImageIcon, Undo2, CalendarDays, Ban } from "lucide-react";
+import { Search, X, ChevronLeft, Check, CheckCircle2, Clock, AlertCircle, ShieldCheck, ShieldX, Printer, FileText, ImageIcon, Undo2, CalendarDays, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { normalizarTexto } from "@/shared/utils/names";
 import { esComprobantePdf } from "@/shared/utils/receipt";
@@ -35,7 +35,6 @@ import type { ApiErrorConEstado } from "@/types/api";
 import { hoyISO } from "@/shared/utils/dates";
 import { imprimirFactura } from "@/features/sales/services/saleInvoice";
 import { exportToExcel } from "@/features/sales/services/exportExcel";
-import { CampoTiempoPreparacion, minutosPreparacionValidos } from "@/shared/components/PrepTimeField";
 import { adelantarVentaApi, crearVentaPanel, anularVentaApi, marcarDevolucionApi, marcarVentaListaApi, obtenerVentaPanel, obtenerVentasPanel, verificarVentaApi, confirmarPagoVenta, obtenerPagosVenta, type ResumenPagosVenta } from "@/features/sales/services/salesApi";
 import { useSubirArchivo } from "@/shared/hooks/useFileUpload";
 import { ESTADOS_ANULABLES } from "@/features/sales/services/saleStatuses";
@@ -182,6 +181,9 @@ const hoyFecha = () => {
     boton.addEventListener("blur", soltar);
   }
 
+  /** Minutos que se envían con la venta del local (no se piden en pantalla). */
+  const MINUTOS_PREPARACION = 25;
+
   /** Modal exclusivo del panel de administrador: el pedido se toma en el local,
       frente al cliente, así que no se pide estado ni comprobante. La fecha se
       carga sola con el día en que se hace el pedido y la hora de recogida se
@@ -204,7 +206,6 @@ const hoyFecha = () => {
     // La fecha no es un campo: el pedido se toma hoy, así que se calcula al
     // guardar. Sin estado no hay forma de editarla.
     const fecha = hoyFecha();
-    const [minutosPreparacion, setMinutosPreparacion] = useState("25");
     const [metodoPago, setMetodoPago] = useState<MetodoPago>("");
     const [selProductos, setSelProductos] = useState<ProductoSeleccionado[]>(
       [],
@@ -226,35 +227,19 @@ const hoyFecha = () => {
       setAnuncio(`Agregado: ${nombre}${esPizza ? ` — ${tamaño}` : ""}`);
     }, [selProductos]);
 
-    /** Botón del catálogo que se acaba de pulsar y a qué altura estaba. */
-    const pulsadoRef = useRef<{ boton: HTMLButtonElement; arriba: number } | null>(null);
-    /** Hueco al final del modal, por si no hay suficiente para compensar. */
-    const huecoRef = useRef<HTMLDivElement>(null);
+    /** Botón del catálogo que se acaba de pulsar. */
+    const pulsadoRef = useRef<HTMLButtonElement | null>(null);
     const recordarPulsado = (e: React.MouseEvent) => {
       const boton = (e.target as HTMLElement).closest("button");
       if (!boton) return;
-      pulsadoRef.current = { boton, arriba: boton.getBoundingClientRect().top };
+      pulsadoRef.current = boton;
       // Si el clic no cambió la selección, no queda pendiente para después.
       setTimeout(() => { pulsadoRef.current = null; }, 0);
     };
-    // La lista de elegidos crece encima del catálogo: antes de pintar se
-    // compensa el desplazamiento para que lo pulsado no se mueva de sitio.
     useLayoutEffect(() => {
-      const pulsado = pulsadoRef.current;
-      if (!pulsado) return;
+      const boton = pulsadoRef.current;
+      if (!boton) return;
       pulsadoRef.current = null;
-      const { boton, arriba } = pulsado;
-      const modal = boton.closest<HTMLElement>(".pn-modal");
-      const hueco = huecoRef.current;
-      if (modal && hueco) {
-        const salto = boton.getBoundingClientRect().top - arriba;
-        // Alto real del contenido: scrollHeight no sirve si aún no llena el modal.
-        const contenido = hueco.getBoundingClientRect().bottom - modal.getBoundingClientRect().top
-          + modal.scrollTop + parseFloat(getComputedStyle(modal).paddingBottom);
-        const falta = modal.scrollTop + salto - (contenido - modal.clientHeight);
-        if (falta > 0) hueco.style.height = `${hueco.offsetHeight + Math.ceil(falta)}px`;
-        modal.scrollTop += salto;
-      }
       // Al agotarse las porciones el botón se deshabilita: el foco pasa al otro
       // tamaño disponible o, si no hay, a la tarjeta del producto.
       if (boton.disabled) {
@@ -489,11 +474,9 @@ const hoyFecha = () => {
     };
 
 
-    // Product picker state
-    const [showPicker, setShowPicker] = useState(false);
+    // Catálogo
     const [prodSearch, setProdSearch] = useState("");
-    // Categoría activa del selector. Filtrar por categoría es lo que deja ver
-    // todos los productos de una vez, sin barra de desplazamiento.
+    // Categoría activa del selector.
     const [catPicker, setCatPicker] = useState("Todas");
 
     // Las bebidas del menú llegan sin tamaños: se venden de una sola
@@ -639,7 +622,6 @@ const hoyFecha = () => {
     /** Valida el formulario y devuelve los datos del pedido. `false` = no se
         puede guardar (falta un dato o la consulta del cliente falló). */
     const prepararPedido = async (): Promise<Omit<Venta, "id"> | null> => {
-      if (!minutosPreparacionValidos(minutosPreparacion)) return null;
       if (!clienteElegido && !crearCliente) {
         setErrorCliente(true);
         return null;
@@ -711,7 +693,7 @@ const hoyFecha = () => {
         total: totalCalculado,
         detalle,
         metodoPago,
-        tiempoPreparacionMin: Number(minutosPreparacion),
+        tiempoPreparacionMin: MINUTOS_PREPARACION,
         historial: [{ estado: finalEstado, hora: nowHora() }],
       };
     };
@@ -746,12 +728,13 @@ const hoyFecha = () => {
     return (
       <>
         <div className="pn-dialogo-fondo" onClick={onClose} />
-        <div className="pn-modal pn-modal--formulario pn-modal--alto-fijo" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
+        <div className="pn-modal pn-modal--formulario pn-modal--alto-fijo pn-modal--ancho pn-venta" role="dialog" aria-modal="true" aria-labelledby="titulo-venta-local">
           <div className="pn-modal__cab">
             <h2 id="titulo-venta-local" className="pn-modal__titulo">Registrar venta del local</h2>
             <p className="sr-only" role="status" aria-live="polite">{anuncio}</p>
           </div>
-          <div className="grid gap-5">
+          <div className="pn-venta__cuerpo">
+            <div className="pn-venta__col">
             <SeccionFormulario numero={1} titulo="¿Quién compra?">
               <div className="pn-campo space-y-4">
             <div className="min-w-0">
@@ -849,7 +832,7 @@ const hoyFecha = () => {
             </div>
 
             {crearCliente && (
-              <>
+              <div className="pn-venta__nuevo">
                 <div>
                   <label htmlFor="tipo-documento-venta" className="pn-etiqueta">Tipo de documento </label>
                   <select id="tipo-documento-venta" value={tipoDocumento} onChange={(e) => {
@@ -885,26 +868,184 @@ const hoyFecha = () => {
                   />
                   {nombreTocado && !usuario.trim() && <p className="text-base mt-1 text-red-500 dark:text-red-400">El nombre del cliente es obligatorio</p>}
                 </div>
-              </>
+              </div>
             )}
 
               </div>
             </SeccionFormulario>
-            <SeccionFormulario numero={2} titulo="¿Qué lleva?">
-              <div className="space-y-4">
-            {/* Selector de productos */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-base font-semibold text-muted-foreground">
-                   Lo que lleva
-                </label>
+            <section className="pn-seccion pn-venta__catalogo" aria-label="Productos">
+              <div className="rounded-xl border border-border overflow-hidden pn-venta__catalogo-caja">
+                  <div className="px-3 py-2.5 border-b border-border bg-muted/30 flex flex-wrap items-center gap-2">
+                    <div className="relative flex-1 min-w-32">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <input
+                        value={prodSearch}
+                        onChange={(e) => setProdSearch(e.target.value)}
+                        placeholder="Buscar producto..."
+                        className="w-full pl-8 pr-3 py-1.5 bg-card rounded-lg border border-border text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {categoriasPicker.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCatPicker(c)}
+                          className={`px-2.5 py-1 rounded-lg text-base font-semibold border transition-colors cursor-pointer ${
+                            catPicker === c
+                              ? "bg-primary text-white border-transparent"
+                              : "bg-card text-foreground border-border hover:border-primary/40"
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pn-venta__grilla">
+                    <div className="grid grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2 p-3" onClickCapture={recordarPulsado}>
+                      {filteredProds.map((p) => {
+                        const selItem = selProductos.find((x) => x.id === p.id);
+                        const sel = !!selItem;
+                        const esPizza = p.category.toLowerCase().includes("pizza");
+                        return (
+                          <div
+                            key={p.id}
+                            data-tarjeta-producto
+                            tabIndex={-1}
+                            role="group"
+                            aria-label={p.name}
+                            className={`rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${
+                              sel
+                                ? "border-primary/40 bg-primary/5"
+                                : "border-border bg-card"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => toggleProduct(p)}
+                                disabled={esPizza && !sel && !variantesDe(p).some((s) => s.price > 0 && disponibleParaVenta(p, s.label) !== 0)}
+                                aria-label={`${sel ? "Quitar" : "Seleccionar"} ${p.name}`}
+                                aria-pressed={sel}
+                                className="shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <div
+                                  className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
+                                    sel ? "bg-primary border-primary" : "border-border"
+                                  }`}
+                                >
+                                  {sel && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                              </button>
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0"
+                              />
+                              <p className="text-base font-semibold text-foreground leading-tight line-clamp-2">
+                                {p.name}
+                              </p>
+                            </div>
+
+                            <div className="flex gap-1.5" data-tamanos>
+                              {variantesDe(p).map((s) => {
+                                if (esPizza) {
+                                  const active = selProductos.some((x) => x.id === p.id && x.tamaño === s.label);
+                                  const maximo = disponibleParaVenta(p, s.label);
+                                  const elegidas = selProductos.find((x) => x.id === p.id && x.tamaño === s.label)?.cantidad ?? 0;
+                                  const stock = maximo === undefined ? undefined : Math.max(0, maximo - elegidas);
+                                  return (
+                                    <button
+                                      key={s.label}
+                                      type="button"
+                                      disabled={stock === 0 || s.price <= 0}
+                                      onClick={() => {
+                                        if (!active) agregarTamanoPizza(p, s.label);
+                                      }}
+                                      aria-pressed={active}
+                                      className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
+                                        active
+                                          ? "border-primary bg-primary text-white"
+                                          : "border-border bg-muted/40 hover:border-primary/40"
+                                      } ${stock === 0 || s.price <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                                    >
+                                      <span className="block text-base font-semibold truncate">{s.label}</span>
+                                      <span className={`block text-base truncate ${active ? "opacity-80" : "text-muted-foreground"}`} style={{ fontFamily: MONO }}>
+                                        {s.price > 0 ? `$${(s.price / 1000).toFixed(0)}k` : "Sin precio"}
+                                      </span>
+                                      <span className={`block text-base ${active ? "opacity-80" : "text-muted-foreground"}`}>
+                                        {stock === undefined ? "porción · stock —" : stock === 0 ? "Agotado" : `Disponibles: ${stock} porc.`}
+                                      </span>
+                                    </button>
+                                  );
+                                }
+                                const active = sel && selItem?.tamaño === s.label;
+                                return (
+                                  <button
+                                    key={s.label}
+                                    type="button"
+                                    onClick={() => {
+                                      if (!sel) {
+                                        setSelProductos((prev) => [
+                                          ...prev,
+                                          { id: p.id, nombre: p.name, precio: s.price, cantidad: 1, tamaño: s.label },
+                                        ]);
+                                      } else {
+                                        updateTamaño(p.id, s.label);
+                                      }
+                                    }}
+                                    className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
+                                      active
+                                        ? "border-primary bg-primary text-white"
+                                        : "border-border bg-muted/40 hover:border-primary/40"
+                                    }`}
+                                  >
+                                    <span className="block text-base font-semibold truncate">
+                                      {s.label}
+                                    </span>
+                                    <span
+                                      className={`block text-base truncate ${
+                                        active ? "opacity-80" : "text-muted-foreground"
+                                      }`}
+                                      style={{ fontFamily: MONO }}
+                                    >
+                                      ${(s.price / 1000).toFixed(0)}k
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {filteredProds.length === 0 && (
+                      <p className="px-3 py-4 text-base text-muted-foreground italic">
+                        Sin productos en esta categoría.
+                      </p>
+                    )}
+                  </div>
+              </div>
+            </section>
+            </div>
+
+            <div className="pn-venta__col">
+            <section className="pn-seccion pn-venta__lleva">
+              <div className="flex items-center justify-between gap-2">
+                <h2>2 · Lo que lleva</h2>
                 {selProductos.length > 0 && (
                   <span className="text-base text-primary font-semibold">
                     {selProductos.length} seleccionados
                   </span>
                 )}
               </div>
-
+              <div className="pn-venta__lista">
+              {selProductos.length === 0 && (
+                <p className="text-base text-muted-foreground">Todavía no lleva nada. Escoge del catálogo.</p>
+              )}
               {/* Productos seleccionados */}
               {selProductos.length > 0 && (
                 <div className="mb-2 space-y-2">
@@ -1045,205 +1186,8 @@ const hoyFecha = () => {
                   })}
                 </div>
               )}
-
-              {/* Botón abrir picker. El catálogo se muestra aparte, a todo el
-                  ancho del modal, para que quepan los productos sin scroll. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setProdSearch("");
-                  setShowPicker((p) => !p);
-                }}
-                className="w-full flex items-center justify-between px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-muted-foreground hover:border-primary/40 cursor-pointer transition-colors"
-              >
-                <span>
-                  {selProductos.length === 0
-                    ? "+ Agregar un producto"
-                    : "+ Agregar otro producto"}
-                </span>
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform ${showPicker ? "rotate-180" : ""}`}
-                />
-              </button>
-
-              {/* Catálogo: vive dentro de la columna derecha para que el modal
-                  siga teniendo sus dos mitades. La rejilla scrollea por dentro
-                  para no empujar nada hacia abajo. */}
-              {showPicker && (
-                <div className="mt-2 border border-border rounded-2xl overflow-hidden shadow-sm">
-                  <div className="px-3 py-2.5 border-b border-border bg-muted/30 flex flex-wrap items-center gap-2">
-                    <div className="relative flex-1 min-w-32">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <input
-                        value={prodSearch}
-                        onChange={(e) => setProdSearch(e.target.value)}
-                        placeholder="Buscar producto..."
-                        className="w-full pl-8 pr-3 py-1.5 bg-card rounded-lg border border-border text-base text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {categoriasPicker.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setCatPicker(c)}
-                          className={`px-2.5 py-1 rounded-lg text-base font-semibold border transition-colors cursor-pointer ${
-                            catPicker === c
-                              ? "bg-primary text-white border-transparent"
-                              : "bg-card text-foreground border-border hover:border-primary/40"
-                          }`}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3" onClickCapture={recordarPulsado}>
-                      {filteredProds.map((p) => {
-                        const selItem = selProductos.find((x) => x.id === p.id);
-                        const sel = !!selItem;
-                        const esPizza = p.category.toLowerCase().includes("pizza");
-                        return (
-                          <div
-                            key={p.id}
-                            data-tarjeta-producto
-                            tabIndex={-1}
-                            role="group"
-                            aria-label={p.name}
-                            className={`rounded-xl border p-2 flex flex-col gap-1.5 transition-colors ${
-                              sel
-                                ? "border-primary/40 bg-primary/5"
-                                : "border-border bg-card"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <button
-                                type="button"
-                                onClick={() => toggleProduct(p)}
-                                disabled={esPizza && !sel && !variantesDe(p).some((s) => s.price > 0 && disponibleParaVenta(p, s.label) !== 0)}
-                                aria-label={`${sel ? "Quitar" : "Seleccionar"} ${p.name}`}
-                                aria-pressed={sel}
-                                className="shrink-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                <div
-                                  className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${
-                                    sel ? "bg-primary border-primary" : "border-border"
-                                  }`}
-                                >
-                                  {sel && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                              </button>
-                              <img
-                                src={p.image}
-                                alt={p.name}
-                                className="w-8 h-8 rounded-lg object-cover bg-muted shrink-0"
-                              />
-                              <p className="text-base font-semibold text-foreground leading-tight line-clamp-2">
-                                {p.name}
-                              </p>
-                            </div>
-
-                            <div className="flex gap-1.5" data-tamanos>
-                              {variantesDe(p).map((s) => {
-                                if (esPizza) {
-                                  const active = selProductos.some((x) => x.id === p.id && x.tamaño === s.label);
-                                  const maximo = disponibleParaVenta(p, s.label);
-                                  const elegidas = selProductos.find((x) => x.id === p.id && x.tamaño === s.label)?.cantidad ?? 0;
-                                  const stock = maximo === undefined ? undefined : Math.max(0, maximo - elegidas);
-                                  return (
-                                    <button
-                                      key={s.label}
-                                      type="button"
-                                      disabled={stock === 0 || s.price <= 0}
-                                      onClick={() => {
-                                        if (!active) agregarTamanoPizza(p, s.label);
-                                      }}
-                                      aria-pressed={active}
-                                      className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
-                                        active
-                                          ? "border-primary bg-primary text-white"
-                                          : "border-border bg-muted/40 hover:border-primary/40"
-                                      } ${stock === 0 || s.price <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
-                                    >
-                                      <span className="block text-base font-semibold truncate">{s.label}</span>
-                                      <span className={`block text-base truncate ${active ? "opacity-80" : "text-muted-foreground"}`} style={{ fontFamily: MONO }}>
-                                        {s.price > 0 ? `$${(s.price / 1000).toFixed(0)}k` : "Sin precio"}
-                                      </span>
-                                      <span className={`block text-base ${active ? "opacity-80" : "text-muted-foreground"}`}>
-                                        {stock === undefined ? "porción · stock —" : stock === 0 ? "Agotado" : `Disponibles: ${stock} porc.`}
-                                      </span>
-                                    </button>
-                                  );
-                                }
-                                const active = sel && selItem?.tamaño === s.label;
-                                return (
-                                  <button
-                                    key={s.label}
-                                    type="button"
-                                    onClick={() => {
-                                      if (!sel) {
-                                        setSelProductos((prev) => [
-                                          ...prev,
-                                          { id: p.id, nombre: p.name, precio: s.price, cantidad: 1, tamaño: s.label },
-                                        ]);
-                                      } else {
-                                        updateTamaño(p.id, s.label);
-                                      }
-                                    }}
-                                    className={`flex-1 min-w-0 rounded-lg border px-1.5 py-1 text-left transition-colors cursor-pointer ${
-                                      active
-                                        ? "border-primary bg-primary text-white"
-                                        : "border-border bg-muted/40 hover:border-primary/40"
-                                    }`}
-                                  >
-                                    <span className="block text-base font-semibold truncate">
-                                      {s.label}
-                                    </span>
-                                    <span
-                                      className={`block text-base truncate ${
-                                        active ? "opacity-80" : "text-muted-foreground"
-                                      }`}
-                                      style={{ fontFamily: MONO }}
-                                    >
-                                      ${(s.price / 1000).toFixed(0)}k
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {filteredProds.length === 0 && (
-                      <p className="px-3 py-4 text-base text-muted-foreground italic">
-                        Sin productos en esta categoría.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Resumen total */}
-            {selProductos.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 bg-muted/50 rounded-xl border border-border">
-                <span className="text-sm text-muted-foreground font-medium">
-                  {[
-                    cantidadPorciones > 0 ? `${cantidadPorciones} ${cantidadPorciones === 1 ? "porción" : "porciones"}` : "",
-                    cantidadUnidades > 0 ? `${cantidadUnidades} und` : "",
-                  ].filter(Boolean).join(" · ")} · Total a cobrar
-                </span>
-                <span style={{ font: "700 1.875rem var(--font-titulo)", color: "var(--texto)" }}>
-                  ${totalCalculado.toLocaleString("es-CO")}
-                </span>
               </div>
-            )}
-              </div>
-            </SeccionFormulario>
+            </section>
             <SeccionFormulario numero={3} titulo="¿Cómo paga?">
               <div className="pn-campo space-y-4">
             {/* Fecha — informative. El pedido se toma hoy y no se puede cambiar. */}
@@ -1267,8 +1211,6 @@ const hoyFecha = () => {
               </div>
             </div>
 
-            <CampoTiempoPreparacion valor={minutosPreparacion} onChange={setMinutosPreparacion} />
-
             {/* Método de pago — incluye Efectivo, exclusivo del administrador */}
             <div>
               <label className="pn-etiqueta">
@@ -1283,18 +1225,33 @@ const hoyFecha = () => {
             </div>
               </div>
             </SeccionFormulario>
-            <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+            <div className="pn-venta__pie">
+            {/* Resumen total */}
+            <div className="flex items-center justify-between gap-3 px-4 py-2 bg-muted/50 rounded-xl border border-border">
+              <span className="text-sm text-muted-foreground font-medium">
+                {[
+                  cantidadPorciones > 0 ? `${cantidadPorciones} ${cantidadPorciones === 1 ? "porción" : "porciones"}` : "",
+                  cantidadUnidades > 0 ? `${cantidadUnidades} und` : "",
+                  "Total a cobrar",
+                ].filter(Boolean).join(" · ")}
+              </span>
+              <span style={{ font: "700 1.875rem var(--font-titulo)", color: "var(--texto)" }}>
+                ${totalCalculado.toLocaleString("es-CO")}
+              </span>
+            </div>
+            <div className="pn-dialogo__botones pn-dialogo__botones--fin">
               <BotonAccion variante="normal" onClick={onClose}>Cancelar</BotonAccion>
               <BotonAccion
                 variante="principal"
-                disabled={guardando || !minutosPreparacionValidos(minutosPreparacion)}
+                disabled={guardando}
                 onClick={() => void handleSave()}
               >
                 {guardando ? "Registrando…" : "Registrar la venta"}
               </BotonAccion>
             </div>
+            </div>
+            </div>
           </div>
-          <div ref={huecoRef} aria-hidden="true" />
         </div>
       </>
     );

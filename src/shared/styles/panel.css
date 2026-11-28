@@ -609,6 +609,44 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
   .pn-permisos__fila { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ═══════════ Registrar venta del local ═══════════
+   1440px: 90rem a letra normal (con la base de 12px del panel serían 1080px). */
+.pn-venta__cuerpo, .pn-venta__col { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.pn-venta__nuevo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr)); gap: 0.75rem; align-items: start; }
+.pn-venta__catalogo-caja { display: flex; flex-direction: column; }
+.pn-venta__pie { display: flex; flex-direction: column; gap: 0.5rem; }
+.pn-venta__pie .pn-dialogo__botones { margin-top: 0; }
+/* Apilado: el catálogo no pasa de media pantalla, para llegar a lo que lleva. */
+@media (max-width: 1023px) {
+  .pn-venta__catalogo.pn-seccion { padding: 0.5rem; }
+  .pn-venta__grilla { max-height: 55dvh; overflow-y: auto; overflow-x: hidden; }
+  /* Total y acciones fijos abajo. Las columnas se disuelven para que la barra
+     se pegue al modal completo; el relleno de enfoque evita que tape campos. */
+  .pn-modal.pn-venta { padding-bottom: 0; scroll-padding-bottom: 10rem; }
+  .pn-venta__col { display: contents; }
+  .pn-venta__pie { position: sticky; bottom: 0; z-index: 20; margin-inline: -0.875rem; padding: 0.625rem 0.875rem 0.75rem; background: var(--crema); border-top: 2px solid var(--borde-suave); }
+  .pn-venta__pie .pn-dialogo__botones { flex-wrap: nowrap; }
+  .pn-venta__pie .pn-dialogo__botones .pn-boton { flex: 1 1 0; min-width: 0; padding-inline: 0.5rem; }
+}
+@media (min-width: 821px) {
+  .pn-modal.pn-modal--ancho.pn-venta { width: min(96vw, 1440px); }
+}
+/* Dos columnas: el modal no hace scroll; lo hacen el catálogo y la lista de
+   elegidos, así agregar productos no mueve el catálogo. */
+@media (min-width: 1024px) {
+  .pn-modal.pn-venta { display: flex; flex-direction: column; overflow: hidden; }
+  .pn-venta .pn-modal__cab { flex: none; }
+  .pn-venta__cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-rows: minmax(0, 1fr); }
+  .pn-venta__col { min-height: 0; overflow-y: auto; }
+  .pn-venta__col > * { flex: none; }
+  .pn-venta__col > .pn-venta__catalogo { flex: 1 1 14rem; min-height: 14rem; display: flex; flex-direction: column; }
+  .pn-venta__catalogo-caja { flex: 1; min-height: 0; }
+  .pn-venta__grilla { flex: 1; min-height: 0; overflow-y: auto; }
+  .pn-venta__col > .pn-venta__lleva { flex: 1 1 9rem; min-height: 9rem; display: flex; flex-direction: column; }
+  .pn-venta__lista { flex: 1; min-height: 0; overflow-y: auto; }
+  .pn-venta__pie { position: sticky; bottom: 0; background: var(--crema); }
+}
+
 /* ═══════════ Cambiar producto ═══════════
    Las dos columnas dependen del ancho que queda (no del de la ventana): si no
    caben, se apilan y hace scroll el conjunto. */
