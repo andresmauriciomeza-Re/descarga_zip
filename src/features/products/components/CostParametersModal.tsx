@@ -87,10 +87,10 @@ export function ParametrosCostosModal({
         aria-modal="true"
         aria-labelledby="parametros-costos-titulo"
         className="pn-dialogo"
-        style={{ zIndex: 121, width: "min(94vw, 720px)" }}
+        style={{ zIndex: 121, width: "min(94vw, 45rem)" }}
       >
         <h2 id="parametros-costos-titulo">Costos de preparación</h2>
-        <p className="pn-seccion__ayuda" style={{ marginTop: -6 }}>
+        <p className="pn-seccion__ayuda" style={{ marginTop: "-0.375rem" }}>
           Con estos datos se calcula lo que cuesta hacer cada cosa y el precio que se recomienda.
         </p>
 
@@ -98,14 +98,14 @@ export function ParametrosCostosModal({
           <div className="pn-dialogo__caja pn-dialogo__caja--ambar">
             <strong>No pudimos cargar los costos</strong>
             {error}
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: "0.625rem" }}>
               <BotonAccion onClick={onReintentar}>Intentar de nuevo</BotonAccion>
             </div>
           </div>
         )}
 
         <form onSubmit={guardar}>
-          <div className="pn-campo" style={{ display: "grid", gap: 18 }}>
+          <div className="pn-campo" style={{ display: "grid", gap: "1.125rem" }}>
             {CAMPOS.map(({ clave, etiqueta, ayuda, paso }) => (
               <div key={clave}>
                 <label htmlFor={`parametro-${clave}`} className="pn-etiqueta">{etiqueta}</label>
@@ -127,18 +127,18 @@ export function ParametrosCostosModal({
           </div>
 
           {(parametrosVista.tarifa_gas_m3 === 0 || parametrosVista.consumo_gas_m3_hora === 0) && (
-            <div className="pn-dialogo__caja pn-dialogo__caja--ambar" style={{ marginTop: 16 }}>
+            <div className="pn-dialogo__caja pn-dialogo__caja--ambar" style={{ marginTop: "1rem" }}>
               Falta anotar el precio del gas y lo que gasta el horno.
             </div>
           )}
 
           {!puedeEditar && (
-            <p className="pn-seccion__ayuda" style={{ marginTop: 14 }}>
+            <p className="pn-seccion__ayuda" style={{ marginTop: "0.875rem" }}>
               Solo el administrador puede cambiar estos costos.
             </p>
           )}
 
-          <div className="pn-dialogo__caja" style={{ marginTop: 16 }}>
+          <div className="pn-dialogo__caja" style={{ marginTop: "1rem" }}>
             El costo de cada pizza se vuelve a calcular solo. Los precios del menú <strong style={{ display: "inline" }}>NO</strong> cambian solos.
           </div>
 

@@ -31,11 +31,11 @@ export function WeekCard({ week, comprasTotal, onVentas, onCompras, prevWeek, is
               <p className="text-xl font-bold text-foreground">
                 {isCompras ? fmtCOP(comprasTotal) : `${week.totalUnidades} und · ${week.totalPorciones} porc.`}
               </p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[0.625rem] text-muted-foreground">
                 {isCompras ? "en insumos" : "unidades y porciones"}
               </p>
               {!isCompras && week.totalRevenue > 0 && (
-                <p className="text-[10px] text-emerald-600 font-semibold">{fmtCOP(week.totalRevenue)}</p>
+                <p className="text-[0.625rem] text-emerald-600 font-semibold">{fmtCOP(week.totalRevenue)}</p>
               )}
             </>
           )}

@@ -136,7 +136,7 @@ export function Sidebar({
           <div className="pn-tira__logo">
             <Logo variante="claro" alt="S.I.V.PRO" />
           </div>
-          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21 }}>La Sirena</span>
+          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "1.3125rem" }}>La Sirena</span>
           <button
             ref={menuButtonRef as React.Ref<HTMLButtonElement>}
             type="button"
@@ -155,7 +155,7 @@ export function Sidebar({
         aria-label="Menú principal"
         className={`pn-sidebar flex flex-col shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil
           ? "fixed left-0 right-0 bottom-0 top-16 z-30"
-          : "fixed left-0 top-0 h-full w-[280px] z-30"
+          : "fixed left-0 top-0 h-full w-[var(--ancho-menu)] z-30"
           } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
       >
         {/* Logo, nombre y saludo */}
@@ -165,9 +165,9 @@ export function Sidebar({
               <Logo variante="claro" alt="S.I.V.PRO Logo" />
             </div>
             <div className="min-w-0">
-              <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 21, lineHeight: 1.2 }}>La Sirena</p>
+              <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "1.3125rem", lineHeight: 1.2 }}>La Sirena</p>
               {nombrePila && (
-                <p style={{ fontSize: 18, lineHeight: 1.3 }} className="truncate">
+                <p style={{ fontSize: "1.125rem", lineHeight: 1.3 }} className="truncate">
                   Hola, {nombrePila}
                 </p>
               )}
@@ -175,7 +175,7 @@ export function Sidebar({
           </div>
         )}
         {esMovil && nombrePila && (
-          <p style={{ fontSize: 18, padding: "16px 28px 12px" }}>Hola, {nombrePila}</p>
+          <p style={{ fontSize: "1.125rem", padding: "1rem 1.75rem 0.75rem" }}>Hola, {nombrePila}</p>
         )}
 
         {/* Buscador de módulos */}

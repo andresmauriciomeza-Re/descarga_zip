@@ -392,12 +392,12 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                 ayuda={fija ? "Las categorías originales no cambian de dibujo." : "Escoge un grupo y después el dibujo."}
               >
                 <div className="flex items-center gap-4 mb-4">
-                  <span aria-hidden="true" style={{ fontSize: 64, lineHeight: 1 }}>{icono || "·"}</span>
-                  <span style={{ fontSize: 18, color: "var(--gris-texto)" }}>{icono ? "Así se verá en el menú" : "Todavía no escoges ninguno"}</span>
+                  <span aria-hidden="true" style={{ fontSize: "4rem", lineHeight: 1 }}>{icono || "·"}</span>
+                  <span style={{ fontSize: "1.125rem", color: "var(--gris-texto)" }}>{icono ? "Así se verá en el menú" : "Todavía no escoges ninguno"}</span>
                 </div>
                 {!fija && (
                   <>
-                    <div className="pn-opciones" role="group" aria-label="Grupo de dibujos" style={{ marginBottom: 14 }}>
+                    <div className="pn-opciones" role="group" aria-label="Grupo de dibujos" style={{ marginBottom: "0.875rem" }}>
                       {GRUPOS_ICONOS.map((g, idx) => (
                         <button key={g.nombre} type="button" className="pn-chip" aria-pressed={grupo === idx} onClick={() => setGrupo(idx)}>
                           {g.nombre}
@@ -485,21 +485,21 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
   if (detailItem) {
     const c = categorias.find(x => x.id === detailItem.id) ?? detailItem;
     return (
-      <div className="pn-contenido" style={{ maxWidth: 900 }}>
+      <div className="pn-contenido" style={{ maxWidth: "56.25rem" }}>
         <BotonRuta>
           <BotonAccion icono={IconoVolver} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
         <div className="flex flex-wrap items-center gap-4 mb-2">
-          <span aria-hidden="true" style={{ fontSize: 64, lineHeight: 1 }}>{c.icono}</span>
-          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Categoría: {c.nombre}</h1>
+          <span aria-hidden="true" style={{ fontSize: "4rem", lineHeight: 1 }}>{c.icono}</span>
+          <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0 }}>Categoría: {c.nombre}</h1>
           <PillEstado c={c} />
         </div>
-        <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>{c.descripcion?.trim() || "Todavía no tiene descripción"}</p>
+        <p className="pn-seccion__ayuda" style={{ marginBottom: "1.25rem" }}>{c.descripcion?.trim() || "Todavía no tiene descripción"}</p>
         <SeccionFormulario titulo="Sus productos">
-          <p style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
-          <p className="pn-seccion__ayuda" style={{ margin: "8px 0 0" }}>Para ver y cambiar cada producto, entra a Productos.</p>
+          <p style={{ fontSize: "1.375rem", fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
+          <p className="pn-seccion__ayuda" style={{ margin: "0.5rem 0 0" }}>Para ver y cambiar cada producto, entra a Productos.</p>
         </SeccionFormulario>
-        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+        <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
           {canEdit && <BotonAccion variante="principal" onClick={() => abrirEditar(c)}>Cambiar nombre o dibujo</BotonAccion>}
           {canEdit && (
             <BotonAccion variante={apagada(c) ? "bien" : "normal"} onClick={() => pedirCambioEstado(c)}>{apagada(c) ? "Encender" : "Apagar"}</BotonAccion>
@@ -531,7 +531,7 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
         </AvisoBanner>
       ) : (
         <>
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: "1.5rem" }}>
             <BuscadorGrande
               etiqueta="Buscar una categoría"
               value={search}
@@ -549,14 +549,14 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
               {paged.map(c => (
                 <article key={c.id} className="pn-tarjeta" style={apagada(c) ? { background: "var(--gris-suave)" } : undefined}>
                   <div className="flex items-center gap-4">
-                    <span aria-hidden="true" style={{ fontSize: 56, lineHeight: 1 }}>{c.icono}</span>
-                    <h2 className="pn-tarjeta__nombre" style={{ fontSize: 26 }}>{c.nombre}</h2>
+                    <span aria-hidden="true" style={{ fontSize: "3.5rem", lineHeight: 1 }}>{c.icono}</span>
+                    <h2 className="pn-tarjeta__nombre" style={{ fontSize: "1.625rem" }}>{c.nombre}</h2>
                   </div>
                   <div><PillEstado c={c} /></div>
-                  <p style={{ fontSize: 18, margin: 0, color: c.descripcion?.trim() ? "var(--texto)" : "var(--gris-texto)" }}>
+                  <p style={{ fontSize: "1.125rem", margin: 0, color: c.descripcion?.trim() ? "var(--texto)" : "var(--gris-texto)" }}>
                     {c.descripcion?.trim() || "Todavía no tiene descripción"}
                   </p>
-                  <p style={{ fontSize: 19, fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
+                  <p style={{ fontSize: "1.1875rem", fontWeight: 600, margin: 0 }}>{cuentaMenu(c)}</p>
                   <div className="pn-tarjeta__botones">
                     <BotonAccion variante="normal" onClick={() => setDetailItem(c)}>Ver sus productos</BotonAccion>
                     {canEdit && <BotonAccion variante="normal" onClick={() => abrirEditar(c)}>Cambiar nombre</BotonAccion>}

@@ -1474,7 +1474,7 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-base min-w-[480px]">
+                    <table className="w-full text-base min-w-[30rem]">
                       <thead className="bg-muted/50 text-base text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -1695,7 +1695,7 @@ export function RecepcionCompraScreen({
 
                 <div className="border border-border rounded-xl overflow-hidden max-md:hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-base min-w-[820px]">
+                    <table className="w-full text-base min-w-[51.25rem]">
                       <thead className="bg-muted/50 text-base text-muted-foreground uppercase tracking-wider">
                         <tr>
                           <th className="px-3 py-3 text-left font-semibold">
@@ -1820,12 +1820,12 @@ export function RecepcionCompraScreen({
                     <table className="table-fixed w-full text-base">
                       <colgroup>
                         <col />
-                        <col style={{ width: 58 }} />
-                        <col style={{ width: 58 }} />
-                        <col style={{ width: 76 }} />
-                        <col style={{ width: 46 }} />
-                        <col style={{ width: 76 }} />
-                        <col style={{ width: 68 }} />
+                        <col style={{ width: "3.625rem" }} />
+                        <col style={{ width: "3.625rem" }} />
+                        <col style={{ width: "4.75rem" }} />
+                        <col style={{ width: "2.875rem" }} />
+                        <col style={{ width: "4.75rem" }} />
+                        <col style={{ width: "4.25rem" }} />
                       </colgroup>
                       <thead className="bg-muted/50">
                         <tr>

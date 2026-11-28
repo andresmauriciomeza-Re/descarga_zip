@@ -165,7 +165,7 @@ export function OrdenModal({
 
   /** Labels: 13px en gris oscuro en pantalla completa; xs gris en el modal. */
   const labelCls = isPage
-    ? "block text-[13px] leading-tight font-medium text-foreground/70 mb-1"
+    ? "block text-[0.8125rem] leading-tight font-medium text-foreground/70 mb-1"
     : "block text-xs font-semibold text-muted-foreground mb-1.5";
 
   /** Clase del input: resalta en rojo cuando el campo visible es inválido. */
@@ -966,7 +966,7 @@ export function OrdenModal({
                     // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
                       isPage ? undefined : (
-                      <div className="min-w-[118px]">
+                      <div className="min-w-[7.375rem]">
                         <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>

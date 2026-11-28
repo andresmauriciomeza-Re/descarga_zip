@@ -71,7 +71,7 @@ export function EstadoSelect<T extends string>({
             (igual que antes) y en oscuro toman el tema (--popover: #1c1c1c),
             así el menú de estado deja de verse blanco en modo oscuro. */}
         <Select.Content
-          className="z-[100] bg-popover text-popover-foreground rounded-xl shadow-xl border border-border overflow-hidden min-w-[150px]"
+          className="z-[100] bg-popover text-popover-foreground rounded-xl shadow-xl border border-border overflow-hidden min-w-[9.375rem]"
           sideOffset={6}
           position="popper"
         >

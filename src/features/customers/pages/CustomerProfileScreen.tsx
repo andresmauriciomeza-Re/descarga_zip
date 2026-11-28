@@ -136,7 +136,7 @@ export function ClientProfileScreen({
       )}
       {perfilError && (
         <div className="mb-4 flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50/60 text-sm text-red-700">
-          <span className="flex-1 min-w-[200px]">{perfilError}</span>
+          <span className="flex-1 min-w-[12.5rem]">{perfilError}</span>
           {onReintentarPerfil && (
             <button
               onClick={onReintentarPerfil}

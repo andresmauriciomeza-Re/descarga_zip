@@ -28,7 +28,7 @@ export function BotonDescargarExcel({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       title="Descargar Excel"
-      className="inline-flex items-center gap-2 px-5 py-[11px] bg-card border border-[#2E7D32] text-foreground font-semibold text-sm rounded-full hover:bg-[#2E7D32]/10 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0"
+      className="inline-flex items-center gap-2 px-5 py-[0.6875rem] bg-card border border-[#2E7D32] text-foreground font-semibold text-sm rounded-full hover:bg-[#2E7D32]/10 active:scale-95 transition-all cursor-pointer shadow-sm whitespace-nowrap shrink-0"
     >
       <FileSpreadsheet className="w-4 h-4 text-[#2E7D32] shrink-0" />
       Descargar Excel

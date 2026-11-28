@@ -121,7 +121,7 @@ function Bloque({
 }) {
   return (
     <section className={`pn-seccion ${className}`}>
-      <h2 style={{ marginBottom: 16 }}>{titulo}</h2>
+      <h2 style={{ marginBottom: "1rem" }}>{titulo}</h2>
       {children}
     </section>
   );
@@ -667,7 +667,7 @@ export function ProveedorFormCampos({
                           type="button"
                           onClick={quitarAdjunto}
                           className="pn-boton pn-boton--peligro shrink-0"
-                          style={{ minHeight: 46 }}
+                          style={{ minHeight: "2.875rem" }}
                         >
                           Quitar el archivo
                         </button>

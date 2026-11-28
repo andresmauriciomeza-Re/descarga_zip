@@ -113,7 +113,7 @@ export function PublicNav({
                 initial={{ scale: 0.5 }}
                 animate={{ scale: 1 }}
                 transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[0.625rem] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
               >
                 {count}
               </m.span>

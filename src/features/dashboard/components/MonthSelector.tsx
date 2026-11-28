@@ -32,7 +32,7 @@ export function SelectorMes({
       >
         ‹ Mes anterior
       </button>
-      <span className="min-w-[8rem] text-center text-[17px] font-semibold text-foreground" aria-live="polite">
+      <span className="min-w-[8rem] text-center text-[1.0625rem] font-semibold text-foreground" aria-live="polite">
         {seleccionado.etiqueta}
       </span>
       <button

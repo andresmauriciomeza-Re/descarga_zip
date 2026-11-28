@@ -33,7 +33,7 @@ export function ComprasDetail({ week, items, total, onBack }: { week: WeekEntry;
             <p className="text-xs text-muted-foreground">{items.length} ítems</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px]">
+            <table className="w-full min-w-[35rem]">
               <thead className="bg-muted/50">
                 <tr>{["Insumo","Cantidad","Precio unit.","Subtotal"].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{h}</th>

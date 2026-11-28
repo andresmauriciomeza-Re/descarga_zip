@@ -28,7 +28,7 @@ export function DetalleCargo({ rol, onClose, onCambiar, onIrAEmpleados, puedeCam
             <section className="pn-seccion">
               <h2>Qué puede hacer</h2>
               {AREAS_MATRIZ.map(({ modulo, subs }) => (
-                <div key={modulo} style={{ marginTop: 14 }}>
+                <div key={modulo} style={{ marginTop: "0.875rem" }}>
                   <p className="pn-resumen__area">{modulo}</p>
                   <div className="pn-permisos">
                     {subs.map(sub => {
@@ -60,14 +60,14 @@ export function DetalleCargo({ rol, onClose, onCambiar, onIrAEmpleados, puedeCam
             </aside>
           </div>
 
-          <div className="pn-dialogo__botones" style={{ marginTop: 18 }}>
+          <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem" }}>
             {puedeCambiar && !rol.activo && (
               <BotonAccion variante="principal" onClick={onCambiar}>Cambiar permisos</BotonAccion>
             )}
             <BotonAccion variante="oscuro" onClick={onClose}>Cerrar</BotonAccion>
           </div>
           {puedeCambiar && rol.activo && (
-            <p className="pn-campo__ayuda" style={{ marginTop: 10 }}>
+            <p className="pn-campo__ayuda" style={{ marginTop: "0.625rem" }}>
               Para cambiar lo que puede hacer, primero apágalo desde la lista de cargos.
             </p>
           )}

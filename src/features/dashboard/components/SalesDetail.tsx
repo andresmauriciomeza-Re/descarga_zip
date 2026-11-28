@@ -25,28 +25,30 @@ export function VentasDetail({ week, onBack }: { week: WeekEntry; onBack: () => 
 
       <div className="bg-card border border-border rounded-2xl p-5 mb-5">
         <p className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-wider">Unidades y porciones vendidas por día</p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={week.days} barSize={32} margin={{ top: 8, bottom: 8, left: -16, right: 8 }}>
-            <CartesianGrid key="grid" vertical={false} stroke="var(--border)" />
-            <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...(props as { x?: number; y?: number; payload?: { index: number; value: string } })} days={week.days} />} axisLine={false} tickLine={false} height={40} />
-            <YAxis key="y" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
-            <Bar
-              key="unidades"
-              dataKey="unidades"
-              name="Unidades"
-              stackId="cantidades"
-              radius={[4,4,0,0]}
-              isAnimationActive={false}
-              shape={(props) => {
-                const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
-                const fill = barFill(week.days[index ?? 0]);
-                return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />;
-              }}
-            />
-            <Bar key="porciones" dataKey="porciones" name="Porciones" stackId="cantidades" fill="#F97316" radius={[4,4,0,0]} isAnimationActive={false} />
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={{ height: "13.75rem" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={week.days} barSize={32} margin={{ top: 8, bottom: 8, left: -16, right: 8 }}>
+              <CartesianGrid key="grid" vertical={false} stroke="var(--border)" />
+              <XAxis key="x" dataKey="label" tick={(props) => <WeekTick {...(props as { x?: number; y?: number; payload?: { index: number; value: string } })} days={week.days} />} axisLine={false} tickLine={false} height={40} />
+              <YAxis key="y" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip key="tip" content={(p) => <ChartTooltip {...(p as { active?: boolean; payload?: { value: number; name?: string; dataKey?: string }[]; label?: string })} />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
+              <Bar
+                key="unidades"
+                dataKey="unidades"
+                name="Unidades"
+                stackId="cantidades"
+                radius={[4,4,0,0]}
+                isAnimationActive={false}
+                shape={(props) => {
+                  const { x, y, width, height, index } = props as { x?: number; y?: number; width?: number; height?: number; index?: number };
+                  const fill = barFill(week.days[index ?? 0]);
+                  return <rect x={x} y={y} width={width} height={height} fill={fill} rx={4} ry={4} />;
+                }}
+              />
+              <Bar key="porciones" dataKey="porciones" name="Porciones" stackId="cantidades" fill="#F97316" radius={[4,4,0,0]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border flex-wrap">
           {[["#C62828","Días pasados"],["#ef5350","Hoy"],["var(--border)","Días futuros"]].map(([c, l]) => (
             <div key={l} className="flex items-center gap-1.5">

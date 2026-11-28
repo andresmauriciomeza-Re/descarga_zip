@@ -238,7 +238,7 @@ export function GestionConfigScreen({
     return (
       <TarjetaFila
         key={r.id}
-        nombre={<span style={{ fontSize: 24 }}>{r.nombre}</span>}
+        nombre={<span style={{ fontSize: "1.5rem" }}>{r.nombre}</span>}
         detalle={
           <>
             Puede usar: {textoPuedeUsar(r.accesos)}
@@ -247,10 +247,10 @@ export function GestionConfigScreen({
         }
         datos={[{ etiqueta: "Personas con este cargo", valor: personas === 0 ? "Nadie" : String(personas) }]}
         estado={
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.625rem" }}>
             <EstadoPill tono={r.activo ? "verde" : "gris"}>{r.activo ? "Encendido" : "Apagado"}</EstadoPill>
             {fijo && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 17, fontWeight: 600, color: "var(--gris-texto)" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", fontSize: "1.0625rem", fontWeight: 600, color: "var(--gris-texto)" }}>
                 <Lock size={20} aria-hidden="true" /> Fijo
               </span>
             )}
@@ -331,7 +331,7 @@ export function GestionConfigScreen({
         placeholder="Escribe el nombre del cargo"
       />
 
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: "1.5rem" }}>
         {cargando ? (
           <p role="status" className="pn-nota">Cargando los cargos…</p>
         ) : errorCarga ? (
@@ -348,16 +348,16 @@ export function GestionConfigScreen({
         ) : (
           <>
             {cargosSistema.length > 0 && (
-              <section style={{ marginBottom: 28 }}>
+              <section style={{ marginBottom: "1.75rem" }}>
                 <h2 className="pn-h2">Cargos del sistema</h2>
-                <p className="pn-seccion__ayuda" style={{ margin: "4px 0 14px" }}>Vienen con el sistema y no se pueden cambiar.</p>
+                <p className="pn-seccion__ayuda" style={{ margin: "0.25rem 0 0.875rem" }}>Vienen con el sistema y no se pueden cambiar.</p>
                 <div className="pn-lista">{cargosSistema.map(tarjetaCargo)}</div>
               </section>
             )}
             {cargosPizzeria.length > 0 && (
               <section>
                 <h2 className="pn-h2">Cargos de la pizzería</h2>
-                <p className="pn-seccion__ayuda" style={{ margin: "4px 0 14px" }}>Los que tú creaste. Para cambiarlos, primero apágalos.</p>
+                <p className="pn-seccion__ayuda" style={{ margin: "0.25rem 0 0.875rem" }}>Los que tú creaste. Para cambiarlos, primero apágalos.</p>
                 <div className="pn-lista">{cargosPizzeria.map(tarjetaCargo)}</div>
               </section>
             )}

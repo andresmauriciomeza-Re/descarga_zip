@@ -66,7 +66,7 @@ declare module "@/features/purchase-orders/utils/purchase-orders" {
   }
 }
 
-const campoMedioCls = "max-w-[240px]"; // Número de factura
+const campoMedioCls = "max-w-[15rem]"; // Número de factura
 const campoLargoCls = "max-w-xs"; // Proveedor (búsqueda)
 
 // ─── NUEVA COMPRA — PÁGINA INDEPENDIENTE ─────────────────────────────────────
@@ -392,15 +392,15 @@ export function GestionCompraScreen({
       unidadBase: item.unidadBase,
     }));
     return (
-      <div className="pn-contenido" style={{ maxWidth: 1100 }}>
+      <div className="pn-contenido" style={{ maxWidth: "68.75rem" }}>
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
         <div className="flex flex-wrap items-center gap-3 mb-1">
-          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Factura {det.numeroFactura || "sin número"}</h1>
+          <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0 }}>Factura {det.numeroFactura || "sin número"}</h1>
           <EstadoPill tono={det.estado === "Recibido" ? "verde" : "rojo"}>{det.estado === "Recibido" ? "Recibida" : "Anulada"}</EstadoPill>
         </div>
-        <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>
+        <p className="pn-seccion__ayuda" style={{ marginBottom: "1.25rem" }}>
           {det.proveedor || "Sin proveedor"} · {det.fechaFactura || "sin fecha"} · {origenDe(det).replace("Llegó por la orden de compra", "llegó por la orden").replace("Compra directa, sin orden", "compra directa, sin orden")}
         </p>
         {det.estado === "Anulado" && (
@@ -412,7 +412,7 @@ export function GestionCompraScreen({
         <SeccionFormulario titulo="Qué llegó">
           <TablaItemsFactura items={itemsDetalle} soloLectura onEdit={() => {}} onRemove={() => {}} />
         </SeccionFormulario>
-        <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+        <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
           {det.estado === "Recibido" && canEdit && (
             <BotonAccion variante="peligro" onClick={() => pedirCambiarEstado(det.id)}>Anular la factura</BotonAccion>
           )}
@@ -485,8 +485,8 @@ export function GestionCompraScreen({
                 etiqueta: "Total pagado",
                 valor: g.valorTotal > 0 ? (
                   <>
-                    <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(g.valorTotal)}</span>
-                    <br /><span style={{ fontSize: 17, fontWeight: 400 }}>Incluye IVA de {fmtCOP(g.totalIva ?? 0)}</span>
+                    <span style={{ font: "700 1.5rem var(--font-titulo)" }}>{fmtCOP(g.valorTotal)}</span>
+                    <br /><span style={{ fontSize: "1.0625rem", fontWeight: 400 }}>Incluye IVA de {fmtCOP(g.totalIva ?? 0)}</span>
                   </>
                 ) : "—",
               }]}
@@ -494,7 +494,7 @@ export function GestionCompraScreen({
                 <div className="grid gap-1 justify-items-start">
                   <EstadoPill tono={g.estado === "Recibido" ? "verde" : "rojo"}>{g.estado === "Recibido" ? "Recibida" : "Anulada"}</EstadoPill>
                   {g.estado === "Anulado" && g.motivoAnulacion && (
-                    <span style={{ fontSize: 16, color: "var(--rojo-texto)", maxWidth: 260 }}>Motivo: {g.motivoAnulacion}</span>
+                    <span style={{ fontSize: "1rem", color: "var(--rojo-texto)", maxWidth: "16.25rem" }}>Motivo: {g.motivoAnulacion}</span>
                   )}
                 </div>
               }

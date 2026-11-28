@@ -30,7 +30,7 @@ export function FiltroPeriodo({
           aria-pressed={value === p.id}
           onClick={() => onChange(p.id)}
           className="pn-opcion"
-          style={size === "sm" ? { minHeight: 50, padding: "0 18px" } : undefined}
+          style={size === "sm" ? { minHeight: "3.125rem", padding: "0 1.125rem" } : undefined}
         >
           {p.label}
         </button>

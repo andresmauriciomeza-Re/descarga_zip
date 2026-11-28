@@ -721,7 +721,7 @@ export function CompactInsumoForm({
               if (destino && evento.currentTarget.contains(destino)) return;
               onCerrarSugerencias?.();
             }}
-            className={`relative ${esCompacta ? "flex-[2_1_150px] min-w-[140px]" : "basis-[26%] min-w-[180px] grow"}`}
+            className={`relative ${esCompacta ? "flex-[2_1_9.375rem] min-w-[8.75rem]" : "basis-[26%] min-w-[11.25rem] grow"}`}
           >
             <label className={esCompacta ? labelClsCompacta : labelCls}>{etiquetaNombre}</label>
 
@@ -818,7 +818,7 @@ export function CompactInsumoForm({
 
           {/* Presentación — unidades compatibles y empaques configurables. */}
           {!ocultarMedida && (
-            <div className={esCompacta ? "w-[96px] flex-none" : "w-[132px]"}>
+            <div className={esCompacta ? "w-[6rem] flex-none" : "w-[8.25rem]"}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 {etiquetaUnidad}
               </label>
@@ -868,7 +868,7 @@ export function CompactInsumoForm({
 
           {/* Cantidad permanece como texto hasta que se intenta agregar. */}
           {esCompacta ? (
-            <div className="w-[70px] flex-none">
+            <div className="w-[4.375rem] flex-none">
               <label className={labelClsCompacta}>Cantidad</label>
               <input
                 type="text"
@@ -883,7 +883,7 @@ export function CompactInsumoForm({
               />
             </div>
           ) : (
-            <div className="w-[112px]">
+            <div className="w-[7rem]">
               <label className={labelCls}>Cantidad</label>
               <input
                 type="text"
@@ -905,7 +905,7 @@ export function CompactInsumoForm({
         <div className="flex flex-wrap items-end gap-2 mt-2">
           {requiereContenido && (
             <>
-              <div className="w-[120px] flex-none">
+              <div className="w-[7.5rem] flex-none">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Contenido</label>
                 <input
                   type="text"
@@ -922,7 +922,7 @@ export function CompactInsumoForm({
                   }`}
                 />
               </div>
-              <div className="w-[160px] flex-none">
+              <div className="w-[10rem] flex-none">
                 <label className={esCompacta ? labelClsCompacta : labelCls}>Medida</label>
                 {medidaContenidoBloqueada ? (
                   /* Punto 5: la Medida es de SOLO LECTURA en Nueva Compra y
@@ -963,7 +963,7 @@ export function CompactInsumoForm({
           )}
 
           {/* Monto unitario */}
-          <div className={`flex-none ${esCompacta ? "w-[110px]" : "w-[116px]"}`}>
+          <div className={`flex-none ${esCompacta ? "w-[6.875rem]" : "w-[7.25rem]"}`}>
             <label className={esCompacta ? labelClsCompacta : labelCls}>Monto unitario</label>
 
             <input
@@ -1005,7 +1005,7 @@ export function CompactInsumoForm({
           </div>
 
           {modoIvaActual !== "exento" && (
-            <div className={`${esCompacta ? "w-[76px] flex-none" : "w-[88px]"}`}>
+            <div className={`${esCompacta ? "w-[4.75rem] flex-none" : "w-[5.5rem]"}`}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 IVA{ivaObligatorio && <span className="text-destructive"> *</span>}
               </label>
@@ -1034,7 +1034,7 @@ export function CompactInsumoForm({
               agregar PRODUCTOS (la Orden de Compra no lo usa). Es OBLIGATORIO
               (punto B2): con `errorPrecioVenta` el campo se pinta en rojo. */}
           {mostrarPrecioVenta && (
-            <div className={`${esCompacta ? "w-[110px] flex-none" : "w-[116px]"}`}>
+            <div className={`${esCompacta ? "w-[6.875rem] flex-none" : "w-[7.25rem]"}`}>
               <label className={esCompacta ? labelClsCompacta : labelCls}>
                 Precio de venta
               </label>
@@ -1086,7 +1086,7 @@ export function CompactInsumoForm({
             venta). Al estar fuera de las celdas, un error nunca desplaza ni
             desalinea a los campos vecinos; al estar reservada, nada salta al
             aparecer. */}
-        <div className="min-h-[16px] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <div className="min-h-[1rem] mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
           {errorCantidad && (
             <p className="text-base font-medium text-destructive">{errorCantidad}</p>
           )}

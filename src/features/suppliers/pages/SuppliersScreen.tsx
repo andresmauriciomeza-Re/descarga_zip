@@ -457,7 +457,7 @@ export function SuppliersScreen({
     // Formulario activo (alta o edición): el selector del paso 1 lee y escribe su tipo de persona.
     const formActivo = enAlta || !editItem ? proveedorForm : editForm;
     return (
-      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
+      <div className="pn-contenido" style={{ maxWidth: "62.5rem" }}>
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={salirDePantalla}>Salir sin guardar</BotonAccion>
         </BotonRuta>
@@ -515,18 +515,18 @@ export function SuppliersScreen({
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .slice(0, 5);
     return (
-      <div className="pn-contenido" style={{ maxWidth: 1000 }}>
+      <div className="pn-contenido" style={{ maxWidth: "62.5rem" }}>
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{s.nombre}</h1>
+          <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0, overflowWrap: "anywhere" }}>{s.nombre}</h1>
           <EstadoPill tono={apagado ? "gris" : "verde"}>{apagado ? "Apagado" : "Activo"}</EstadoPill>
           <TipoPersonaSelector comoEtiqueta valor={s.tipoPersona ?? ""} />
         </div>
 
-        <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
+        <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: "1.25rem" }}>
           {canEdit && (
             <BotonAccion variante="principal" onClick={() => setEditItem({ ...s })}>Cambiar datos</BotonAccion>
           )}
@@ -543,11 +543,11 @@ export function SuppliersScreen({
         <DetalleContenido s={s} />
 
         {pedidos.length > 0 && (
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: "1.25rem" }}>
             <SeccionFormulario titulo="Últimos pedidos">
               <div className="pn-permisos">
                 {pedidos.map(o => (
-                  <div key={o.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(120px,1fr) minmax(0,1fr) auto auto" }}>
+                  <div key={o.id} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(7.5rem,1fr) minmax(0,1fr) auto auto" }}>
                     <strong>Orden #{o.id.replace(/^\D+-?/, "") || o.id}</strong>
                     <span>{o.fecha}</span>
                     <span>{o.total != null ? `$${o.total.toLocaleString("es-CO")}` : ""}</span>
@@ -576,7 +576,7 @@ export function SuppliersScreen({
         )}
       />
 
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: "1.5rem" }}>
         <BuscadorGrande
           etiqueta="Buscar un proveedor"
           value={search}

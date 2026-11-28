@@ -54,13 +54,13 @@ export function TablaItemsFactura({
   // CANTIDAD y MEDIDA se superponían en los anchos fijos) y el IVA se muestra
   // como chip con el modo de la línea.
   const headers = ["Nombre", "Cantidad + presentación", "Monto unitario", "IVA", "Subtotal"];
-  const ANCHOS: Record<string, number> = {
-    "Cantidad + presentación": 86,
-    "Monto unitario": 82,
-    IVA: 58,
-    Subtotal: 66,
+  const ANCHOS: Record<string, string> = {
+    "Cantidad + presentación": "5.375rem",
+    "Monto unitario": "5.125rem",
+    IVA: "3.625rem",
+    Subtotal: "4.125rem",
   };
-  const ANCHO_ACCIONES = 112;
+  const ANCHO_ACCIONES = "7rem";
   const columnCount = headers.length + 1;
   const td = "align-middle px-1 " + (enPagina ? "py-1.5" : "py-2.5");
   /** Columnas numéricas: se alinean a la derecha para que las cifras se lean
@@ -243,7 +243,7 @@ export function TablaItemsFactura({
             <span className="text-base font-bold text-muted-foreground">
               Total pagado
             </span>
-            <span style={{ font: "700 28px var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
+            <span style={{ font: "700 1.75rem var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
           </div>
         )}
       </div>

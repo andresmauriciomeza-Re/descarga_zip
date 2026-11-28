@@ -1018,26 +1018,28 @@ export function DashboardScreen({
               ) : vacio(dataVentasGrafica.flatMap((d) => [d.ingresos, d.unidades, d.porciones])) ? (
                 <SinDatos texto={`Todavía no hay ventas ${cuando(fVentas)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <ComposedChart data={dataVentasGrafica} margin={{ left: -8, right: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} {...ejeXMovil} />
-                    <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 14 }} />
-                    <YAxis
-                      yAxisId="cop"
-                      orientation="right"
-                      tick={{ fontSize: 14 }}
-                      tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
-                    />
-                    <Tooltip
-                      content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill={C_ROJO} radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill={C_AZUL} radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke={C_VERDE} strokeWidth={3} dot={{ r: 4 }} connectNulls={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={dataVentasGrafica} margin={{ left: -8, right: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="etiqueta" tick={{ fontSize: 12 }} interval={0} {...ejeXMovil} />
+                      <YAxis yAxisId="und" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis
+                        yAxisId="cop"
+                        orientation="right"
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(v: number) => `${Math.round(v / 1000)}k`}
+                      />
+                      <Tooltip
+                        content={<GrafTooltip formatear={(serie, v) => serie === "ingresos" ? cop(v) : serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar yAxisId="und" dataKey="unidades" name="Unidades" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="und" dataKey="porciones" name="Porciones" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                      <Line yAxisId="cop" dataKey="ingresos" name="Ingresos" stroke={C_VERDE} strokeWidth={3} dot={{ r: 4 }} connectNulls={false} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               )}
               <div className="flex justify-end mt-3">
                 <BotonAccion onClick={() => navigate("sales-chart")}>Ver el detalle por semana ›</BotonAccion>
@@ -1064,18 +1066,20 @@ export function DashboardScreen({
               ) : dataClientes.length === 0 ? (
                 <SinDatos texto={`Todavía no hay compras de clientes ${cuando(fClientes)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={dataClientes} margin={{ left: -8, right: 4, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="nombre" tick={{ fontSize: 14 }} interval={0} angle={-35} textAnchor="end" height={100} />
-                    <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 14 }} />
-                    <YAxis yAxisId="valor" orientation="right" tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                    <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "total" ? cop(v) : `${v} ${v === 1 ? "pedido" : "pedidos"}`)} />} />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill={C_ROJO} radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="valor" dataKey="total" name="Valor comprado" fill={C_AZUL} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataClientes} margin={{ left: -8, right: 4, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="nombre" tick={{ fontSize: 12 }} interval={0} angle={-35} textAnchor="end" height={100} />
+                      <YAxis yAxisId="pedidos" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis yAxisId="valor" orientation="right" tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                      <Tooltip content={<GrafTooltip formatear={(serie, v) => (serie === "total" ? cop(v) : `${v} ${v === 1 ? "pedido" : "pedidos"}`)} />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar yAxisId="pedidos" dataKey="pedidos" name="Pedidos" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                      <Bar yAxisId="valor" dataKey="total" name="Valor comprado" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
 
@@ -1099,17 +1103,19 @@ export function DashboardScreen({
               ) : dataProductos.length === 0 ? (
                 <SinDatos texto={`Todavía no se ha vendido ningún producto ${cuando(fProductos)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={dataProductos} layout="vertical" margin={{ left: 8, right: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 14 }} />
-                    <YAxis type="category" dataKey="nombre" width={150} tick={{ fontSize: 14 }} />
-                    <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />} />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    <Bar dataKey="unidades" name="Unidades" fill={C_AZUL} radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="porciones" name="Porciones" fill={C_ROJO} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataProductos} layout="vertical" margin={{ left: 8, right: 12 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis type="category" dataKey="nombre" width={150} tick={{ fontSize: 12 }} />
+                      <Tooltip content={<GrafTooltip formatear={(serie, v) => serie === "porciones" ? `${v} ${v === 1 ? "porción" : "porciones"}` : und(v)} />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="unidades" name="Unidades" fill={C_AZUL} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="porciones" name="Porciones" fill={C_ROJO} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
 
@@ -1133,17 +1139,19 @@ export function DashboardScreen({
               ) : vacio(dataOCvsCompras.flatMap((d) => [d.ordenes, d.compras])) ? (
                 <SinDatos texto={`Todavía no hay compras ni órdenes ${cuando(fOC)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
-                    <YAxis tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                    <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    <Bar dataKey="ordenes" name="Órdenes de compra" fill={C_AZUL} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="compras" name="Compras (facturas)" fill={C_ROJO} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataOCvsCompras} margin={{ left: -4, right: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="etiqueta" tick={{ fontSize: 12 }} interval={0} height={48} {...ejeXMovil} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                      <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Bar dataKey="ordenes" name="Órdenes de compra" fill={C_AZUL} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="compras" name="Compras (facturas)" fill={C_ROJO} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
 
@@ -1167,25 +1175,27 @@ export function DashboardScreen({
               ) : !hayComprasProveedores ? (
                 <SinDatos texto={`Todavía no hay compras a proveedores ${cuando(fProv)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
-                    <YAxis tick={{ fontSize: 14 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
-                    <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    {nombresProveedores.map((p, i) => (
-                      <Bar
-                        key={p}
-                        dataKey={p}
-                        name={p}
-                        stackId="prov"
-                        fill={PALETA[i % PALETA.length]}
-                        radius={i === nombresProveedores.length - 1 ? [4, 4, 0, 0] : undefined}
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataProveedores} margin={{ left: -4, right: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="etiqueta" tick={{ fontSize: 12 }} interval={0} height={48} {...ejeXMovil} />
+                      <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                      <Tooltip content={<GrafTooltip formatear={(_, v) => cop(v)} />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      {nombresProveedores.map((p, i) => (
+                        <Bar
+                          key={p}
+                          dataKey={p}
+                          name={p}
+                          stackId="prov"
+                          fill={PALETA[i % PALETA.length]}
+                          radius={i === nombresProveedores.length - 1 ? [4, 4, 0, 0] : undefined}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
 
@@ -1209,25 +1219,27 @@ export function DashboardScreen({
               ) : noConformesGrafica.length === 0 ? (
                 <SinDatos texto={`No hay productos no conformes ${cuando(fNC)}`} />
               ) : (
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={dataNoConformes} margin={{ left: -4, right: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="etiqueta" tick={{ fontSize: 14 }} interval={0} height={48} {...ejeXMovil} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 14 }} />
-                    <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
-                    <Legend wrapperStyle={{ fontSize: 16 }} />
-                    {TIPOS_NC.map((t, i) => (
-                      <Bar
-                        key={t}
-                        dataKey={t}
-                        name={t}
-                        stackId="nc"
-                        fill={COLOR_TIPO_NC[t]}
-                        radius={i === TIPOS_NC.length - 1 ? [4, 4, 0, 0] : undefined}
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                <div style={{ height: "20rem" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dataNoConformes} margin={{ left: -4, right: 8, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="etiqueta" tick={{ fontSize: 12 }} interval={0} height={48} {...ejeXMovil} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <Tooltip content={<GrafTooltip formatear={(_, v) => `${v} ${v === 1 ? "registro" : "registros"}`} />} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      {TIPOS_NC.map((t, i) => (
+                        <Bar
+                          key={t}
+                          dataKey={t}
+                          name={t}
+                          stackId="nc"
+                          fill={COLOR_TIPO_NC[t]}
+                          radius={i === TIPOS_NC.length - 1 ? [4, 4, 0, 0] : undefined}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               )}
             </ChartCard>
           </div>

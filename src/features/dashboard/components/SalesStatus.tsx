@@ -22,7 +22,7 @@ export function EstadoVentas({
   return (
     <div
       role={estado === "error" ? "alert" : "status"}
-      className={`flex min-h-[72px] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
+      className={`flex min-h-[4.5rem] items-center justify-center gap-2 rounded-xl px-4 py-3 text-lg text-center ${
         estado === "error"
           ? "bg-destructive/10 text-destructive"
           : "bg-muted/30 text-muted-foreground"

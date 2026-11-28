@@ -38,7 +38,7 @@ export function PreguntaTieneFicha({
       </div>
       {error && <p className="text-xs text-red-500 mt-1 leading-tight">{error}</p>}
       {bloqueada && (
-        <p className="text-[11px] text-muted-foreground mt-1 italic">
+        <p className="text-[0.6875rem] text-muted-foreground mt-1 italic">
           Bloqueado: el producto ya tiene historial de ficha técnica.
         </p>
       )}

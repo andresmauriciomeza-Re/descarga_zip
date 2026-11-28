@@ -34,7 +34,7 @@ export function CambiarRolMenu({
     return (
       <span className="inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground">
         <UserCog className="w-4 h-4 text-primary" />
-        <span className="hidden sm:inline max-w-[140px] truncate">{rolActivoNombre}</span>
+        <span className="hidden sm:inline max-w-[8.75rem] truncate">{rolActivoNombre}</span>
       </span>
     );
   }
@@ -48,13 +48,13 @@ export function CambiarRolMenu({
         className="inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
       >
         <UserCog className="w-4 h-4 text-primary" />
-        <span className="hidden sm:inline max-w-[140px] truncate">{rolActivoNombre}</span>
+        <span className="hidden sm:inline max-w-[8.75rem] truncate">{rolActivoNombre}</span>
         <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground" />
       </button>
 
       {open && (
         <div className="absolute right-0 max-md:fixed max-md:inset-x-2 max-md:top-14 max-md:mt-0 max-md:w-auto z-40 mt-1.5 w-64 bg-card border border-border rounded-xl shadow-xl overflow-hidden">
-          <p className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+          <p className="px-3 py-2 text-[0.625rem] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
             Cambiar de rol
           </p>
           <div className="max-h-72 overflow-y-auto py-1">

@@ -20,20 +20,20 @@ export const iCls =
   "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
-export const campoCortoCls = "max-w-[180px]"; // Fecha de factura · Estado
+export const campoCortoCls = "max-w-[11.25rem]"; // Fecha de factura · Estado
 
 /** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
  *  que el formulario Nuevo Proveedor. */
 
 /** Labels de las guías: 13px en gris oscuro (pantalla completa). */
-export const labelPaginaCls = "block text-[13px] leading-tight font-medium text-foreground/70 mb-1";
+export const labelPaginaCls = "block text-[0.8125rem] leading-tight font-medium text-foreground/70 mb-1";
 
 export const labelModalCls = "block text-xs font-semibold text-muted-foreground mb-1.5";
 
 /** Detalle de compra (vista): rejilla compacta de resumen — label pequeño en
  *  mayúsculas gris y valor en negrita, sin cards anidadas. */
 export const labelDatoCls =
-  "block text-[11px] leading-none font-bold uppercase tracking-widest text-muted-foreground mb-1.5";
+  "block text-[0.6875rem] leading-none font-bold uppercase tracking-widest text-muted-foreground mb-1.5";
 
 export const valorDatoCls = "block text-sm font-semibold text-foreground break-words";
 

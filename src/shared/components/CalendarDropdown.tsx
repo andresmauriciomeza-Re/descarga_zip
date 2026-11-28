@@ -199,14 +199,14 @@ export function CalendarDropdown({
             ref={panelRef}
             // z-[100]: mismo nivel que los portales de los selects del panel
             // (EstadoSelect/UnidadSelect), por encima de los overlays z-50.
-            className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64 max-md:w-80 max-md:max-w-[calc(100vw-8px)]"
+            className="fixed z-[100] bg-card border border-border rounded-xl shadow-xl overflow-hidden select-none w-64 max-md:w-80 max-md:max-w-[calc(100vw-0.5rem)]"
             style={{
               top: pos?.top ?? 0,
               left: pos?.left ?? 0,
               // Invisible hasta medir la posición (useLayoutEffect): evita el
               // parpadeo del cuadro en la esquina antes de anclarlo al campo.
               visibility: pos ? "visible" : "hidden",
-              maxHeight: "calc(100dvh - 200px)",
+              maxHeight: "calc(100dvh - 12.5rem)",
               overflowY: "auto",
             }}
           >
@@ -227,7 +227,7 @@ export function CalendarDropdown({
             </div>
             <div className="grid grid-cols-7 px-2 max-md:px-0 pt-1.5">
               {DIAS.map(d => (
-                <div key={d} className="text-center text-[10px] font-bold text-muted-foreground py-0.5">{d}</div>
+                <div key={d} className="text-center text-[0.625rem] font-bold text-muted-foreground py-0.5">{d}</div>
               ))}
             </div>
             <div className="grid grid-cols-7 px-2 max-md:px-0 pb-1.5">
@@ -256,7 +256,7 @@ export function CalendarDropdown({
             </div>
             <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
               <button type="button" onClick={() => { onChange(""); setOpen(false); onClose?.(); onBlur?.(); }}
-                className="text-[11px] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-muted-foreground hover:text-primary cursor-pointer">
+                className="text-[0.6875rem] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-muted-foreground hover:text-primary cursor-pointer">
                 Borrar
               </button>
               <button type="button" onClick={() => {
@@ -274,7 +274,7 @@ export function CalendarDropdown({
                 onClose?.();
                 onBlur?.();
               }}
-                className="text-[11px] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-primary hover:text-red-700 cursor-pointer">
+                className="text-[0.6875rem] max-md:min-h-11 max-md:min-w-11 max-md:px-2 font-semibold text-primary hover:text-red-700 cursor-pointer">
                 Hoy
               </button>
             </div>

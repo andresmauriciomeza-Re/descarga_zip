@@ -25,10 +25,10 @@ export function ChartCard({
 }) {
   return (
     <section className="pn-seccion" style={{ minWidth: 0 }}>
-      <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF, fontSize: 23, lineHeight: 1.3 }}>
+      <h3 className="font-bold text-foreground" style={{ fontFamily: SERIF, fontSize: "1.4375rem", lineHeight: 1.3 }}>
         {titulo}
       </h3>
-      <p className="pn-seccion__ayuda" style={{ marginBottom: 14 }}>{etiqueta}</p>
+      <p className="pn-seccion__ayuda" style={{ marginBottom: "0.875rem" }}>{etiqueta}</p>
       {periodo !== undefined && onPeriodo && (
         <div className="flex flex-col gap-3 mb-4">
           <FiltroPeriodo

@@ -916,7 +916,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
       />
 
       {insumosStockBajo.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: "1.25rem" }}>
           <AvisoBanner
             titulo={`Hay que comprar ${insumosStockBajo.length} ${insumosStockBajo.length === 1 ? "insumo" : "insumos"}`}
             boton={abrirOrdenCompra ? <BotonAccion onClick={abrirOrdenCompra}>Hacer el pedido al proveedor</BotonAccion> : undefined}
@@ -997,7 +997,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                 </Dialog.Title>
               </div>
 
-              <div className="grid gap-5" style={{ maxWidth: 980 }}>
+              <div className="grid gap-5" style={{ maxWidth: "61.25rem" }}>
                 <SeccionFormulario numero={1} titulo="¿Cómo se consigue?" ayuda={editingId ? "Esto no se puede cambiar después de creado." : undefined}>
                   <OpcionesBotones
                     etiqueta="Cómo se consigue"
@@ -1061,7 +1061,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           ariaLabel="Se mide en"
                           dataField={esPI ? "unidad" : undefined}
                           mostrarValorSeleccionadoCorto
-                          fieldClassName={`h-[60px] border-2 border-[var(--borde-campo)] rounded-[14px] text-[20px] ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
+                          fieldClassName={`h-[3.75rem] border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-[1.25rem] ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
                         />
                         {esOtraPresentacion(unidadForm) && (
                           <div className="relative w-40 shrink-0">
@@ -1074,7 +1074,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                               placeholder="¿Cuánto trae?"
                               aria-label="Contenido"
                               onChange={(e) => setContenidoPresentacion(numeroDeInput(limpiarNumeroInput(e.target.value)))}
-                              style={{ paddingRight: 44 }}
+                              style={{ paddingRight: "2.75rem" }}
                             />
                             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
                               {unidadForm === OTRA_PRESENTACION_G ? "g" : "ml"}
@@ -1107,7 +1107,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                                 tocar("pesoMedida");
                               }}
                               onBlur={() => tocar("pesoMedida")}
-                              style={{ paddingRight: 56 }}
+                              style={{ paddingRight: "3.5rem" }}
                             />
                             <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
                               {unidadPeso}
@@ -1216,7 +1216,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     ? <EstadoPill tono="gris">Apagado</EstadoPill>
                     : <EstadoPill tono={stock === "ok" ? "verde" : "rojo"}>{stock === "ok" ? "Alcanza bien" : "Hay que comprar"}</EstadoPill>}
                 </div>
-                <p className="pn-seccion__ayuda" style={{ marginTop: -6 }}>{categoriaDe(d.categoriaId)} · {etiquetaTipo(d)}</p>
+                <p className="pn-seccion__ayuda" style={{ marginTop: "-0.375rem" }}>{categoriaDe(d.categoriaId)} · {etiquetaTipo(d)}</p>
 
                 <div className="grid gap-4">
                   <SeccionFormulario titulo="Cuánto hay">
@@ -1252,7 +1252,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   )}
                 </div>
 
-                <div className="pn-dialogo__botones" style={{ marginTop: 18, justifyContent: "flex-start" }}>
+                <div className="pn-dialogo__botones" style={{ marginTop: "1.125rem", justifyContent: "flex-start" }}>
                   {esProd && (
                     <BotonAccion
                       variante="principal"
@@ -1278,7 +1278,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                   <BotonAccion variante="peligro" onClick={() => { cerrarDetalle(); intentarEliminar(d.id); }}>Borrar</BotonAccion>
                   <BotonAccion variante="oscuro" onClick={cerrarDetalle}>Cerrar</BotonAccion>
                 </div>
-                {apagado && <p className="pn-campo__ayuda" style={{ marginTop: 10 }}>Para cambiar sus datos, primero enciéndelo.</p>}
+                {apagado && <p className="pn-campo__ayuda" style={{ marginTop: "0.625rem" }}>Para cambiar sus datos, primero enciéndelo.</p>}
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>

@@ -185,11 +185,11 @@ export function SelectorProductoInsumo({
     <>
       <div
         ref={trigger}
-        className={`relative min-h-[56px] h-[56px] w-full rounded-[14px] bg-white border-2 focus-within:ring-2 focus-within:ring-primary/30 ${
+        className={`relative min-h-[3.5rem] h-[3.5rem] w-full rounded-[0.875rem] bg-white border-2 focus-within:ring-2 focus-within:ring-primary/30 ${
           open ? "border-primary" : "border-border"
         }`}
       >
-        <Search className="absolute left-[18px] top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+        <Search className="absolute left-[1.125rem] top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
         <input
           ref={input}
           type="text"
@@ -209,10 +209,10 @@ export function SelectorProductoInsumo({
             ubicar();
           }}
           onKeyDown={alTeclado}
-          className="h-full w-full rounded-[14px] bg-transparent pl-[46px] pr-[46px] text-lg text-foreground placeholder:text-muted-foreground focus:outline-none"
+          className="h-full w-full rounded-[0.875rem] bg-transparent pl-[2.875rem] pr-[2.875rem] text-lg text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
         <ChevronDown
-          className={`absolute right-[18px] top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-transform pointer-events-none ${
+          className={`absolute right-[1.125rem] top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-transform pointer-events-none ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -256,7 +256,7 @@ export function SelectorProductoInsumo({
                       if (!opcion.disabled) setActiveId(opcion.id);
                     }}
                     onClick={() => seleccionar(opcion.id)}
-                    className={`w-full text-left px-3.5 py-3 min-h-[48px] text-lg rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                    className={`w-full text-left px-3.5 py-3 min-h-[3rem] text-lg rounded-[0.625rem] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
                       opcion.disabled
                         ? "text-muted-foreground cursor-not-allowed"
                         : opcion.id === activeId

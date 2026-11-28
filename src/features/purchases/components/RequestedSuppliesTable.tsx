@@ -144,14 +144,14 @@ export function InsumosSolicitadosTable({
    * angosta, `min-w` conserva el ancho mínimo y el scroll queda dentro del
    * contenedor de la tabla (salvo con `sinScrollX`, que lo desactiva).
    */
-  const ANCHOS: Record<string, number | undefined> = {
-    "Cantidad + presentación": sinScrollX ? 96 : 104,
-    "Monto unitario": sinScrollX ? 82 : 90,
-    IVA: sinScrollX ? 68 : 82,
-    Subtotal: sinScrollX ? 78 : 88,
+  const ANCHOS: Record<string, string | undefined> = {
+    "Cantidad + presentación": sinScrollX ? "6rem" : "6.5rem",
+    "Monto unitario": sinScrollX ? "5.125rem" : "5.625rem",
+    IVA: sinScrollX ? "4.25rem" : "5.125rem",
+    Subtotal: sinScrollX ? "4.875rem" : "5.5rem",
   };
-  const ANCHO_ACCIONES = 112;
-  const ANCHO_MINIMO = 500;
+  const ANCHO_ACCIONES = "7rem";
+  const ANCHO_MINIMO = "31.25rem";
   const colgroup = (
     <colgroup>
       {headers.map((h) => (

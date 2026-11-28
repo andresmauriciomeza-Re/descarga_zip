@@ -155,7 +155,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
       )}
       {perfilError && (
         <div className="mb-4 flex flex-wrap items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 bg-red-50/60 text-sm text-red-700">
-          <span className="flex-1 min-w-[200px]">{perfilError}</span>
+          <span className="flex-1 min-w-[12.5rem]">{perfilError}</span>
           {onReintentarPerfil && (
             <button
               onClick={onReintentarPerfil}
@@ -243,7 +243,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 readOnly
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
               />
-              <p className="text-[11px] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
+              <p className="text-[0.6875rem] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
             </div>
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground mb-1.5">
@@ -256,7 +256,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                 readOnly
                 className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground focus:outline-none select-none"
               />
-              <p className="text-[11px] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
+              <p className="text-[0.6875rem] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
             </div>
           </div>
 
@@ -269,7 +269,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
             <div className="px-3 py-2.5 rounded-xl border border-border bg-muted/40 text-sm font-medium text-muted-foreground select-none">
               {nombre}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
+            <p className="text-[0.6875rem] text-muted-foreground mt-1 ml-0.5">Este campo no es editable</p>
           </div>
 
           {/* Correo */}
@@ -348,7 +348,7 @@ export function MiPerfilScreen({ navigate, userRole, onLogout, isStaff, loggedIn
                           ))}
                         </span>
                         {i === 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wide shrink-0">
+                          <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[0.625rem] font-bold uppercase tracking-wide shrink-0">
                             Actual
                           </span>
                         )}

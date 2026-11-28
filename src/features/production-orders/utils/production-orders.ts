@@ -129,7 +129,7 @@ export interface OrdenProduccion {
 
 export const PER_PAGE = 10;
 
-export const INPUT_LINEA_CLS = "w-full h-[54px] px-[18px] bg-muted border border-border text-base text-foreground rounded-[14px] focus:outline-none focus:ring-2 focus:ring-primary/30";
+export const INPUT_LINEA_CLS = "w-full h-[3.375rem] px-[1.125rem] bg-muted border border-border text-base text-foreground rounded-[0.875rem] focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** Tiempo fijo de una orden "Pedido de cliente": el plato solo pasa por el
     horno. El `tiempoPreparacion` de la ficha técnica es de "Preparación en

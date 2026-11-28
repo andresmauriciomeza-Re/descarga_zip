@@ -67,7 +67,7 @@ export function DialogoConfirmacion(props: Confirmar | Bloqueo) {
           </AlertDialog.Description>
 
           {props.variante !== "bloqueo" && props.pedirMotivo && (
-            <div className="pn-campo" style={{ marginBottom: 16 }}>
+            <div className="pn-campo" style={{ marginBottom: "1rem" }}>
               <label htmlFor={idMotivo} className="pn-etiqueta">{props.etiquetaMotivo ?? "Motivo (opcional)"}</label>
               <input id={idMotivo} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </div>

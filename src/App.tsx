@@ -2247,7 +2247,7 @@ function AppContent() {
     ? esMovil
       ? ""
       : menuAbierto
-        ? "ml-[280px]"
+        ? "ml-[var(--ancho-menu)]"
         : "ml-0"
     : "";
 
@@ -2276,10 +2276,10 @@ function AppContent() {
           // Todas las alertas del sistema (landing y panel) duran 2 segundos.
           duration: 2000,
           // En celular el botón de acción del toast ("Ver carrito") llega a 44 px.
-          classNames: { actionButton: "max-md:!h-11 max-md:!px-4 max-md:!text-sm" },
+          classNames: { actionButton: `max-md:!h-11 max-md:!px-4 ${isAdmin ? "max-md:!text-base" : "max-md:!text-sm"}` },
           style: {
             fontFamily: "var(--font-texto)",
-            fontSize: isAdmin ? "16px" : "15px",
+            fontSize: isAdmin ? "1rem" : "15px",
           },
         }}
       />

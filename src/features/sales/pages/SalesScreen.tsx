@@ -678,7 +678,7 @@ const hoyFecha = () => {
           <div className="pn-modal__cab">
             <h2 id="titulo-venta-local" className="pn-modal__titulo">Registrar venta del local</h2>
           </div>
-          <div className="grid gap-5" style={{ maxWidth: 980 }}>
+          <div className="grid gap-5" style={{ maxWidth: "61.25rem" }}>
             <SeccionFormulario numero={1} titulo="¿Quién compra?">
               <div className="pn-campo space-y-4">
             <div className="min-w-0">
@@ -722,7 +722,7 @@ const hoyFecha = () => {
               {errorCliente && <p id="error-cliente-venta" role="alert" className="text-base mt-1 text-red-500 dark:text-red-400">Selecciona un cliente o créalo.</p>}
               {clienteElegido && (
                 <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <p role="status" style={{ color: "var(--verde-texto)", fontWeight: 600, fontSize: 18, margin: 0 }}>✓ Es {usuario}</p>
+                  <p role="status" style={{ color: "var(--verde-texto)", fontWeight: 600, fontSize: "1.125rem", margin: 0 }}>✓ Es {usuario}</p>
                   <BotonAccion variante="normal" onClick={borrarCliente}>Buscar otro cliente</BotonAccion>
                 </div>
               )}
@@ -1152,7 +1152,7 @@ const hoyFecha = () => {
                     cantidadUnidades > 0 ? `${cantidadUnidades} und` : "",
                   ].filter(Boolean).join(" · ")} · Total a cobrar
                 </span>
-                <span style={{ font: "700 30px var(--font-titulo)", color: "var(--texto)" }}>
+                <span style={{ font: "700 1.875rem var(--font-titulo)", color: "var(--texto)" }}>
                   ${totalCalculado.toLocaleString("es-CO")}
                 </span>
               </div>
@@ -1879,7 +1879,7 @@ export function VentasScreen({
       />
 
       {porVerificar > 0 && (
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: "1.25rem" }}>
           <AvisoBanner
             titulo={`Tienes ${porVerificar} ${porVerificar === 1 ? "pedido esperando" : "pedidos esperando"} por ti`}
             boton={<BotonAccion onClick={() => { setEstadoFiltro("Por verificar"); setPage(1); }}>Ver esos pedidos</BotonAccion>}
@@ -1924,7 +1924,7 @@ export function VentasScreen({
               pre={
                 <span className="inline-flex items-center gap-2">
                   Pedido #{p.id} · {p.ventaLocal ? "Local" : "Página"}
-                  {p.estado === "Por verificar" && <span aria-label="Nuevo" title="Nuevo" style={{ width: 12, height: 12, borderRadius: 999, background: "#F97316" }} className="animate-pulse" />}
+                  {p.estado === "Por verificar" && <span aria-label="Nuevo" title="Nuevo" style={{ width: "0.75rem", height: "0.75rem", borderRadius: "62.4375rem", background: "#F97316" }} className="animate-pulse" />}
                 </span>
               }
               nombre={p.usuario}
@@ -1932,12 +1932,12 @@ export function VentasScreen({
               datos={[
                 { etiqueta: "Recoge", valor: p.horaRecogida ? formatearHora(p.horaRecogida) : "—" },
                 { etiqueta: "Pago", valor: p.metodoPago ? `Pagó con ${p.metodoPago}` : "—" },
-                { etiqueta: "Total", valor: <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(p.total)}</span> },
+                { etiqueta: "Total", valor: <span style={{ font: "700 1.5rem var(--font-titulo)" }}>{fmtCOP(p.total)}</span> },
               ]}
               estado={
-                <div className="grid gap-1 justify-items-start" style={{ maxWidth: 260 }}>
+                <div className="grid gap-1 justify-items-start" style={{ maxWidth: "16.25rem" }}>
                   <EstadoPill tono={TONO_VENTA[p.estado]}>{etiquetaEstadoVenta(p)}</EstadoPill>
-                  <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>{fraseEstado(p)}</span>
+                  <span style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>{fraseEstado(p)}</span>
                 </div>
               }
               acciones={
@@ -1953,13 +1953,13 @@ export function VentasScreen({
 
       <PaginadorGrande pagina={page} total={filtered.length} porPagina={PER_PAGE} onCambiar={setPage} />
 
-      <section className="pn-seccion" style={{ marginTop: 28 }}>
+      <section className="pn-seccion" style={{ marginTop: "1.75rem" }}>
         <h2>Qué significa cada estado</h2>
-        <div className="grid gap-3" style={{ marginTop: 14 }}>
+        <div className="grid gap-3" style={{ marginTop: "0.875rem" }}>
           {significados.map((s) => (
             <div key={s.estado} className="flex flex-wrap items-center gap-3">
               <EstadoPill tono={TONO_VENTA[s.estado]}>{s.texto}</EstadoPill>
-              <span style={{ fontSize: 18 }}>{s.frase}</span>
+              <span style={{ fontSize: "1.125rem" }}>{s.frase}</span>
             </div>
           ))}
         </div>
@@ -1982,18 +1982,18 @@ export function VentasScreen({
                 <EstadoPill tono={TONO_VENTA[detailItem.estado]}>{etiquetaEstadoVenta(detailItem)}</EstadoPill>
               </div>
               {detailItem.ventaLocal && detailItem.estado === "Por entregar" && detailItem.finVentaLocalMs != null && (
-                <p className="mb-2 tabular-nums" style={{ fontSize: 18 }}>⏱ {tiempoRestante(detailItem.finVentaLocalMs, ahora)}</p>
+                <p className="mb-2 tabular-nums" style={{ fontSize: "1.125rem" }}>⏱ {tiempoRestante(detailItem.finVentaLocalMs, ahora)}</p>
               )}
 
-              <h1 className="mb-1" style={{ font: "700 34px/1.15 var(--font-titulo)" }}>
+              <h1 className="mb-1" style={{ font: "700 2.125rem/1.15 var(--font-titulo)" }}>
                 Pedido #{detailItem.id} · {detailItem.usuario}
               </h1>
-              <p className="pn-seccion__ayuda" style={{ marginBottom: 16 }}>
+              <p className="pn-seccion__ayuda" style={{ marginBottom: "1rem" }}>
                 {detailItem.ventaLocal ? "Venta del local" : "Pedido de la página"} · {detailItem.fecha}
               </p>
 
               {/* Lo que se puede hacer con el pedido (anular y devolución viven aquí) */}
-              <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: 20 }}>
+              <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start", marginBottom: "1.25rem" }}>
                 {!["Por verificar", "En espera", "Anulado", "Devolucion"].includes(detailItem.estado) && (
                   <BotonAccion variante="normal" onClick={() => setFacturaVenta(detailItem)}>Imprimir factura</BotonAccion>
                 )}
@@ -2031,7 +2031,7 @@ export function VentasScreen({
                             </div>
                           ))}
                         </div>
-                        <p style={{ font: "700 26px var(--font-titulo)", margin: "14px 0 0", textAlign: "right" }}>
+                        <p style={{ font: "700 1.625rem var(--font-titulo)", margin: "0.875rem 0 0", textAlign: "right" }}>
                           Total: {fmtCOP(detailItem.detalle.reduce((s, d) => s + d.precio * d.cantidad, 0))}
                         </p>
                       </>
@@ -2080,7 +2080,7 @@ export function VentasScreen({
                             {comps.map((c, i) => (
                               <div key={i}>
                                 {comps.length > 1 && (
-                                  <p className="text-[11px] font-semibold text-foreground mb-1">
+                                  <p className="text-[0.6875rem] font-semibold text-foreground mb-1">
                                     {etiquetas[i] ?? `Comprobante ${i + 1}`}
                                     {(c.fecha || c.hora) && (
                                       <span className="text-muted-foreground font-normal">
@@ -2102,7 +2102,7 @@ export function VentasScreen({
                                     className="block w-full rounded-xl overflow-hidden border border-border bg-muted cursor-zoom-in hover:border-primary/40 transition-colors"
                                   >
                                     <img src={c.url} alt="Comprobante" className="w-full object-contain max-h-60" />
-                                    <span className="block text-[11px] text-muted-foreground py-1">Clic para ampliar</span>
+                                    <span className="block text-[0.6875rem] text-muted-foreground py-1">Clic para ampliar</span>
                                   </button>
                                 )}
                               </div>
@@ -2157,7 +2157,7 @@ export function VentasScreen({
                         )}
                         {comprobante && (
                           <div className="mt-3">
-                            <p className="text-[11px] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
+                            <p className="text-[0.6875rem] font-semibold text-red-800 mb-1">Comprobante de devolución</p>
                             {esComprobantePdf(comprobante) ? (
                               <a
                                 href={comprobante}
@@ -2175,7 +2175,7 @@ export function VentasScreen({
                                 className="block w-full rounded-xl overflow-hidden border border-red-200 bg-white cursor-zoom-in hover:border-red-400 transition-colors"
                               >
                                 <img src={comprobante} alt="Comprobante de devolución" className="w-full object-contain max-h-56" />
-                                <span className="block text-[11px] text-red-700 py-1">Clic para ampliar</span>
+                                <span className="block text-[0.6875rem] text-red-700 py-1">Clic para ampliar</span>
                               </button>
                             )}
                           </div>
@@ -2188,18 +2188,18 @@ export function VentasScreen({
                     <div className="grid gap-4">
                       <section className="pn-seccion">
                         <h2>Paso 1 · ¿Cuánta plata llegó?</h2>
-                        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1" style={{ marginTop: 14 }} aria-live="polite">
+                        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1" style={{ marginTop: "0.875rem" }} aria-live="polite">
                           <div className="pn-dialogo__caja" style={{ marginBottom: 0 }}>
-                            <strong style={{ fontWeight: 500, fontSize: 16 }}>Total del pedido</strong>
-                            <span style={{ font: "700 22px var(--font-titulo)" }}>{fmtPago(resumenPagos?.total ?? detailItem.total)}</span>
+                            <strong style={{ fontWeight: 500, fontSize: "1rem" }}>Total del pedido</strong>
+                            <span style={{ font: "700 1.375rem var(--font-titulo)" }}>{fmtPago(resumenPagos?.total ?? detailItem.total)}</span>
                           </div>
                           <div className="pn-dialogo__caja" style={{ marginBottom: 0 }}>
-                            <strong style={{ fontWeight: 500, fontSize: 16 }}>Llegó</strong>
-                            <span style={{ font: "700 22px var(--font-titulo)" }}>{resumenPagos ? fmtPago(resumenPagos.recibido) : "—"}</span>
+                            <strong style={{ fontWeight: 500, fontSize: "1rem" }}>Llegó</strong>
+                            <span style={{ font: "700 1.375rem var(--font-titulo)" }}>{resumenPagos ? fmtPago(resumenPagos.recibido) : "—"}</span>
                           </div>
                           <div className="pn-dialogo__caja" style={{ marginBottom: 0, background: "var(--rojo-suave)", borderColor: "var(--rojo)" }}>
-                            <strong style={{ fontWeight: 500, fontSize: 16, color: "var(--rojo-texto)" }}>Falta</strong>
-                            <span style={{ font: "700 22px var(--font-titulo)", color: "var(--rojo-texto)" }}>{resumenPagos ? fmtPago(resumenPagos.falta) : "—"}</span>
+                            <strong style={{ fontWeight: 500, fontSize: "1rem", color: "var(--rojo-texto)" }}>Falta</strong>
+                            <span style={{ font: "700 1.375rem var(--font-titulo)", color: "var(--rojo-texto)" }}>{resumenPagos ? fmtPago(resumenPagos.falta) : "—"}</span>
                           </div>
                         </div>
                         {resumenPagos && resumenPagos.en_revision > 0 && (
@@ -2207,25 +2207,25 @@ export function VentasScreen({
                         )}
                         {errorPagos ? (
                           <p role="alert" className="pn-campo__error"><span>No se pudo actualizar el resumen de pagos. Intenta de nuevo en un momento.</span></p>
-                        ) : !resumenPagos && <p role="status" className="pn-nota" style={{ margin: "12px 0 0" }}>Cargando los pagos…</p>}
-                        {resumenPagos?.pagos.length === 0 && <p className="pn-nota" style={{ margin: "12px 0 0" }}>Todavía no hay comprobantes.</p>}
-                        <div className="grid gap-3" style={{ marginTop: 14 }}>
+                        ) : !resumenPagos && <p role="status" className="pn-nota" style={{ margin: "0.75rem 0 0" }}>Cargando los pagos…</p>}
+                        {resumenPagos?.pagos.length === 0 && <p className="pn-nota" style={{ margin: "0.75rem 0 0" }}>Todavía no hay comprobantes.</p>}
+                        <div className="grid gap-3" style={{ marginTop: "0.875rem" }}>
                           {resumenPagos?.pagos.map((pago) => {
                             const valor = montosPago[pago.id_pago] ?? String(pago.monto_declarado ?? "");
                             const monto = Number(valor);
                             const puedeConfirmar = Number.isSafeInteger(monto) && monto > 0;
                             return (
-                              <article key={pago.id_pago} className="pn-fila" style={{ display: "grid", gap: 10 }}>
-                                <p style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{formatearFechaHora(pago.fecha)}</p>
+                              <article key={pago.id_pago} className="pn-fila" style={{ display: "grid", gap: "0.625rem" }}>
+                                <p style={{ fontSize: "1.125rem", fontWeight: 600, margin: 0 }}>{formatearFechaHora(pago.fecha)}</p>
                                 {pago.comprobante && (esComprobantePdf(pago.comprobante) ? (
                                   <div><BotonAccion href={pago.comprobante} target="_blank" rel="noreferrer">Abrir el comprobante (PDF)</BotonAccion></div>
                                 ) : (
                                   <div className="grid gap-2 justify-items-start">
-                                    <img src={pago.comprobante} alt="Comprobante" style={{ maxHeight: 200, borderRadius: 12, border: "2px solid var(--borde-suave)" }} />
+                                    <img src={pago.comprobante} alt="Comprobante" style={{ maxHeight: "12.5rem", borderRadius: "0.75rem", border: "2px solid var(--borde-suave)" }} />
                                     <BotonAccion onClick={() => setVisorSrc(pago.comprobante)}>Ver el comprobante más grande</BotonAccion>
                                   </div>
                                 ))}
-                                <p style={{ fontSize: 17, margin: 0 }}>
+                                <p style={{ fontSize: "1.0625rem", margin: 0 }}>
                                   Dijo que pagó: <strong>{pago.monto_declarado == null ? "no dijo cuánto" : fmtPago(pago.monto_declarado)}</strong>
                                   {" · "}Tú confirmaste: <strong>{pago.monto_confirmado == null ? "todavía nada" : fmtPago(pago.monto_confirmado)}</strong>
                                 </p>
@@ -2242,7 +2242,7 @@ export function VentasScreen({
                                         setMontosPago((actuales) => ({ ...actuales, [pago.id_pago]: entrada }));
                                       }}
                                     />
-                                    <div style={{ marginTop: 10 }}>
+                                    <div style={{ marginTop: "0.625rem" }}>
                                       <BotonAccion
                                         variante="principal"
                                         disabled={!puedeConfirmar || operacionPago || errorPagos}
@@ -2261,7 +2261,7 @@ export function VentasScreen({
 
                       <section className="pn-seccion">
                         <h2>Paso 2 · ¿Qué hacemos?</h2>
-                        <div className="grid gap-5" style={{ marginTop: 14 }}>
+                        <div className="grid gap-5" style={{ marginTop: "0.875rem" }}>
                           <div>
                             <BotonAccion
                               variante="principal"
@@ -2611,7 +2611,7 @@ export function VentasScreen({
                 <div className="flex gap-2 px-5 pb-5">
                   <button
                     onClick={cerrarAnular}
-                    className="flex-1 py-2.5 max-md:min-h-11 rounded-2xl min-h-[56px] border-2 border-black text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 rounded-2xl min-h-[3.5rem] border-2 border-black text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     No, dejarlo como está
                   </button>
@@ -2705,7 +2705,7 @@ export function VentasScreen({
                   </div>
                 </button>
 
-                <p className="pt-1 text-[11px] text-muted-foreground text-center">
+                <p className="pt-1 text-[0.6875rem] text-muted-foreground text-center">
                   Total a facturar:{" "}
                   <span className="font-bold text-foreground">
                     {fmtCOP(facturaVenta.total)}

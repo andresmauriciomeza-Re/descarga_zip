@@ -652,7 +652,7 @@ export function OrdenCompraScreen({
                   </>
                 }
                 datos={[
-                  { etiqueta: "Total", valor: <span style={{ font: "700 24px var(--font-titulo)" }}>{fmtCOP(totalOrden)}</span> },
+                  { etiqueta: "Total", valor: <span style={{ font: "700 1.5rem var(--font-titulo)" }}>{fmtCOP(totalOrden)}</span> },
                   {
                     etiqueta: "Factura",
                     valor: numerosFactura.length > 0
@@ -663,9 +663,9 @@ export function OrdenCompraScreen({
                 estado={
                   <div className="grid gap-1 justify-items-start">
                     <EstadoPill tono={tonoEstado[o.estado]}>{o.estado}</EstadoPill>
-                    <span style={{ fontSize: 16, color: "var(--gris-texto)" }}>{fechaUltimoCambio(o)}</span>
+                    <span style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>{fechaUltimoCambio(o)}</span>
                     <EstadoHistorialTooltip historial={o.historialEstados ?? []} estadoColors={ESTADO_CONFIG}>
-                      <button type="button" className="pn-boton pn-boton--normal" style={{ minHeight: 44, fontSize: 16 }}>Ver historial</button>
+                      <button type="button" className="pn-boton pn-boton--normal" style={{ minHeight: "2.75rem", fontSize: "1rem" }}>Ver historial</button>
                     </EstadoHistorialTooltip>
                   </div>
                 }

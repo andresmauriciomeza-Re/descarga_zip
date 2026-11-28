@@ -44,7 +44,7 @@ export function BarraProgresoPedido({ pedido }: { pedido: Venta }) {
                 {anterior ? "✓" : indice + 1}
               </span>
               <span
-                className={`mt-1 hidden text-[10px] leading-tight sm:block ${
+                className={`mt-1 hidden text-[0.625rem] leading-tight sm:block ${
                   actual ? "font-bold text-foreground" : "text-muted-foreground"
                 }`}
               >

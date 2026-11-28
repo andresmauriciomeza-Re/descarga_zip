@@ -366,7 +366,7 @@ function InsumosFichaTable({
                     {presentaciones?.[ins.insumoId ?? ins.nombre] ? (
                       <div>
                         <div>{formatoCantidadFicha.format(ins.cantidad)}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-[0.6875rem] text-muted-foreground">
                           {formatoCantidadFicha.format(presentaciones[ins.insumoId ?? ins.nombre].cantidadOriginal)} ×{" "}
                           {presentaciones[ins.insumoId ?? ins.nombre].etiqueta}
                         </div>
@@ -752,7 +752,7 @@ export function FichaTecnicaEditor({
               </div>
             ) : (
               <>
-                <div className="flex gap-2 text-[11px] font-semibold text-muted-foreground mb-1">
+                <div className="flex gap-2 text-[0.6875rem] font-semibold text-muted-foreground mb-1">
                   <span className="flex-1 min-w-0">Tamaño</span>
                   <span className="w-20 shrink-0">Porciones</span>
                   <span className="w-6 shrink-0" />
@@ -952,7 +952,7 @@ export function FichaTecnicaEditor({
           <ol className="space-y-1.5 mb-3">
             {ficha.pasos.map((p, idx) => (
               <li key={idx} className="flex items-start gap-2 px-3 py-2 bg-muted/40 rounded-xl border border-border">
-                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[0.6875rem] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{p}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button onClick={() => moverPaso(idx, -1)} disabled={idx === 0} title="Subir paso"
@@ -1088,7 +1088,7 @@ export function FichaTecnicaDetalle({
           <ol className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1">
             {(v.pasos ?? []).map((paso, idx) => (
               <li key={idx} className="flex items-start gap-2 px-3 py-1 bg-muted/40 rounded-xl border border-border">
-                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">{idx + 1}</span>
+                <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[0.6875rem] font-bold flex items-center justify-center">{idx + 1}</span>
                 <span className="flex-1 text-sm text-foreground leading-snug">{paso}</span>
               </li>
             ))}

@@ -10,7 +10,7 @@ export function BadgeImagenes({ p }: { p: Producto }) {
   if (n === 0) return null;
   return (
     <span
-      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground whitespace-nowrap"
+      className="mt-0.5 inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-muted-foreground whitespace-nowrap"
       title={`${n} ${n === 1 ? "imagen" : "imágenes"} del producto · la primera es la portada`}
     >
       <ImageIcon className="w-3 h-3" />

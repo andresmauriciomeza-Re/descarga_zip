@@ -23,7 +23,7 @@ export function CampoTiempoPreparacion({ valor, onChange, deshabilitado }: {
       </label>
       <input
         id={id}
-        className="w-full rounded-[14px] border-2 border-[var(--borde-campo)] bg-white px-4 min-h-[56px] text-lg"
+        className="w-full rounded-[0.875rem] border-2 border-[var(--borde-campo)] bg-white px-4 min-h-[3.5rem] text-lg"
         type="number"
         min={MINIMO}
         max={MAXIMO}
@@ -35,7 +35,7 @@ export function CampoTiempoPreparacion({ valor, onChange, deshabilitado }: {
         aria-invalid={invalido}
         aria-describedby={invalido ? id + "-error" : undefined}
       />
-      {invalido && <p id={id + "-error"} style={{ fontSize: 18, fontWeight: 600, color: "var(--rojo-texto)", margin: "6px 0 0" }} role="alert">{MENSAJE}</p>}
+      {invalido && <p id={id + "-error"} style={{ fontSize: "1.125rem", fontWeight: 600, color: "var(--rojo-texto)", margin: "0.375rem 0 0" }} role="alert">{MENSAJE}</p>}
     </div>
   );
 }

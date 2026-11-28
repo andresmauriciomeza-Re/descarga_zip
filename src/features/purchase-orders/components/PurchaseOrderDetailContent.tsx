@@ -78,16 +78,16 @@ export function OrdenDetallePageContenido({
   );
 
   return (
-    <div className="pn-contenido" style={{ maxWidth: 1100 }}>
+    <div className="pn-contenido" style={{ maxWidth: "68.75rem" }}>
       <BotonRuta>
         <BotonAccion icono={ArrowLeft} onClick={onBack}>Volver a la lista</BotonAccion>
       </BotonRuta>
 
       <div className="flex flex-wrap items-center gap-3 mb-1">
-        <h1 style={{ font: "700 34px/1.15 var(--font-titulo)", margin: 0 }}>Orden de compra #{numero}</h1>
+        <h1 style={{ font: "700 2.125rem/1.15 var(--font-titulo)", margin: 0 }}>Orden de compra #{numero}</h1>
         <EstadoPill tono={tonoEstado[orden.estado]}>{orden.estado}</EstadoPill>
       </div>
-      <p className="pn-seccion__ayuda" style={{ marginBottom: 20 }}>
+      <p className="pn-seccion__ayuda" style={{ marginBottom: "1.25rem" }}>
         {orden.proveedor} · {orden.fecha} · {orden.estado} el {fechaEstado}
       </p>
       {orden.estado === "Anulado" && orden.motivoAnulacion && (
@@ -106,7 +106,7 @@ export function OrdenDetallePageContenido({
                 <div key={item.rowId} className="pn-permisos__fila" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) auto auto" }}>
                   <div>
                     <strong>{item.nombre}</strong>
-                    <div style={{ fontSize: 16, color: "var(--gris-texto)" }}>{etiquetaModoIvaSimple(item.modoIva ?? "incluido")}</div>
+                    <div style={{ fontSize: "1rem", color: "var(--gris-texto)" }}>{etiquetaModoIvaSimple(item.modoIva ?? "incluido")}</div>
                   </div>
                   <span>
                     {item.cantidad}
@@ -121,7 +121,7 @@ export function OrdenDetallePageContenido({
               );
             })}
           </div>
-          <p style={{ font: "700 26px var(--font-titulo)", margin: "16px 0 0", textAlign: "right" }}>
+          <p style={{ font: "700 1.625rem var(--font-titulo)", margin: "1rem 0 0", textAlign: "right" }}>
             Total con IVA: {fmtCOP(orden.total ?? calcTotal(orden.items))}
           </p>
         </SeccionFormulario>
@@ -131,7 +131,7 @@ export function OrdenDetallePageContenido({
             <p className="pn-seccion__ayuda">Todavía no hay facturas de esta orden.</p>
           ) : (
             <>
-              <div className="pn-opciones" role="group" aria-label="Facturas de la orden" style={{ marginBottom: 16 }}>
+              <div className="pn-opciones" role="group" aria-label="Facturas de la orden" style={{ marginBottom: "1rem" }}>
                 {facturas.map(f => (
                   <button
                     key={f.id}
@@ -155,7 +155,7 @@ export function OrdenDetallePageContenido({
                   <div>
                     <h3 className="pn-resumen__area">Lo que se pidió y llegó</h3>
                     {filasFactura(solicitados, false)}
-                    <p style={{ textAlign: "right", fontWeight: 700, fontSize: 19, margin: "8px 0 0" }}>
+                    <p style={{ textAlign: "right", fontWeight: 700, fontSize: "1.1875rem", margin: "0.5rem 0 0" }}>
                       Subtotal de lo pedido: {fmtCOP(calcTotal(solicitados))}
                     </p>
                   </div>
@@ -163,12 +163,12 @@ export function OrdenDetallePageContenido({
                     <div>
                       <h3 className="pn-resumen__area">Llegó algo que no se pidió</h3>
                       {filasFactura(noSolicitados, true)}
-                      <p style={{ textAlign: "right", fontWeight: 700, fontSize: 19, margin: "8px 0 0" }}>
+                      <p style={{ textAlign: "right", fontWeight: 700, fontSize: "1.1875rem", margin: "0.5rem 0 0" }}>
                         Subtotal de lo que no se pidió: {fmtCOP(calcTotal(noSolicitados))}
                       </p>
                     </div>
                   )}
-                  <p style={{ font: "700 26px var(--font-titulo)", margin: 0, textAlign: "right" }}>
+                  <p style={{ font: "700 1.625rem var(--font-titulo)", margin: 0, textAlign: "right" }}>
                     Total pagado: {fmtCOP(totalPagado)}
                   </p>
                 </div>

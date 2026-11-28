@@ -718,7 +718,7 @@ export function CompraForm({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className={`flex flex-col w-full ${isPage ? "max-w-[1200px]" : FORM_MAXW}${
+            className={`flex flex-col w-full ${isPage ? "max-w-[75rem]" : FORM_MAXW}${
               isPage
                 ? " h-full"
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
@@ -1206,7 +1206,7 @@ export function CompraForm({
                     // título de arriba, así que no se pasa `campoExtra`.
                     campoExtra={
                       isPage ? undefined : (
-                      <div className="min-w-[118px]">
+                      <div className="min-w-[7.375rem]">
                         <label className="block text-base font-semibold text-muted-foreground mb-1">
                           Tipo
                         </label>
@@ -1298,7 +1298,7 @@ export function CompraForm({
                   <div
                     className={
                       "rounded-xl border border-border bg-muted/30 overflow-hidden " +
-                      (items.length > 6 ? "max-h-[340px] overflow-y-auto" : "")
+                      (items.length > 6 ? "max-h-[21.25rem] overflow-y-auto" : "")
                     }
                   >
                     <table className="table-fixed w-full text-base">
@@ -1306,12 +1306,12 @@ export function CompraForm({
                         <tr>
                           <th className="px-2 py-2.5 text-left font-semibold">Nombre</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-16">Tipo</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[68px] whitespace-nowrap">CANTIDAD</th>
-                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[64px] whitespace-nowrap">MEDIDA</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[78px]">Monto unitario</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[4.25rem] whitespace-nowrap">CANTIDAD</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-left font-semibold w-[4rem] whitespace-nowrap">MEDIDA</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[4.875rem]">Monto unitario</th>
                           <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-11">IVA %</th>
-                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[78px]">Monto IVA</th>
-                          <th className="px-2 py-2.5 text-right font-semibold w-[86px]">Subtotal</th>
+                          <th className="hidden md:table-cell px-2 py-2.5 text-right font-semibold w-[4.875rem]">Monto IVA</th>
+                          <th className="px-2 py-2.5 text-right font-semibold w-[5.375rem]">Subtotal</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">

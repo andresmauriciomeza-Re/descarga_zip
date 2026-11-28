@@ -13,7 +13,7 @@ export function EncabezadoPagina({
 }) {
   return (
     <header className="pn-encabezado">
-      <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+      <div style={{ minWidth: 0, flex: "1 1 20rem" }}>
         <h1>{titulo}</h1>
         {descripcion && <p>{descripcion}</p>}
       </div>

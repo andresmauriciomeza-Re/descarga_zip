@@ -23,7 +23,7 @@ export function EstadoBadge({
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold whitespace-nowrap ${className}`}
-      style={{ backgroundColor: color + "1A", color, fontSize: 13 }}
+      style={{ backgroundColor: color + "1A", color, fontSize: "1rem" }}
     >
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
       {estado}

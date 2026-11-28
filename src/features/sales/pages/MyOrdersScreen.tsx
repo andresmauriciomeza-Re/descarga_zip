@@ -478,7 +478,7 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
           </p>
           <button
             onClick={onVerMenu}
-            className="px-6 py-3 min-h-[48px] bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
+            className="px-6 py-3 min-h-[3rem] bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
           >
             Ver el menú
           </button>
@@ -865,15 +865,15 @@ export function MisPedidosScreen({ pedidos: _pedidos = [], usuarioNombre: _usuar
                   </p>
                   <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3">
                     <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Total del pedido</p>
+                      <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Total del pedido</p>
                       <p className="text-base font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(total)}</p>
                     </div>
                     <div className="bg-muted/50 rounded-xl px-3 py-2 border border-border max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Pagado</p>
+                      <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Pagado</p>
                       <p className="text-base font-bold text-foreground" style={{ fontFamily: MONO }}>{fmtCOP(pagado)}</p>
                     </div>
                     <div className="bg-violet-50 rounded-xl px-3 py-2 border border-violet-200 max-md:flex max-md:items-center max-md:justify-between max-md:gap-3">
-                      <p className="text-[11px] text-violet-700 uppercase tracking-wide">Faltante</p>
+                      <p className="text-[0.6875rem] text-violet-700 uppercase tracking-wide">Faltante</p>
                       <p className="text-base font-bold text-violet-800" style={{ fontFamily: MONO }}>{fmtCOP(faltante)}</p>
                     </div>
                   </div>
