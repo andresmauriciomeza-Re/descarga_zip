@@ -2,7 +2,7 @@ import { formatearFechaHora } from "@/shared/utils/time";
 import React, { useState, useEffect } from "react";
 // Bloque 3: el "+ Crear insumo" comparte el mismo catálogo de categorías
 // obligatorias (A5.1) que usa Gestión de Insumos.
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 // Bloque 2: "+ Crear producto" con el mismo modal que Nueva Compra y

@@ -2,7 +2,7 @@ import type { ProveedorRef, GestionCompra, OrdenCompra } from "@/features/purcha
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import { type SetCatalogo, historialCompraDe, unidadesPorLinea } from "@/features/purchases/services/inventory";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import { type NuevaCompraData, type ItemFactura, type TipoItem, labelPaginaCls, labelModalCls, iPaginaCls, iCls, SERIF, labelDatoCls, valorDatoCls, campoCortoCls, fmtCOP } from "@/features/purchases/utils/purchases";

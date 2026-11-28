@@ -29,12 +29,10 @@ import { KEY, ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/u
 import { GestionEmpleadosScreen } from "@/features/employees/pages/EmployeesScreen";
 import type { Contratacion } from "@/features/employees/utils/employees";
 import { obtenerMiContratacion } from "@/shared/services/employeesService";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import {
-  GestionInsumosScreen,
-  INITIAL_INSUMOS,
-} from "@/features/supplies/pages/SuppliesScreen";
+import { GestionInsumosScreen } from "@/features/supplies/pages/SuppliesScreen";
+import { INITIAL_INSUMOS } from "@/features/supplies/utils/supplies";
 import { GestionProductosScreen } from "@/features/products/pages/ProductsScreen";
 import { INITIAL_FICHAS, normalizarIdsFicha, type FichasPorProducto, type FichaVersion } from "@/shared/utils/technicalSheets";
 import { INITIAL_PRODUCTOS, tipoDe } from "@/features/products/utils/products";

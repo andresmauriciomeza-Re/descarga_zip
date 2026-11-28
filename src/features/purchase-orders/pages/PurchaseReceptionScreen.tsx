@@ -45,7 +45,7 @@ import { mismoNombre } from "@/shared/utils/names";
 // Catálogo único de unidades de Compras (antes había una copia local sin
 // paca/sixpack): una sola lista para validar y mostrar las medidas.
 import { UNIDADES, etiquetaPresentacion } from "@/shared/utils/units";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 // Bloque 2: "+ Crear producto" desde el desplegable de no solicitados.

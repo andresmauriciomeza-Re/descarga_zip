@@ -1,4 +1,4 @@
-import { CATEGORIAS_INSUMO, type CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import { CATEGORIAS_INSUMO, type CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import { type NuevoInsumoCreado, SERIF, iCls } from "@/features/purchase-orders/utils/purchase-orders";
 import { useState } from "react";
 import { UNIDADES_INSUMO } from "@/shared/utils/units";

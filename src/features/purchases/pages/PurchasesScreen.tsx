@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Eye, ArrowLeft, Plus, CheckCircle2, Pencil, Trash2, Download, Package } from "lucide-react";
 import { toast } from "sonner";
 import { exportarMultiExcelEstilizado, exportarGestionComprasConInsumosExcel, type GestionCompraConInsumos } from "@/shared/utils/styledExcelExport";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
