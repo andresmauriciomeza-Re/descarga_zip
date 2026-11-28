@@ -1,11 +1,11 @@
 import type { Screen } from "@/shared/utils/screen";
 import { useEffect, useState } from "react";
-import logoBlanco from "@/assets/img/logo-blanco.webp";
-import logoClaro from "@/assets/img/logoclaro2.webp";
+import { Logo } from "@/shared/components/Logo";
 import { Moon, ShoppingCart, Sun } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { CartItem } from "@/types/cart";
 import { SERIF } from "@/shared/utils/fonts";
+import { precargar } from "@/shared/utils/lazyScreens";
 
 export function PublicNav({
   navigate,
@@ -54,7 +54,7 @@ export function PublicNav({
           onClick={() => navigate("landing")}
           className="flex items-center gap-3 cursor-pointer group min-w-0"
         >
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
+          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="object-contain shrink-0 w-11 h-11 md:w-14 md:h-14 lg:w-16 lg:h-16" />
           {/* Punto 1.1: `min-w-0` + `truncate` — a 375 px el texto cede y se
               corta con puntos en vez de empujar el botón de tema fuera de la
               pantalla. */}
@@ -81,6 +81,7 @@ export function PublicNav({
           </button>
           <button
             onClick={() => navigate("catalog")}
+            {...precargar("catalog")}
             className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
             Ver Menú
@@ -100,13 +101,14 @@ export function PublicNav({
           {/* Cart */}
           <button
             onClick={() => navigate("cart")}
+            {...precargar("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
             aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
             {count > 0 && (
-              <motion.span
+              <m.span
                 key={count}
                 initial={{ scale: 0.5 }}
                 animate={{ scale: 1 }}
@@ -114,7 +116,7 @@ export function PublicNav({
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
               >
                 {count}
-              </motion.span>
+              </m.span>
             )}
           </button>
 
@@ -141,6 +143,7 @@ export function PublicNav({
           )) : (
             <button
               onClick={onLogin}
+              {...precargar("login")}
               className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
               Iniciar sesión

@@ -1,4 +1,5 @@
 import type { RolApi } from "@/shared/services/authService";
+import { claveGeneroRol } from "@/shared/utils/roleName";
 
 // ── Árbol de módulos / sub-opciones del sistema ──────────────────────
 export const MENU_TREE = [
@@ -160,3 +161,89 @@ export const frasePermisos = (perms: readonly Accion[]) => {
 
 export const textoPersonas = (n: number) =>
   n === 0 ? "Nadie lo tiene todavía" : n === 1 ? "1 persona lo tiene" : `${n} personas lo tienen`;
+
+export const fullAccesos = (): AccesosMap => {
+  const m: AccesosMap = {};
+  MENU_TREE.forEach(({ modulo, subs }) =>
+    subs.forEach(sub => { m[KEY(modulo, sub)] = [...accionesDeSub(modulo, sub)]; })
+  );
+  return m;
+};
+
+export const conAcciones = (base: AccesosMap, ks: string[], acts: Accion[]): AccesosMap => {
+  const m: AccesosMap = { ...base };
+  ks.forEach(k => { m[k] = [...acts]; });
+  return m;
+};
+
+export const ROLES_CARGO: Rol[] = [
+  {
+    id: "ROL-004", nombre: "Cajero",
+    descripcion: "Atiende el punto de venta y la gestión de clientes.", activo: true,
+    accesos: conAcciones({},
+      [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes"), KEY("Ventas", "Devoluciones")],
+      [...ACCIONES]),
+  },
+  {
+    id: "ROL-005", nombre: "Mesero",
+    descripcion: "Toma pedidos en sala y atiende a los clientes.", activo: true,
+    accesos: conAcciones({},
+      [KEY("Ventas", "Ventas"), KEY("Ventas", "Clientes")], [...ACCIONES]),
+  },
+];
+
+// Roles de la semilla anterior que se purgan de datos viejos. Solo se eliminan
+// si coinciden nombre Y id: un rol creado por el usuario que haya recibido uno
+// de estos ids se conserva intacto.
+export const ROLES_SEMILLA_ELIMINADOS: Rol[] = [
+  { id: "ROL-006", nombre: "Domiciliario", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-007", nombre: "Cocinero", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-008", nombre: "Auxiliar de cocina", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-009", nombre: "Operador de producción", descripcion: "", activo: true, accesos: {} },
+  { id: "ROL-010", nombre: "Auxiliar administrativo", descripcion: "", activo: true, accesos: {} },
+];
+
+export const INITIAL_ROLES: Rol[] = [
+  {
+    id: "ROL-001", nombre: "Administrador", descripcion: "Acceso total al sistema.", activo: true,
+    accesos: fullAccesos(),
+  },
+  {
+    id: "ROL-002", nombre: "Cliente", descripcion: "Acceso al portal de pedidos en línea.", activo: true,
+    accesos: { [KEY("Ventas","Ventas")]: ["Ver","Crear"] },
+  },
+  {
+    id: "ROL-003", nombre: "Empleado", descripcion: "Acceso operativo al sistema.", activo: true,
+    accesos: {},
+  },
+  ...ROLES_CARGO,
+];
+
+// Garantía de semilla sobre datos viejos: fusiona los roles de la semilla que
+// falten por NOMBRE. Si el id está ocupado, asigna el siguiente libre.
+export const completarRolesSemilla = (existentes: Rol[]): Rol[] => {
+  // Purga: solo se borran los que coinciden nombre Y id (ROL-006…ROL-010).
+  const eliminadosKeys = new Set(ROLES_SEMILLA_ELIMINADOS.map(r => `${r.id}||${claveGeneroRol(r.nombre)}`));
+  const purge = existentes.filter(r => !eliminadosKeys.has(`${r.id}||${claveGeneroRol(r.nombre)}`));
+  if (purge.length === 0) return INITIAL_ROLES;
+  const salida = [...purge];
+  const usados = new Set(existentes.map(r => r.id));
+  // La comparación es por clave de género: "Mesero" y "Mesera" son UN rol, así
+  // la semilla no agrega un segundo rol por diferencia de género.
+  const nombres = new Set(existentes.map(r => claveGeneroRol(r.nombre)));
+  for (const semilla of INITIAL_ROLES) {
+    const clave = claveGeneroRol(semilla.nombre);
+    if (nombres.has(clave)) continue;
+    let id = semilla.id;
+    if (usados.has(id)) id = nextRolId(salida);
+    usados.add(id);
+    nombres.add(clave);
+    salida.push({ ...semilla, id });
+  }
+  return salida;
+};
+
+export function nextRolId(roles: Rol[]) {
+  const nums = roles.map(r => parseInt(r.id.replace("ROL-",""),10)).filter(n => !isNaN(n));
+  return `ROL-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3,"0")}`;
+}

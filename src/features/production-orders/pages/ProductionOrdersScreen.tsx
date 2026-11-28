@@ -27,10 +27,11 @@ import { ConfirmDeleteModal } from "@/shared/components/ConfirmDeleteModal";
 import { FichaTecnicaDetalle } from "@/shared/components/TechnicalSheetEditor";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Venta } from "@/features/sales/utils/sales";
-import { tipoDe, type FichasPorProducto } from "@/features/products/pages/ProductsScreen";
+import type { FichasPorProducto } from "@/shared/utils/technicalSheets";
+import { tipoDe } from "@/features/products/utils/products";
 import type { Producto } from "@/features/products/utils/products";
-import { porcionesReferencia, esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/technicalSheets";
-import { convertirUnidad, faltantesPara, fmtCant, motivoFaltante, requeridosPorUnidad, unidadesCompatibles } from "@/shared/utils/availability";
+import { esIdInsumo, idInsumoApiDesdeFront, type FichaVersion } from "@/shared/utils/technicalSheets";
+import { convertirUnidad, faltantesPara, fmtCant, motivoFaltante, unidadesCompatibles } from "@/shared/utils/availability";
 import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 import {
   actualizarOrdenProduccion,
@@ -67,7 +68,8 @@ import { AvisoFaltantes } from "@/features/production-orders/components/Shortage
 import { TablaInsumosRequeridos } from "@/features/production-orders/components/RequiredSuppliesTable";
 import { LineaPreparacion } from "@/features/production-orders/components/PreparationLine";
 import { CamposPedido } from "@/features/production-orders/components/OrderFields";
-import { HORNEADO_MIN, esDecimal, fmtMinutos, normalizarNombre, normalizar, esPizzaProducto, fichaVigente, snapshotDeFicha, type Faltante, type OrdenForm, requeridosDeLinea, resumenNecesita, lineasDeVenta } from "@/features/production-orders/utils/production-orders";
+import { HORNEADO_MIN, esDecimal, fmtMinutos, normalizarNombre, normalizar, esPizzaProducto, fichaVigente, snapshotDeFicha, type Faltante, type OrdenForm, requeridosDeLinea, resumenNecesita } from "@/features/production-orders/utils/production-orders";
+import { hoyLocal, siguienteOrdenId } from "@/features/production-orders/utils/production-orders";
 
 const SERIF = "var(--font-titulo)";
 
@@ -139,7 +141,6 @@ function epochOrden(iso: string): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
-const nowISO = () => new Date().toISOString();
 const addMinutesISO = (iso: string, min: number) =>
   new Date(new Date(iso).getTime() + min * 60000).toISOString();
 
@@ -157,10 +158,6 @@ const fechaHoraBogotaDesdeEpoch = (epoch: number, incluirSegundos = false) => {
   const fecha = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
   return `${fecha.year}-${fecha.month}-${fecha.day}T${fecha.hour}:${fecha.minute}${incluirSegundos ? `:${fecha.second}` : ""}`;
 };
-
-/** Fecha local "YYYY-MM-DD" (en Colombia después de las 19:00 `toISOString()`
-    ya devuelve el día siguiente). */
-const hoyLocal = () => new Date().toLocaleDateString("en-CA");
 
 const porcionesPorPizza = (tamano?: string | null): number =>
   normalizar(tamano ?? "") === "grande" ? 6 : 8;
@@ -225,90 +222,6 @@ function esBebida(l: LineaOrden, productos: Producto[]): boolean {
   if (!producto) return false;
   return tipoDe(producto) === "Producto terminado";
 }
-
-// ─────────────────────────── Semilla de órdenes ───────────────────────────
-// Las tres órdenes ya vienen con sus marcas contables puestas y conviven con los datos semilla y trae sus
-// marcas contables puestas: una orden guardada no vuelve a mover el stock, ni
-// aunque se vuelva a abrir el historial.
-const haceHoras = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
-
-export const INITIAL_ORDENES: OrdenProduccion[] = [
-  {
-    id: "OP-001",
-    tipo: "preparacion",
-    lineas: [{ idProducto: "INS-004", nombre: "Masa Pre-elaborada", unidad: "und", cantidadEstimada: 96 }],
-    insumosRequeridos: [
-      { insumoId: "INS-006", nombre: "Harina", cantidad: 48, unidad: "kg" },
-      { insumoId: "INS-007", nombre: "Agua", cantidad: 28.8, unidad: "lt" },
-      { insumoId: "INS-008", nombre: "Aceite", cantidad: 4.8, unidad: "lt" },
-      { insumoId: "INS-009", nombre: "Levadura", cantidad: 0.96, unidad: "kg" },
-    ],
-    ventaId: null,
-    cliente: null,
-    fechaSolicitada: hoyLocal(),
-    horaSolicitada: "",
-    estadoOrden: "pendiente",
-    observacion: "Lote para surtir el fin de semana.",
-    creadaEn: haceHoras(3),
-    inicioProduccion: null,
-    entregaEstimada: null,
-    historial: [],
-    descripcionPreparacion: "1. Mezclar harina, agua, aceite y levadura hasta que quede homogénea.\n2. Amasar 10 minutos.\n3. Reposar 30 minutos tapada en refrigeración.\n4. Formar discos de 250 g de yogur.\n5. Refrigerar. Rinde 1 unidad por preparación.",
-    tiempoPreparacionMin: 60,
-  },
-  {
-    id: "OP-002",
-    tipo: "preparacion",
-    lineas: [{ idProducto: "PIN-001", nombre: "Guacamole", unidad: "lt", cantidadEstimada: 8, cantidadReal: 7.5, merma: 0.5 }],
-    insumosRequeridos: [
-      { insumoId: "INS-010", nombre: "Aguacate", cantidad: 16, unidad: "kg" },
-      { insumoId: "INS-011", nombre: "Cebolla", cantidad: 1.6, unidad: "kg" },
-      { insumoId: "INS-012", nombre: "Limón", cantidad: 0.8, unidad: "lt" },
-    ],
-    ventaId: null,
-    cliente: null,
-    fechaSolicitada: hoyLocal(),
-    horaSolicitada: "",
-    estadoOrden: "completada",
-    observacion: "",
-    creadaEn: haceHoras(26),
-    inicioProduccion: haceHoras(25),
-    entregaEstimada: haceHoras(24),
-    historial: [
-      { de: "pendiente", a: "en-proceso", fechaHora: haceHoras(25) },
-      { de: "en-proceso", a: "completada", fechaHora: haceHoras(24) },
-    ],
-    descripcionPreparacion: "1. Triturar aguacate con limón para que no se oxide.\n2. Agregar cebolla picada fina.\n3. Ajustar sal y cilantro al gusto.\n4. Guardar en recipiente cerrado, en refrigeración.",
-    tiempoPreparacionMin: 25,
-    insumosDescontados: true,
-    stockAplicado: true,
-  },
-  {
-    id: "OP-003",
-    tipo: "pedido",
-    lineas: [
-      { idProducto: "PROD-001", productoId: "PROD-001", nombre: "Pizza Peperoni", unidad: "und", cantidadEstimada: 2, tamano: "Mediana", porciones: 16, sinFicha: false },
-      { idProducto: "PROD-012", productoId: "PROD-012", nombre: "Gaseosa Cuatro", unidad: "und", cantidadEstimada: 1, sinFicha: true },
-    ],
-    insumosRequeridos: [
-      { insumoId: "INS-004", nombre: "Masa Pre-elaborada", cantidad: 2, unidad: "und" },
-      { insumoId: "INS-002", nombre: "Salsa de Tomate", cantidad: 0.4, unidad: "lt" },
-      { insumoId: "INS-001", nombre: "Queso Mozzarella", cantidad: 0.5, unidad: "kg" },
-      { insumoId: "INS-003", nombre: "Pepperoni", cantidad: 0.3, unidad: "kg" },
-    ],
-    ventaId: "1",
-    ventaNumero: "1",
-    cliente: "María González",
-    fechaSolicitada: hoyLocal(),
-    horaSolicitada: "18:30",
-    estadoOrden: "pendiente",
-    observacion: "",
-    creadaEn: haceHoras(2),
-    inicioProduccion: null,
-    entregaEstimada: null,
-    historial: [],
-  },
-];
 
 const emptyForm = (tipo: TipoOrden = "preparacion"): OrdenForm => ({
   tipo,
@@ -417,168 +330,6 @@ function requeridosDePreparaciones(
     }
   }
   return [...acc.values()];
-}
-
-/** Siguiente número de orden libre. `length + 1` reutilizaría un id si se borró
-    una orden del medio; se toma el mayor sufijo numérico, como en Usuarios. */
-export const siguienteOrdenId = (ordenes: OrdenProduccion[]) => {
-  const max = ordenes.reduce((m, o) => Math.max(m, parseInt(o.id.replace("OP-", ""), 10) || 0), 0);
-  return `OP-${String(max + 1).padStart(3, "0")}`;
-};
-
-/** Arma la orden "Pedido de cliente" de una venta: líneas del detalle en solo
-    lectura, insumos que consumen sus fichas y fecha/hora de recogida. La usa el
-    buscador manual de la pantalla y la creación automática de App. */
-export function crearOrdenPedido(
-  venta: Venta,
-  ctx: { productos: Producto[]; fichas: FichasPorProducto; insumos: Insumo[] },
-  id: string,
-): OrdenProduccion {
-  const armado = lineasDeVenta(venta, ctx.productos, ctx.fichas, ctx.insumos);
-  return {
-    id,
-    tipo: "pedido",
-    lineas: armado.lineas,
-    insumosRequeridos: armado.insumos,
-    ventaId: venta.id,
-    ventaNumero: venta.id,
-    cliente: venta.usuario,
-    fechaSolicitada: venta.fecha,
-    horaSolicitada: venta.horaRecogida ?? "",
-    estadoOrden: "pendiente",
-    observacion: "",
-    creadaEn: nowISO(),
-    inicioProduccion: null,
-    entregaEstimada: null,
-    historial: [],
-  };
-}
-
-/** Ítem de canje de una devolución: producto del menú elegido como reemplazo.
-    El nombre es el del catálogo público (mismo `nombre` que trae el `Producto`
-    del panel, porque el catálogo se arma con `productoACatalogo`). */
-export type ItemReemplazo = { nombre: string; cantidad: number; tamaño?: string };
-
-/** Orden "Pedido de cliente" para el CANJE de una devolución: la OP anterior
-    (vinculada por `ventaId`) queda cancelada y esta reemplaza lo que el
-    cliente se lleva. Nace en "pendiente": al INICIAR descuenta sus insumos
-    (si alcanza el inventario) y al COMPLETAR solo baja el stock de las líneas
-    de bebida, igual que cualquier pedido. */
-export function crearOrdenReemplazo(
-  venta: Venta,
-  items: ItemReemplazo[],
-  ctx: { productos: Producto[]; fichas: FichasPorProducto; insumos: Insumo[] },
-  id: string,
-): OrdenProduccion {
-  const lineas: LineaOrden[] = [];
-  const acc = new Map<string, InsumoRequerido>();
-
-  for (const it of items) {
-    const cantidad = it.cantidad || 0;
-    if (cantidad <= 0) continue;
-    const base = it.nombre.split(" — ")[0].trim();
-    const producto =
-      ctx.productos.find((p) => normalizar(p.nombre) === normalizar(base)) ?? null;
-    const ficha = producto ? fichaVigente(ctx.fichas, producto.id) : null;
-
-    lineas.push({
-      idProducto: producto?.id ?? "",
-      productoId: producto?.id ?? null,
-      nombre: producto?.nombre ?? base,
-      unidad: "und",
-      cantidadEstimada: cantidad,
-      tamano: it.tamaño ?? "",
-      porciones: ficha ? cantidad * (porcionesReferencia(ficha) || 0) : undefined,
-      sinFicha: !ficha,
-      pasos: ficha?.pasos?.length ? [...ficha.pasos] : undefined,
-      // La línea del canje queda congelada con la ficha del momento: la línea
-      // original de la venta (`venta.detalle`) no guarda snapshot, así que se
-      // usa la ficha vigente del producto. Desde aquí la orden no vuelve a
-      // leer la ficha vigente (mismo criterio que `lineasDeVenta`).
-      fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
-    });
-
-    if (!ficha) continue;
-    // Mismo cálculo compartido que `lineasDeVenta`, con el factor del tamaño
-    // que eligió el cliente en el canje.
-    for (const r of requeridosPorUnidad(ficha, it.tamaño)) {
-      const req = cantidad * r.cantidad;
-      const ins = ctx.insumos.find((i) => i.id === r.insumoId)
-        ?? ctx.insumos.find((i) => normalizar(i.nombre) === normalizar(r.nombre));
-      const clave = ins?.id ?? r.insumoId;
-      const previa = acc.get(clave);
-      acc.set(clave, previa
-        ? { ...previa, cantidad: previa.cantidad + req }
-        : { insumoId: clave, nombre: r.nombre, cantidad: req, unidad: r.unidad, noEncontrado: !ins });
-    }
-  }
-
-  return {
-    id,
-    tipo: "pedido",
-    lineas,
-    insumosRequeridos: [...acc.values()],
-    ventaId: venta.id,
-    ventaNumero: venta.id,
-    cliente: venta.usuario,
-    fechaSolicitada: venta.fecha,
-    horaSolicitada: venta.horaRecogida ?? "",
-    estadoOrden: "pendiente",
-    observacion: "Canje por devolución",
-    creadaEn: nowISO(),
-    inicioProduccion: null,
-    entregaEstimada: null,
-    historial: [],
-  };
-}
-
-/** Orden "Preparación en lote" de UN Producto Insumo, con la "Cantidad a
-    hacer" de su ficha. La crea Gestión de Insumos al crear un producto insumo
-    NUEVO (A2): nace "pendiente" con la foto de la ficha en la línea, sus
-    insumos requeridos ya calculados —el MISMO cálculo de `requeridosDeLinea`,
-    así lo que se ve y lo que se descuenta dan igual— y, en el historial, el
-    motivo "Creada desde Insumos". NO descuenta nada al crearse: el stock baja
-    al INICIAR la orden, con la validación de inventario de siempre.
-    La ficha llega como ARGUMENTO (la v1 recién creada) porque al ser el mismo
-    clic, el estado `fichas` de App todavía no la contiene. */
-export function crearOrdenPreparacion(
-  pi: Insumo,
-  ficha: FichaVersion | null,
-  ctx: { fichas: FichasPorProducto },
-  id: string,
-): OrdenProduccion {
-  const ahora = nowISO();
-  const linea: LineaOrden = {
-    idProducto: pi.id,
-    nombre: pi.nombre,
-    unidad: pi.unidadMedida,
-    // La "Cantidad a hacer" de la ficha es lo que se va a producir. El
-    // mínimo válido de una línea de preparación es 1, así que una ficha sin
-    // rendimiento (no debería pasar: el modal lo exige) cae ahí.
-    cantidadEstimada:
-      ficha && ficha.rendimiento && ficha.rendimiento > 0 ? ficha.rendimiento : 1,
-    // Foto de la ficha v1: desde aquí la orden no vuelve a leer la vigente.
-    fichaSnapshot: ficha ? snapshotDeFicha(ficha) : undefined,
-  };
-  return {
-    id,
-    tipo: "preparacion",
-    lineas: [linea],
-    insumosRequeridos: requeridosDeLinea(linea, ctx.fichas),
-    ventaId: null,
-    ventaNumero: null,
-    cliente: null,
-    fechaSolicitada: hoyLocal(),
-    horaSolicitada: "",
-    estadoOrden: "pendiente",
-    observacion: "",
-    creadaEn: ahora,
-    inicioProduccion: null,
-    entregaEstimada: null,
-    historial: [{ de: "pendiente", a: "pendiente", fechaHora: ahora, detalle: "Creada desde Insumos" }],
-    descripcionPreparacion: ficha?.pasos.join("\n") || undefined,
-    tiempoPreparacionMin: ficha ? ficha.tiempoPreparacion : null,
-  };
 }
 
 async function exportExcel(ordenes: OrdenProduccion[]) {

@@ -62,6 +62,8 @@ export const TABLA_FRONTEND: TablaDatos = {
     ["TW Animate CSS", "1.3.8", "MIT"],
     ["Vaul", "1.1.2", "MIT"],
     ["Vite Plugin PWA", "2.0.0", "MIT"],
+    ["Fontsource Montserrat", "5.3.0", "OFL 1.1"],
+    ["Fontsource Poppins", "5.3.0", "OFL 1.1"],
   ],
 };
 

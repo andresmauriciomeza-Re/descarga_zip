@@ -2,7 +2,7 @@ import { type OrdenCompra, type ProveedorRef, type OrdenFormData, type OrdenItem
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import type { Producto } from "@/features/products/utils/products";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import { useState, useRef, useMemo, useEffect } from "react";
 import { UNIDADES, type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm } from "@/features/purchases/components/CompactSupplyForm";
 import type { ModoIva } from "@/features/purchases/services/vat";

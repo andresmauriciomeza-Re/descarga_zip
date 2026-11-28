@@ -65,7 +65,8 @@ export const onErrorImagen = (evento: SyntheticEvent<HTMLImageElement>): void =>
     Clave: `/src/assets/img/<archivo>`; valor: la URL (dev) o la ruta
     empaquetada con hash (build). `eager` para tener el mapa disponible en
     el primer render, sin await. */
-const images = import.meta.glob<string>("/src/assets/img/*.{png,jpg,jpeg,webp,svg}", {
+// Sin los logos: `Logo` los importa aparte y aquí irían incrustados en el arranque.
+const images = import.meta.glob<string>(["/src/assets/img/*.{png,jpg,jpeg,webp,svg}", "!/src/assets/img/logo*"], {
   eager: true,
   import: "default",
 });

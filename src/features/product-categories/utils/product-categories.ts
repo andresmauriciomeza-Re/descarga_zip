@@ -30,3 +30,9 @@ export interface CategoriaProducto {
 export type EstadoCategoria = "Activo" | "Inactivo";
 
 export const SERIF = "var(--font-titulo)";
+
+// ─────────────────────────── CATEGORÍA PRODUCTO ───────────────────────────
+
+/** Estado de una categoría, con el que no lo tiene todavía: Activo. */
+export const estadoDe = (c?: CategoriaProducto): EstadoCategoria =>
+  c?.estado ?? "Activo";

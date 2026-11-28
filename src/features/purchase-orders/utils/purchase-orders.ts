@@ -276,3 +276,86 @@ export type NuevoInsumoCreado = {
   /** Bloque 3: categoría obligatoria del catálogo de insumos (A5.1). */
   categoriaId: string;
 };
+
+export const PROVEEDORES_INIT: ProveedorRef[] = [];
+
+/** Sección con título pequeño en mayúsculas y línea divisoria: mismo estilo
+ *  que el formulario Nuevo Proveedor. */
+
+// ��������� INITIAL DATA ���������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
+
+export const INITIAL_ORDENES: OrdenCompra[] = [];
+
+export const INITIAL_GESTIONES: GestionCompra[] = [
+  {
+    id: "001",
+    ordenId: "",
+    proveedor: "Distribuidora La Cosecha",
+    proveedorId: "6",
+    numeroFactura: "FAC-2026-0301",
+    fechaFactura: "2026-08-05",
+    valorTotal: 410000,
+    estado: "Recibido",
+    items: [
+      { rowId: "g001-1", idInsumo: "INS-001", nombre: "Tomate", cantidad: 40, unidad: "kg", costoUnitario: 7500, precioUnitario: 7500, iva: 0 },
+      { rowId: "g001-2", idInsumo: "INS-002", nombre: "Cebolla", cantidad: 10, unidad: "kg", costoUnitario: 6500, precioUnitario: 6500, iva: 0 },
+      { rowId: "g001-3", idInsumo: "INS-003", nombre: "Papa", cantidad: 15, unidad: "kg", costoUnitario: 3000, precioUnitario: 3000, iva: 0 },
+    ],
+  },
+  {
+    id: "002",
+    ordenId: "",
+    proveedor: "Quesos del Norte S.A.S.",
+    proveedorId: "7",
+    numeroFactura: "FAC-2026-0318",
+    fechaFactura: "2026-08-19",
+    valorTotal: 560000,
+    estado: "Recibido",
+    items: [
+      { rowId: "g002-1", idInsumo: "INS-011", nombre: "Queso mozzarella", cantidad: 20, unidad: "kg", costoUnitario: 18000, precioUnitario: 18000, iva: 0 },
+      { rowId: "g002-2", idInsumo: "INS-012", nombre: "Queso gouda", cantidad: 20, unidad: "kg", costoUnitario: 10000, precioUnitario: 10000, iva: 0 },
+    ],
+  },
+  {
+    id: "003",
+    ordenId: "",
+    proveedor: "Carnes Premium Ltda.",
+    proveedorId: "8",
+    numeroFactura: "FAC-2026-0329",
+    fechaFactura: "2026-09-01",
+    valorTotal: 190000,
+    estado: "Anulado",
+    items: [
+      { rowId: "g003-1", idInsumo: "INS-021", nombre: "Res madurada", cantidad: 25, unidad: "kg", costoUnitario: 7600, precioUnitario: 7600, iva: 0 },
+    ],
+  },
+  {
+    id: "004",
+    ordenId: "",
+    proveedor: "Bebidas y Más",
+    proveedorId: "9",
+    numeroFactura: "FAC-2026-0347",
+    fechaFactura: "2026-09-12",
+    valorTotal: 275500,
+    estado: "Recibido",
+    items: [
+      { rowId: "g004-1", idInsumo: "INS-031", nombre: "Gaseosa cola 1.5 L", cantidad: 60, unidad: "und", costoUnitario: 3200, precioUnitario: 3200, iva: 0 },
+      { rowId: "g004-2", idInsumo: "INS-032", nombre: "Agua en bolsa 500 ml", cantidad: 100, unidad: "und", costoUnitario: 835, precioUnitario: 835, iva: 0 },
+    ],
+  },
+  {
+    id: "005",
+    ordenId: "",
+    proveedor: "Molinos del Valle",
+    proveedorId: "1",
+    numeroFactura: "FAC-2026-0360",
+    fechaFactura: "2026-09-20",
+    valorTotal: 750000,
+    estado: "Recibido",
+    items: [
+      { rowId: "g005-1", idInsumo: "INS-041", nombre: "Harina de trigo", cantidad: 50, unidad: "kg", costoUnitario: 6000, precioUnitario: 6000, iva: 0 },
+      { rowId: "g005-2", idInsumo: "INS-042", nombre: "Azúcar rubia", cantidad: 25, unidad: "kg", costoUnitario: 5200, precioUnitario: 5200, iva: 0 },
+      { rowId: "g005-3", idInsumo: "INS-043", nombre: "Aceite vegetal", cantidad: 32, unidad: "lt", costoUnitario: 10000, precioUnitario: 10000, iva: 0 },
+    ],
+  },
+];

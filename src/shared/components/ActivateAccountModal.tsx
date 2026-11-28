@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Lock, X } from "lucide-react";
 import {
   activarCuenta,
@@ -84,7 +84,7 @@ export function ActivarCuentaModal({
         if (event.target === event.currentTarget) onCerrar();
       }}
     >
-      <motion.div
+      <m.div
         initial={{ scale: 0.93, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.18 }}
@@ -158,7 +158,7 @@ export function ActivarCuentaModal({
             />
           </>
         )}
-      </motion.div>
+      </m.div>
     </div>
   );
 }

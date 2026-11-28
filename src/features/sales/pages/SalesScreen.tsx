@@ -1611,8 +1611,8 @@ export function VentasScreen({
   const fmtPago = (n: number) => `$ ${n.toLocaleString("es-CO")}`;
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
 
-  const exportExcel = () => {
-    exportToExcel(
+  const exportExcel = async () => {
+    await exportToExcel(
       pedidos.map((p) => ({
         id: p.id,
         cliente: p.usuario,

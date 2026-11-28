@@ -126,6 +126,8 @@
 "frontend","@floating-ui/dom","1.8.0","MIT","producción","no","no","navegador (dependencia de producción)","archivo del paquete",""
 "frontend","@floating-ui/react-dom","2.1.9","MIT","producción","no","no","navegador (dependencia de producción)","archivo del paquete",""
 "frontend","@floating-ui/utils","0.2.12","MIT","producción","no","no","navegador (dependencia de producción)","archivo del paquete",""
+"frontend","@fontsource/montserrat","5.3.0","OFL-1.1","producción","sí","no","navegador (dependencia de producción)","archivo del paquete",""
+"frontend","@fontsource/poppins","5.3.0","OFL-1.1","producción","sí","no","navegador (dependencia de producción)","archivo del paquete",""
 "frontend","@img/colour","1.1.0","MIT","desarrollo","no","no","solo desarrollo","archivo del paquete",""
 "frontend","@img/sharp-darwin-arm64","0.35.5","Apache-2.0","desarrollo","no","sí","solo desarrollo","no instalado en esta plataforma",""
 "frontend","@img/sharp-darwin-x64","0.35.5","Apache-2.0","desarrollo","no","sí","solo desarrollo","no instalado en esta plataforma",""

@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Screen } from "@/shared/utils/screen";
-import { type Usuario } from "@/features/users/pages/UsersScreen";
+import type { Usuario } from "@/features/users/utils/users";
 import type { Cliente } from "@/features/customers/utils/customers";
 import { useRef, useState } from "react";
 import { filtrarCorreo, filtrarDocumento, filtrarNombre, normalizarNombre as normalizarNombrePersona, MarcaObligatorio, MensajeError, PasswordField, RequisitosContrasena, soloDigitos, validarContrasena, validarCorreo, validarDocumento, validarNombre, validarTelefono } from "@/shared/components/FormInputs";
@@ -11,8 +11,7 @@ import { toast } from "sonner";
 import { motion } from "motion/react";
 import { AUTH_GLASS_BUTTON_SECONDARY, AUTH_GLASS_CARD, authInputCls } from "@/shared/styles/authGlass";
 import { ArrowLeft, CheckCircle, RefreshCw } from "lucide-react";
-import logoBlanco from "@/assets/img/logo-blanco.webp";
-import logoClaro from "@/assets/img/logoclaro2.webp";
+import { Logo } from "@/shared/components/Logo";
 import { SERIF } from "@/shared/utils/fonts";
 import { OPCIONES_TIPO_DOCUMENTO } from "@/shared/utils/documentTypes";
 import { PrimaryBtn } from "@/shared/components/buttons/PrimaryButton";
@@ -352,7 +351,7 @@ export function RegisterScreen({
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="text-center mb-2">
-          <img src={darkMode ? logoBlanco : logoClaro} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-1" />
+          <Logo variante={darkMode ? "blanco" : "claro"} alt="S.I.V.PRO Logo" className="h-16 w-auto object-contain mx-auto mb-1" />
           <h1
             className="text-xl font-bold text-foreground dark:text-white"
             style={{ fontFamily: SERIF }}

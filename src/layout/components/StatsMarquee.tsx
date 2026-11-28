@@ -25,7 +25,7 @@ function Estadistica({ emoji, value, label }: Dato) {
       >
         {value}
       </p>
-      <p className="text-white/75 text-sm font-medium">{label}</p>
+      <p className="text-white text-sm font-medium">{label}</p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import api from "@/shared/services/api";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
 import { mapearFichaApi, type FichaApi } from "@/features/products/services/technicalSheetsApi";
 import { idInsumoFront, type FichaVersion } from "@/shared/utils/technicalSheets";

@@ -1,5 +1,5 @@
 import { AlertTriangle, Archive, Banknote, CircleCheck, ClipboardList, Eye, ImageIcon, Lock, PackageCheck, QrCode, RefreshCw, Upload } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
@@ -19,23 +19,20 @@ import { obtenerCatalogo } from "@/shared/services/catalogService";
 import { actualizarPerfil, borrarToken, obtenerPerfil, obtenerToken } from "@/shared/services/authService";
 import { crearError401Checkout, registrarManejadorCierreSesion } from "@/shared/services/api";
 import type { ApiErrorConEstado } from "@/types/api";
-import { CategoriaProductoScreen, type CategoriaGuardar } from "@/features/product-categories/pages/ProductCategoriesScreen";
+import type { CategoriaGuardar } from "@/features/product-categories/pages/ProductCategoriesScreen";
 import type { CategoriaProducto, EstadoCategoria } from "@/features/product-categories/utils/product-categories";
 import type { Cliente } from "@/features/customers/utils/customers";
-import { GestionCompraScreen, NuevaCompraPage } from "@/features/purchases/pages/PurchasesScreen";
-import { GestionConfigScreen, fullAccesos } from "@/features/roles/pages/RolesScreen";
+import { fullAccesos } from "@/features/roles/utils/roles";
 import { KEY, ACCION_EXCEL, type AccesosMap, type Rol } from "@/features/roles/utils/roles";
-import { GestionEmpleadosScreen } from "@/features/employees/pages/EmployeesScreen";
 import type { Contratacion } from "@/features/employees/utils/employees";
 import { obtenerMiContratacion } from "@/shared/services/employeesService";
-import type { CategoriaInsumo } from "@/features/supplies/pages/SuppliesScreen";
+import type { CategoriaInsumo } from "@/features/supplies/utils/supplies";
 import type { Insumo } from "@/features/supplies/utils/supplies";
-import {
-  GestionInsumosScreen,
-  INITIAL_INSUMOS,
-} from "@/features/supplies/pages/SuppliesScreen";
-import { GestionProductosScreen, INITIAL_PRODUCTOS, INITIAL_FICHAS, normalizarIdsFicha, tipoDe, type FichasPorProducto, type FichaVersion } from "@/features/products/pages/ProductsScreen";
-import { imagenesDe, TIPOS_PRODUCTO, type Producto } from "@/features/products/utils/products";
+import { INITIAL_INSUMOS } from "@/features/supplies/utils/supplies";
+import { INITIAL_FICHAS, normalizarIdsFicha, type FichasPorProducto, type FichaVersion } from "@/shared/utils/technicalSheets";
+import { INITIAL_PRODUCTOS, tipoDe } from "@/features/products/utils/products";
+import { imagenesDe, type Producto } from "@/features/products/utils/products";
+import { TIPOS_PRODUCTO } from "@/shared/utils/categoryConfig";
 import { migrarFichasLegacy } from "@/shared/utils/technicalSheets";
 import { listarGestion, crearProducto, editarProducto, cambiarEstadoProducto, productoPanelACreacion, productoPanelAEdicion, mensajeErrorProductos, type EstadoProductoManual } from "@/features/products/services/productsApi";
 import { listarCategoriasInsumo, listarInsumos, mensajeErrorInsumos } from "@/features/supplies/services/suppliesApi";
@@ -46,53 +43,35 @@ import { listarOrdenesCompra, mensajeErrorOrdenesCompra } from "@/features/purch
 import { listarCompras, mensajeErrorCompras } from "@/features/purchases/services/purchasesApi";
 import { configDeCategoria, type ConfigCategoria } from "@/shared/utils/categoryConfig";
 import { mismoNombre } from "@/shared/utils/names";
-import { GestionUsuariosScreen, claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/pages/UsersScreen";
+import { claveDoc, docValida, idRolCliente, type Usuario } from "@/features/users/utils/users";
 import { ActivarCuentaModal } from "@/shared/components/ActivateAccountModal";
 import { verificarCorreo } from "@/shared/services/verificationService";
 import type { GestionCompra, OrdenCompra, OrdenItem, ProveedorRef } from "@/features/purchase-orders/utils/purchase-orders";
-import {
-  INITIAL_GESTIONES,
-  INITIAL_ORDENES,
-  NuevaOrdenCompraPage,
-  OrdenCompraScreen,
-  OrdenDetallePage,
-  PROVEEDORES_INIT,
-} from "@/features/purchase-orders/pages/PurchaseOrdersScreen";
-import { OrdenProduccionScreen, INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId } from "@/features/production-orders/pages/ProductionOrdersScreen";
+import { INITIAL_GESTIONES, INITIAL_ORDENES, PROVEEDORES_INIT } from "@/features/purchase-orders/utils/purchase-orders";
+import { INITIAL_ORDENES as INITIAL_ORDENES_PRODUCCION, crearOrdenPedido, crearOrdenPreparacion, crearOrdenReemplazo, siguienteOrdenId } from "@/features/production-orders/utils/production-orders";
 import { normalizarNombre, type Faltante } from "@/features/production-orders/utils/production-orders";
 import type { OrdenProduccion } from "@/features/production-orders/utils/production-orders";
-import { ProductosPerecederosScreen } from "@/features/non-conforming-products/pages/NonConformingProductsScreen";
 import type { NoConformidad } from "@/features/non-conforming-products/utils/non-conforming-products";
 import { listarNoConformidades, mensajeErrorNoConformes } from "@/features/non-conforming-products/services/nonConformingApi";
 import { cambiarEstadoCategoria, crearCategoria, editarCategoria, eliminarCategoria, listarCategoriasGestion, mensajeErrorCategorias } from "@/features/product-categories/services/categoriesApi";
-import { VentasScreen } from "@/features/sales/pages/SalesScreen";
 import { PagoPill } from "@/features/sales/components/PaymentPill";
 import type { DevolucionTipo, Venta } from "@/features/sales/utils/sales";
 import type { CartItem } from "@/types/cart";
 import { DASHBOARD_PERM_KEY, canViewPermission } from "@/shared/utils/navigation";
 import { PublicNav } from "@/layout/components/Header";
-import { Sidebar } from "@/layout/components/Sidebar";
-import { AdminTopBar } from "@/layout/components/AdminTopBar";
 import { BottomNav } from "@/layout/components/BottomNav";
 import { Landing } from "@/layout/pages/Landing";
+import { cargarPantalla } from "@/shared/utils/lazyScreens";
 import { AuthProvider, useAuth } from "@/shared/contexts/AuthContext";
 import { CartProvider, useCart } from "@/shared/contexts/CartContext";
 import { normalizarNombreRol } from "@/shared/utils/roleName";
 import { AVATAR_PALETTE } from "@/shared/utils/avatar";
-import { LoginScreen } from "@/features/auth/pages/LoginScreen";
-import { RegisterScreen } from "@/features/auth/pages/RegisterScreen";
 import { esRolCliente, armarRolesSesion, clavePersona, escribirRolActivo, SESION_STORAGE_KEY, INACTIVIDAD_MS, ACTIVIDAD_THROTTLE_MS, type SesionGuardada, leerSesionGuardada, escribirSesionGuardada, borrarSesionGuardada } from "@/features/auth/hooks/useSession";
 import { sizeDe, PRODUCTS } from "@/features/catalog/data/products";
 import { type LineaLimiteRef, type LimiteLinea, mensajeMaximoDe, ajustarCantidad } from "@/features/catalog/utils/lineLimits";
-import { CatalogScreen } from "@/features/catalog/pages/CatalogScreen";
-import { ProductDetailScreen } from "@/features/catalog/pages/ProductDetailScreen";
 import { type PendingOrder, type PedidoResumen } from "@/types/cart";
 import { guardarRetornoCheckout, consumirRetornoCheckout, borrarRetornoCheckout, hayIdsProductoLegacyEnCarritos, leerCarritoGuardado, escribirCarritoGuardado, borrarCarritoGuardado, leerCarritosDeUsuarios, escribirCarritosDeUsuarios, mismaConfig, fusionarCarritos } from "@/features/cart/utils/cartStorage";
-import { CartScreen } from "@/features/cart/pages/CartScreen";
-import { ClientProfileScreen } from "@/features/customers/pages/CustomerProfileScreen";
 import { SCREEN_META } from "@/shared/utils/navigation";
-import { ManageProductsScreen } from "@/features/products/pages/ManageProductsScreen";
-import { GenericAdmin } from "@/features/products/components/GenericAdmin";
 import { ROLES_STORAGE_KEY, leerRolesPersistidos, respaldarEmpleadosLocales, respaldarCategoriasLocales, respaldarDatosComprasFase3, respaldarDatosProduccionFase2, respaldarNoConformidadesLocales, MIGRACION_FICHAS_FASE1_KEY, leerProductosParaMigracion, respaldarDatosProductosFase1, AUTH_STORAGE_KEYS } from "@/shared/utils/storage";
 import { ADMIN_SCREENS, SCREEN_PERM_KEY } from "@/shared/utils/navigation";
 
@@ -100,6 +79,30 @@ import { ADMIN_SCREENS, SCREEN_PERM_KEY } from "@/shared/utils/navigation";
 // Estas pantallas se importan SOLO como componente (no comparten constants ni
 // funciones con App), así que se cargan bajo demanda para reducir el bundle
 // inicial. Cada wrapper resuelve el export nominal correspondiente como `default`.
+const CategoriaProductoScreen = lazy(() => import("@/features/product-categories/pages/ProductCategoriesScreen").then((m) => ({ default: m.CategoriaProductoScreen })));
+const GestionCompraScreen = lazy(() => import("@/features/purchases/pages/PurchasesScreen").then((m) => ({ default: m.GestionCompraScreen })));
+const NuevaCompraPage = lazy(() => import("@/features/purchases/pages/PurchasesScreen").then((m) => ({ default: m.NuevaCompraPage })));
+const GestionConfigScreen = lazy(() => import("@/features/roles/pages/RolesScreen").then((m) => ({ default: m.GestionConfigScreen })));
+const GestionEmpleadosScreen = lazy(() => import("@/features/employees/pages/EmployeesScreen").then((m) => ({ default: m.GestionEmpleadosScreen })));
+const GestionInsumosScreen = lazy(() => import("@/features/supplies/pages/SuppliesScreen").then((m) => ({ default: m.GestionInsumosScreen })));
+const GestionProductosScreen = lazy(() => import("@/features/products/pages/ProductsScreen").then((m) => ({ default: m.GestionProductosScreen })));
+const GestionUsuariosScreen = lazy(() => import("@/features/users/pages/UsersScreen").then((m) => ({ default: m.GestionUsuariosScreen })));
+const NuevaOrdenCompraPage = lazy(() => import("@/features/purchase-orders/pages/PurchaseOrdersScreen").then((m) => ({ default: m.NuevaOrdenCompraPage })));
+const OrdenCompraScreen = lazy(() => import("@/features/purchase-orders/pages/PurchaseOrdersScreen").then((m) => ({ default: m.OrdenCompraScreen })));
+const OrdenDetallePage = lazy(() => import("@/features/purchase-orders/pages/PurchaseOrdersScreen").then((m) => ({ default: m.OrdenDetallePage })));
+const OrdenProduccionScreen = lazy(() => import("@/features/production-orders/pages/ProductionOrdersScreen").then((m) => ({ default: m.OrdenProduccionScreen })));
+const ProductosPerecederosScreen = lazy(() => import("@/features/non-conforming-products/pages/NonConformingProductsScreen").then((m) => ({ default: m.ProductosPerecederosScreen })));
+const VentasScreen = lazy(() => import("@/features/sales/pages/SalesScreen").then((m) => ({ default: m.VentasScreen })));
+const Sidebar = lazy(() => import("@/layout/components/Sidebar").then((m) => ({ default: m.Sidebar })));
+const AdminTopBar = lazy(() => import("@/layout/components/AdminTopBar").then((m) => ({ default: m.AdminTopBar })));
+const LoginScreen = lazy(() => cargarPantalla.login().then((m) => ({ default: m.LoginScreen })));
+const RegisterScreen = lazy(() => import("@/features/auth/pages/RegisterScreen").then((m) => ({ default: m.RegisterScreen })));
+const CatalogScreen = lazy(() => cargarPantalla.catalog().then((m) => ({ default: m.CatalogScreen })));
+const ProductDetailScreen = lazy(() => import("@/features/catalog/pages/ProductDetailScreen").then((m) => ({ default: m.ProductDetailScreen })));
+const CartScreen = lazy(() => cargarPantalla.cart().then((m) => ({ default: m.CartScreen })));
+const ClientProfileScreen = lazy(() => import("@/features/customers/pages/CustomerProfileScreen").then((m) => ({ default: m.ClientProfileScreen })));
+const ManageProductsScreen = lazy(() => import("@/features/products/pages/ManageProductsScreen").then((m) => ({ default: m.ManageProductsScreen })));
+const GenericAdmin = lazy(() => import("@/features/products/components/GenericAdmin").then((m) => ({ default: m.GenericAdmin })));
 const ProductoTerminadoScreen = lazy(() => import("@/features/products/pages/FinishedProductScreen").then((m) => ({ default: m.ProductoTerminadoScreen })));
 const RecepcionCompraScreen = lazy(() => import("@/features/purchase-orders/pages/PurchaseReceptionScreen").then((m) => ({ default: m.RecepcionCompraScreen })));
 const SalesChartScreen = lazy(() => import("@/features/dashboard/pages/SalesChartScreen").then((m) => ({ default: m.SalesChartScreen })));
@@ -166,15 +169,19 @@ export default function App() {
   // el estado guardado.
   respaldarDatosProductosFase1();
   return (
-    <AuthProvider>
-      <CartProvider>
-        {/* Sin transiciones: las redirecciones de `AppContent` esperan que la
-            ruta cambie junto con el resto del estado. */}
-        <BrowserRouter useTransitions={false}>
-          <AppRoutes shell={<AppContent />} />
-        </BrowserRouter>
-      </CartProvider>
-    </AuthProvider>
+    // `m.*` con solo las animaciones que se usan al arrancar (sin arrastre ni
+    // `layout`); las pantallas que importan `motion` traen el resto al cargarse.
+    <LazyMotion features={domAnimation}>
+      <AuthProvider>
+        <CartProvider>
+          {/* Sin transiciones: las redirecciones de `AppContent` esperan que la
+              ruta cambie junto con el resto del estado. */}
+          <BrowserRouter useTransitions={false}>
+            <AppRoutes shell={<AppContent />} />
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
+    </LazyMotion>
   );
 }
 
@@ -218,6 +225,10 @@ function AppContent() {
     rutaInicial?.id ? { screen: rutaInicial.screen, id: rutaInicial.id } : null,
   );
   const reemplazarRutaRef = useRef(false);
+  /** La primera pantalla se pinta sin el fundido de entrada, para que se vea en
+      cuanto React la monta. Las siguientes lo conservan. */
+  const primeraPantallaRef = useRef(true);
+  useEffect(() => { primeraPantallaRef.current = false; }, []);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -2286,23 +2297,27 @@ function AppContent() {
 
       {/* Sidebar */}
       {isAdmin && (
-        <Sidebar
-          current={screen}
-          navigate={navigate}
-          abierto={esMovil ? sidebarMovilAbierto : menuAbierto}
-          userName={sesionRestaurandose ? "" : loggedInUserName}
-          menuButtonRef={menuButtonRef}
-          onToggleMenu={alternarMenu}
-          accesos={loggedInAccesos}
-          esSuperAdminSesion={esSuperAdminSesion}
-          hasDashboardAccess={hasDashboardAccess}
-          esMovil={esMovil}
-          onCerrarMovil={() => {
-            setSidebarMovilAbierto(false);
-            setTimeout(() => menuButtonRef.current?.focus(), 0);
-          }}
-          firstNavRef={firstNavRef}
-        />
+        <LandingErrorBoundary resetKey={screen}>
+          <Suspense fallback={esMovil ? <div className="pn-tira" aria-hidden="true" /> : null}>
+            <Sidebar
+              current={screen}
+              navigate={navigate}
+              abierto={esMovil ? sidebarMovilAbierto : menuAbierto}
+              userName={sesionRestaurandose ? "" : loggedInUserName}
+              menuButtonRef={menuButtonRef}
+              onToggleMenu={alternarMenu}
+              accesos={loggedInAccesos}
+              esSuperAdminSesion={esSuperAdminSesion}
+              hasDashboardAccess={hasDashboardAccess}
+              esMovil={esMovil}
+              onCerrarMovil={() => {
+                setSidebarMovilAbierto(false);
+                setTimeout(() => menuButtonRef.current?.focus(), 0);
+              }}
+              firstNavRef={firstNavRef}
+            />
+          </Suspense>
+        </LandingErrorBoundary>
       )}
 
       <div
@@ -2326,21 +2341,25 @@ function AppContent() {
 
         {/* Admin topbar */}
         {isAdmin && (
-          <AdminTopBar
-            current={screen}
-            onToggleSidebar={alternarMenu}
-            esMovil={esMovil}
-            menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
-            menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
-            navigate={navigate}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-            userName={sesionRestaurandose ? "" : loggedInUserName}
-            roleName={sesionRestaurandose ? "" : loggedInRoleName}
-            homeScreen={adminHomeScreen}
-            rolesParaCambiar={rolesParaCambiar}
-            onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
-          />
+          <LandingErrorBoundary resetKey={screen}>
+            <Suspense fallback={<header className="pn-header" aria-hidden="true" />}>
+              <AdminTopBar
+                current={screen}
+                onToggleSidebar={alternarMenu}
+                esMovil={esMovil}
+                menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
+                menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
+                navigate={navigate}
+                darkMode={darkMode}
+                setDarkMode={setDarkMode}
+                userName={sesionRestaurandose ? "" : loggedInUserName}
+                roleName={sesionRestaurandose ? "" : loggedInRoleName}
+                homeScreen={adminHomeScreen}
+                rolesParaCambiar={rolesParaCambiar}
+                onCambiarRol={rolesDeTrabajo.length > 0 && normalizarNombreRol(loggedInRoleName) !== "administrador" ? cambiarRolActivo : undefined}
+              />
+            </Suspense>
+          </LandingErrorBoundary>
         )}
 
         {/* Screen content */}
@@ -2385,10 +2404,10 @@ function AppContent() {
             </div>
           )}
           <AnimatePresence mode="wait">
-            <motion.div
+            <m.div
               key={screen}
               className="h-full"
-              initial={{ opacity: 0, y: 8 }}
+              initial={primeraPantallaRef.current ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
@@ -3140,7 +3159,7 @@ function AppContent() {
                     )}
                 </LandingErrorBoundary>
               </Suspense>
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         </main>
 

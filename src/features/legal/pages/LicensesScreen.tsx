@@ -159,8 +159,8 @@ export function LicenciasScreen({ onVolver }: { onVolver: () => void }) {
 
           <Seccion indice={4}>
             <p>
-              S.I.V.PRO utiliza las familias tipográficas Montserrat y Poppins, disponibles a través de Google
-              Fonts y distribuidas bajo la SIL Open Font License 1.1.
+              S.I.V.PRO utiliza las familias tipográficas Montserrat y Poppins, incluidas en el propio
+              aplicativo y distribuidas bajo la SIL Open Font License 1.1.
             </p>
             <p>
               Asimismo, el proyecto incorpora componentes gráficos de Lucide y recursos fotográficos

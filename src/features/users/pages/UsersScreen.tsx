@@ -13,47 +13,12 @@ import { PaginadorGrande } from "@/shared/components/panel/LargePaginator";
 import { SeccionFormulario } from "@/shared/components/panel/FormSection";
 import { TarjetaFila } from "@/shared/components/panel/RowCard";
 import { VacioEstado } from "@/shared/components/panel/EmptyState";
-import type { Rol } from "@/features/roles/utils/roles";
 import { cambiarEstadoUsuario, eliminarUsuario } from "@/shared/services/authService";
 import { useUsers } from "@/features/users/hooks/useUsers";
 import type { UsuarioGestion } from "@/features/users/utils/users";
 import { Avatar, RolesPills, EstadoEntrada } from "@/features/users/components/UserCells";
 
 const SERIF = "var(--font-titulo)";
-export const DOC_TIPOS = [
-  { code: "CC", label: "Cédula de Ciudadanía" },
-  { code: "CE", label: "Cédula de Extranjería" },
-  { code: "PP", label: "Pasaporte" },
-];
-export const fmtDoc = (tipo: string, numero: string) => `${tipo} ${numero}`;
-export const claveDoc = (tipo?: string, numero?: string) => `${(tipo ?? "").trim().toLowerCase()}||${(numero ?? "").trim()}`;
-export const docValida = (clave: string) => clave !== "||" && clave !== "";
-export const idRolCliente = (roles: Rol[]) => roles.find(r => r.nombre.trim().toLowerCase() === "cliente")?.id ?? "ROL-002";
-
-export interface Usuario {
-  id: string;
-  nombre: string;
-  iniciales: string;
-  avatarColor: string;
-  correo: string;
-  telefono: string;
-  tipoDocumento: string;
-  numeroDocumento: string;
-  rolIds: string[];
-  rolId: string;
-  rolInternoId?: string;
-  /** Rol primario informado por el backend en login o /auth/me. */
-  rolCuentaApi?: string;
-  activo: boolean;
-  esCliente?: boolean;
-  esEmpleado?: boolean;
-  rolesExtra?: string[];
-  esSuperAdmin?: boolean;
-  /** Roles y permisos asignados por el backend para la sesión actual. */
-  rolesSesionApi?: import("@/types/api").RolSesionApi[];
-}
-
-
 /** "1036554120" → "1.036.554.120" (si no es solo números, se deja igual). */
 const documentoLegible = (tipo: string, numero: string) =>
   `${tipo ? `${tipo} ` : ""}${/^\d+$/.test(numero) ? Number(numero).toLocaleString("es-CO") : numero}`;

@@ -95,6 +95,10 @@ export function ProductCard({
           src={getImageUrl(p.image)}
           alt={p.name}
           onError={onErrorImagen}
+          width={800}
+          height={600}
+          loading="lazy"
+          decoding="async"
           className={`block w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out motion-reduce:transition-none motion-reduce:group-hover:scale-100 ${etiqueta === "no_disponible" ? "grayscale opacity-60" : ""
             } ${verImagenCompleta(p) ? "object-contain" : "object-cover"}`}
         />
