@@ -1,5 +1,5 @@
 // Pantallas navegables de la app. El estado de navegación vive en `App()`
-// (`useState<Screen>`); no se usa react-router.
+// (`useState<Screen>`); la URL de cada pantalla está en `src/AppRoutes.tsx`.
 const PANTALLAS = [
   "landing",
   "catalog",

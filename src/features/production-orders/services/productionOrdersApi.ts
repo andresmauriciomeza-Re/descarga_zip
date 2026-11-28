@@ -1,0 +1,438 @@
+import api from "@/shared/services/api";
+import type { AxiosResponse } from "axios";
+import type { FaltanteUnidad } from "@/shared/utils/availability";
+import { idInsumoApiDesdeFront, idInsumoFront } from "@/shared/utils/technicalSheets";
+import type { EstadoOrden, InsumoRequerido, LineaOrden, OrdenProduccion, TipoOrden } from "@/features/production-orders/utils/production-orders";
+
+/** Fila de línea de orden tal como la devuelve el backend. */
+export interface LineaOrdenApi {
+  id_detalle_op: number | string;
+  id_producto: number | string | null;
+  id_insumo: number | string | null;
+  id_ft: number | string | null;
+  version_ficha: number | string | null;
+  nombre: string;
+  tamano: string | null;
+  cantidad_estimada: number | string;
+  cantidad_debida: number | string | null;
+  cantidad_real: number | string | null;
+  merma: number | string | null;
+  unidad: string;
+}
+
+/** Orden tal como la devuelve el backend (`op.*` + `lineas`). */
+export interface OrdenApi {
+  id_orden_produccion: number | string;
+  tipo: "Preparacion" | "Pedido";
+  id_venta: number | string | null;
+  es_venta_local: boolean;
+  estado_venta?: OrdenProduccion["estadoVenta"];
+  fecha_solicitada: string;
+  fecha_entrega_estimada: string | null;
+  hora_solicitada: string | null;
+  estado: "Pendiente" | "En proceso" | "Completada" | "Cancelada";
+  observacion: string | null;
+  venta_numero: string | null;
+  cliente: string | null;
+  fecha_creacion: string;
+  fecha_en_proceso: string | null;
+  fin_calentamiento_ms?: number | string | null;
+  listo_despues_recogida?: boolean | null;
+  cierre_manual_por_tiempo?: boolean | null;
+  fin_preparacion_ms?: number | string | null;
+  fecha_completada: string | null;
+  fecha_cancelada: string | null;
+  descripcion_preparacion: string | null;
+  tiempo_preparacion_min: number | string | null;
+  insumos_descontados: boolean | null;
+  productos_descontados: boolean | null;
+  stock_aplicado: boolean | null;
+  historial: TransicionApi[] | string | null;
+  insumos_requeridos: RequeridoApi[] | string | null;
+  lineas: LineaOrdenApi[];
+}
+
+interface TransicionApi {
+  de: string | null;
+  a: string;
+  fechaHora: string;
+  detalle?: string | null;
+  automatico?: boolean;
+  verificacion?: { id_detalle_op: number; pizzas_medianas?: number; pizzas_grandes?: number }[];
+}
+
+interface RequeridoApi {
+  id_insumo: number | string | null;
+  nombre: string;
+  requerido: number | string | null;
+  stock: number | string | null;
+  falta: number | string | null;
+  unidad: string | null;
+  motivo?: string | null;
+}
+
+/** Faltante del 409 de la API (o de GET /:id/requeridos). */
+export interface FaltanteApi {
+  id_insumo: number | string | null;
+  nombre: string;
+  requerido: number | string | null;
+  stock: number | string | null;
+  falta: number | string | null;
+  unidad: string | null;
+  motivo?: string | null;
+}
+
+/** Error de la API con sus `faltantes` (el interceptor compartido de `api`
+    solo conserva message+status). */
+export interface ErrorConFaltantes extends Error {
+  status?: number;
+  faltantes?: FaltanteApi[];
+}
+
+export const mensajeErrorOrdenes = (error: unknown, fallback: string): string => {
+  if (!(error instanceof Error) || !error.message) return fallback;
+  const status = (error as ErrorConFaltantes).status;
+  // Los errores conocidos (400/409...) muestran el mensaje del servidor; los 5xx usan el texto de cada pantalla.
+  if (typeof status === "number" && status >= 500) return fallback;
+  return error.message;
+};
+
+/** Faltantes del servidor → modelo de pantalla (`FaltanteUnidad`). */
+export const mapearFaltanteApi = (f: FaltanteApi): FaltanteUnidad => ({
+  insumoId: f.id_insumo == null ? "" : idInsumoFront(f.id_insumo),
+  nombre: f.nombre,
+  requerido: Number(f.requerido ?? 0),
+  stock: Number(f.stock ?? 0),
+  falta: Number(f.falta ?? 0),
+  unidad: f.unidad ?? "und",
+  ...(f.motivo ? { motivoTexto: f.motivo } : {}),
+});
+
+const estadoAFront = (estado: string): EstadoOrden =>
+  estado === "En proceso" || estado === "Por verificar"
+    ? "en-proceso"
+    : estado === "Completada"
+      ? "completada"
+      : estado === "Cancelada"
+        ? "cancelada"
+        : "pendiente";
+
+const parsearJson = <T>(valor: T | string | null | undefined): T => {
+  if (typeof valor === "string") {
+    try {
+      return JSON.parse(valor) as T;
+    } catch {
+      return [] as unknown as T;
+    }
+  }
+  return (valor ?? []) as T;
+};
+
+/** Orden del backend → modelo de la pantalla. El `fichaSnapshot` NO se arma
+    aquí: se pide con `GET /api/fichas` cuando se abre "Ver ficha" (guardando
+    el `idFt` de cada línea). */
+export const mapearOrdenApi = (row: OrdenApi): OrdenProduccion => {
+  const tipo: TipoOrden = row.tipo === "Pedido" ? "pedido" : "preparacion";
+  const transiciones = parsearJson<TransicionApi[]>(row.historial);
+  const cortes = new Map(
+    transiciones.flatMap((h) => h.verificacion ?? []).map((v) => [Number(v.id_detalle_op), v]),
+  );
+  const lineas = (row.lineas ?? []).map((l): LineaOrden => {
+    const esPedido = l.id_producto != null && l.id_producto !== "";
+    const corte = cortes.get(Number(l.id_detalle_op));
+    return {
+      idProducto: esPedido ? String(l.id_producto) : idInsumoFront(l.id_insumo as number | string),
+      ...(esPedido ? { productoId: String(l.id_producto) } : {}),
+      nombre: l.nombre,
+      unidad: l.unidad,
+      cantidadEstimada: Number(l.cantidad_estimada),
+      ...(l.cantidad_debida == null ? {} : { cantidadDebida: Number(l.cantidad_debida) }),
+      ...(l.tamano ? { tamano: l.tamano } : {}),
+      ...(l.cantidad_real == null ? {} : { cantidadReal: Number(l.cantidad_real) }),
+      ...(corte?.pizzas_medianas == null ? {} : { pizzasMedianas: Number(corte.pizzas_medianas) }),
+      ...(corte?.pizzas_grandes == null ? {} : { pizzasGrandes: Number(corte.pizzas_grandes) }),
+      ...(l.merma == null ? {} : { merma: Number(l.merma) }),
+      ...(esPedido && l.id_ft == null ? { sinFicha: true } : {}),
+      idDetalleOp: Number(l.id_detalle_op),
+      idFt: l.id_ft == null ? null : Number(l.id_ft),
+      versionFicha: l.version_ficha == null ? null : Number(l.version_ficha),
+    };
+  });
+  const requeridos = parsearJson<RequeridoApi[]>(row.insumos_requeridos).map(
+    (r): InsumoRequerido => ({
+      insumoId: r.id_insumo == null ? "" : idInsumoFront(r.id_insumo),
+      nombre: r.nombre,
+      cantidad: Number(r.requerido ?? 0),
+      unidad: r.unidad ?? "und",
+    }),
+  );
+  const historial = transiciones.map((h) => ({
+    de: h.de ? estadoAFront(h.de as OrdenApi["estado"]) : null,
+    a: estadoAFront(h.a as OrdenApi["estado"]),
+    fechaHora: h.fechaHora,
+    ...(h.detalle ? { detalle: h.detalle } : {}),
+    ...(h.automatico ? { automatico: true } : {}),
+  }));
+  return {
+    id: `OP-${String(Number(row.id_orden_produccion)).padStart(3, "0")}`,
+    idApi: Number(row.id_orden_produccion),
+    tipo,
+    lineas,
+    insumosRequeridos: requeridos,
+    ...(row.id_venta == null ? {} : { ventaId: String(row.id_venta) }),
+    ventaLocal: row.es_venta_local === true,
+    estadoVenta: row.estado_venta,
+    ventaNumero: row.venta_numero,
+    cliente: row.cliente,
+    fechaSolicitada: String(row.fecha_solicitada).slice(0, 10),
+    fechaLimite: row.fecha_entrega_estimada
+      ? String(row.fecha_entrega_estimada).replace(" ", "T").slice(0, 16)
+      : null,
+    horaSolicitada: row.hora_solicitada ?? "",
+    estadoOrden: estadoAFront(row.estado),
+    observacion: row.observacion ?? "",
+    creadaEn: row.fecha_creacion,
+    inicioProduccion: row.fecha_en_proceso,
+    finCalentamientoMs: row.fin_calentamiento_ms == null ? undefined : Number(row.fin_calentamiento_ms),
+    finPreparacionMs: row.fin_preparacion_ms == null ? undefined : Number(row.fin_preparacion_ms),
+    entregaEstimada: row.fecha_completada ?? row.fecha_cancelada ?? null,
+    listoDespuesRecogida: row.listo_despues_recogida === true,
+    cierreManualPorTiempo: row.cierre_manual_por_tiempo === true,
+    historial,
+    ...(row.descripcion_preparacion
+      ? { descripcionPreparacion: row.descripcion_preparacion }
+      : {}),
+    ...(row.tiempo_preparacion_min == null
+      ? {}
+      : { tiempoPreparacionMin: Number(row.tiempo_preparacion_min) }),
+    ...(row.insumos_descontados ? { insumosDescontados: true } : {}),
+    ...(row.productos_descontados ? { productosDescontados: true } : {}),
+    ...(row.stock_aplicado ? { stockAplicado: true } : {}),
+  };
+};
+
+/** Lanza el error del servidor conservando el `faltantes` de los 409. El
+    interceptor compartido de `api` solo conserva message+status, así que para
+    estos endpoints se acepta la respuesta con `validateStatus` y se arma el
+    error aquí (sin tocar `shared/services`). */
+async function conFaltantes<T>(peticion: Promise<AxiosResponse<T>>): Promise<T> {
+  const { data, status } = await peticion;
+  if (status >= 400) {
+    const cuerpo = (data as unknown as { error?: { message?: string; faltantes?: FaltanteApi[] } })
+      ?.error;
+    const err: ErrorConFaltantes = new Error(
+      cuerpo?.message ?? "No se pudo completar la operación de órdenes de producción.",
+    );
+    err.status = status;
+    err.faltantes = cuerpo?.faltantes ?? [];
+    throw err;
+  }
+  return data;
+}
+
+const crudo = { validateStatus: () => true } as const;
+
+export const listarOrdenesProduccion = async (filtros?: {
+  estado?: string;
+  tipo?: string;
+}): Promise<OrdenProduccion[]> => {
+  const params: Record<string, string> = {};
+  if (filtros?.estado) params.estado = filtros.estado;
+  if (filtros?.tipo) params.tipo = filtros.tipo;
+  const { data } = await api.get<OrdenApi[]>("/ordenes-produccion", { params });
+  return data.map(mapearOrdenApi);
+};
+
+
+
+export interface CapacidadLineaApi {
+  id_detalle_op: number;
+  requeridos_por_unidad: {
+    id_insumo: number;
+    nombre: string;
+    requerido: number;
+    stock: number | null;
+    unidad: string | null;
+    motivo?: string | null;
+  }[];
+}
+
+export interface CalculoVerificacionLineaApi {
+  id_detalle_op: number;
+  cantidad_debida: number;
+  calculada_al_verificar: boolean;
+}
+
+export const obtenerCalculoVerificacionOrden = async (
+  id: string,
+): Promise<{ lineas: CalculoVerificacionLineaApi[] }> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const { data } = await api.get<{ lineas: CalculoVerificacionLineaApi[] }>(
+    `/ordenes-produccion/${idApi}/verificacion`,
+  );
+  return data;
+};
+
+
+/** Crear "Preparación en lote". `lineas[].id` es el id del frontend ("INS-###")
+    del producto insumo a preparar; `id_producto` identifica sin ambigüedad un
+    producto del menú. 409 con `faltantes` si no alcanza el stock. */
+export const crearOrdenPreparacionApi = async (payload: {
+  fecha_solicitada?: string;
+  hora_solicitada?: string | null;
+  observacion?: string | null;
+  validar_stock?: boolean;
+  lineas: (
+    | { id: string; cantidad: number }
+    | { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }
+  )[];
+}): Promise<OrdenProduccion> => {
+  const data = await conFaltantes(
+    api.post<OrdenApi>(
+      "/ordenes-produccion",
+      {
+        ...(payload.fecha_solicitada ? { fecha_solicitada: payload.fecha_solicitada } : {}),
+        hora_solicitada: payload.hora_solicitada ?? null,
+        observacion: payload.observacion ?? null,
+        ...(payload.validar_stock === undefined ? {} : { validar_stock: payload.validar_stock }),
+        lineas: payload.lineas.map((linea) => (
+          "id_producto" in linea
+            ? {
+                id_producto: linea.id_producto,
+                cantidad: linea.cantidad,
+                ...("tamano" in linea && linea.tamano ? { tamano: linea.tamano } : {}),
+              }
+            : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
+        )),
+      },
+      crudo,
+    ),
+  );
+  return mapearOrdenApi(data);
+};
+
+export const actualizarOrdenProduccion = async (
+  id: string,
+  payload: {
+    tiempo_preparacion_min?: number;
+    fecha_solicitada?: string;
+    hora_solicitada?: string | null;
+    observacion?: string | null;
+    lineas?: (
+      | { id: string; cantidad: number }
+      | { id_producto: number; cantidad: number; tamano?: "Mediana" | "Grande" }
+    )[];
+  },
+): Promise<OrdenProduccion> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const data = await conFaltantes(
+    api.put<OrdenApi>(
+      `/ordenes-produccion/${idApi}`,
+      {
+        ...(payload.tiempo_preparacion_min !== undefined ? { tiempo_preparacion_min: payload.tiempo_preparacion_min } : {}),
+        ...(payload.fecha_solicitada ? { fecha_solicitada: payload.fecha_solicitada } : {}),
+        ...(payload.hora_solicitada !== undefined ? { hora_solicitada: payload.hora_solicitada } : {}),
+        ...(payload.observacion !== undefined ? { observacion: payload.observacion } : {}),
+        ...(payload.lineas
+          ? {
+              lineas: payload.lineas.map((linea) => (
+                "id_producto" in linea
+                  ? {
+                      id_producto: linea.id_producto,
+                      cantidad: linea.cantidad,
+                      ...("tamano" in linea && linea.tamano ? { tamano: linea.tamano } : {}),
+                    }
+                  : { id_insumo: idInsumoApiDesdeFront(linea.id), cantidad: linea.cantidad }
+              )),
+            }
+          : {}),
+      },
+      crudo,
+    ),
+  );
+  return mapearOrdenApi(data);
+};
+
+export const eliminarOrdenProduccion = async (id: string): Promise<void> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  await api.delete(`/ordenes-produccion/${idApi}`);
+};
+
+/** Inicia la orden (descuenta insumos). 409 con `faltantes` si no alcanza. */
+export const iniciarOrdenProduccion = async (
+  id: string,
+  payload: {
+    fechaEntregaEstimada?: string;
+    fechaLimiteAutomatica?: boolean;
+    lineas?: { idDetalleOp: number; cantidad: number }[];
+  },
+): Promise<OrdenProduccion> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const data = await conFaltantes(
+    api.post<OrdenApi>(
+      `/ordenes-produccion/${idApi}/iniciar`,
+      {
+        ...(payload.fechaEntregaEstimada === undefined ? {} : { fecha_entrega_estimada: payload.fechaEntregaEstimada }),
+        ...(payload.fechaLimiteAutomatica === undefined ? {} : { fecha_limite_automatica: payload.fechaLimiteAutomatica }),
+        ...(payload.lineas
+          ? {
+              lineas: payload.lineas.map((linea) => ({
+                id_detalle_op: linea.idDetalleOp,
+                cantidad: linea.cantidad,
+              })),
+            }
+          : {}),
+      },
+      crudo,
+    ),
+  );
+  return mapearOrdenApi(data);
+};
+
+/** Verifica la producción. Preparación manda solo cantidades reales; el
+    servidor determina la cantidad debida desde el dato congelado. */
+export const completarOrdenProduccion = async (
+  id: string,
+  lineas?: { idDetalleOp: number; cantidadReal: number }[],
+  precios?: { idProducto: number; precioMediana?: number; precioGrande?: number }[],
+): Promise<OrdenProduccion> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const data = await conFaltantes(
+    api.post<OrdenApi>(
+      `/ordenes-produccion/${idApi}/completar`,
+      lineas
+        ? {
+            lineas: lineas.map((l) => ({
+              id_detalle_op: l.idDetalleOp,
+              cantidad_real: l.cantidadReal,
+            })),
+            ...(precios?.length
+              ? {
+                  precios: precios.map((p) => ({
+                    id_producto: p.idProducto,
+                    ...(p.precioMediana ? { precio_mediana: p.precioMediana } : {}),
+                    ...(p.precioGrande ? { precio_grande: p.precioGrande } : {}),
+                  })),
+                }
+              : {}),
+          }
+        : {},
+      crudo,
+    ),
+  );
+  return mapearOrdenApi(data);
+};
+
+/** Da de baja una orden (motivo + descripción del formulario actual). */
+export const darBajaOrdenProduccion = async (
+  id: string,
+  motivo: string,
+  descripcion: string,
+): Promise<OrdenProduccion> => {
+  const idApi = Number(String(id).replace(/^OP-/, ""));
+  const { data } = await api.post<OrdenApi>(`/ordenes-produccion/${idApi}/dar-baja`, {
+    motivo,
+    descripcion,
+  });
+  return mapearOrdenApi(data);
+};

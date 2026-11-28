@@ -1,5 +1,7 @@
 # Informe: página «Licencias y reconocimientos»
 
+> **Actualización del 27 de noviembre de 2026.** La URL de la página pasó a `/licenses` (`/licencias` redirige) y la navegación usa React Router: `useRutaLicencias` ya no existe. Se agregaron `react-router`, `cookie` y `set-cookie-parser` (MIT) y se regeneraron los avisos y el inventario. Las cifras y la descripción de la navegación de más abajo son de la revisión original.
+
 Fecha: 25 de noviembre de 2026. Base de trabajo: rama `feature/limpieza-codigo`, en el mismo commit que
 `origin/develop` (`1d6ce99`). No se hicieron commits, push ni despliegues.
 
@@ -18,9 +20,9 @@ advierte que hay paquetes pendientes de verificación.
 
 Creados:
 
-- `src/features/legal/pages/LicenciasScreen.tsx`
-- `src/features/legal/components/TablaLicencias.tsx`, `IndiceLicencias.tsx`
-- `src/features/legal/data/licencias.ts`, `types/licencias.types.ts`, `navegacion.ts`
+- `src/features/legal/pages/LicensesScreen.tsx`
+- `src/features/legal/components/LicenseTable.tsx`, `LicenseIndex.tsx`
+- `src/features/legal/data/licenses.ts`, `types/licenses.types.ts`, `navigation.ts`
 - `scripts/legal/generar-avisos.mjs` y `scripts/legal/upstream/*.txt`
 - `public/legal/THIRD-PARTY-NOTICES.txt`
 - `docs/legal/inventario-dependencias.csv` y este informe
@@ -135,7 +137,7 @@ Firefox, Safari, dispositivos físicos, lector de pantalla ni la actualización 
 ## 8. Mantenimiento
 
 Tras cambiar dependencias, ejecutar `npm ci` en ambos repositorios, actualizar
-`src/features/legal/data/licencias.ts` y regenerar:
+`src/features/legal/data/licenses.ts` y regenerar:
 
 ```bash
 node scripts/legal/generar-avisos.mjs ../sivpro-backend
