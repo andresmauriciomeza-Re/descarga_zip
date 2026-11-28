@@ -16,6 +16,7 @@ import imagenLocal from "@/assets/img/imagen_local.webp";
 import { toast } from "sonner";
 import { REVEAL_EASE, reveal, inclinarTarjetaProducto, reposarTarjetaProducto, desplazarFotoProducto, reposarFotoProducto } from "@/layout/hooks/useLandingAnimations";
 import { SERIF, MONO } from "@/shared/utils/fonts";
+import { precargar } from "@/shared/utils/lazyScreens";
 
 export function Content({
   navigate,
@@ -184,6 +185,7 @@ export function Content({
               >
                 <button
                   onClick={() => navigate("catalog")}
+                  {...precargar("catalog")}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#DC2626] text-white font-bold text-base rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-2xl shadow-red-900/40 cursor-pointer"
                 >
                   <ShoppingCart className="w-5 h-5" />
@@ -191,6 +193,7 @@ export function Content({
                 </button>
                 <button
                   onClick={() => navigate("catalog")}
+                  {...precargar("catalog")}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 max-md:bg-black/45 border-2 border-white/70 text-white font-bold text-base rounded-xl hover:bg-white/10 hover:border-white active:scale-95 transition-all duration-200 cursor-pointer backdrop-blur-sm"
                 >
                   Ver menú completo
@@ -327,6 +330,7 @@ export function Content({
             </h2>
             <button
               onClick={() => navigate("catalog")}
+              {...precargar("catalog")}
               className="text-[#DC2626] font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all cursor-pointer shrink-0 max-md:min-h-11"
             >
               Ver todas <ArrowRight className="w-4 h-4" />
@@ -623,6 +627,7 @@ export function Content({
               <motion.div {...reveal(0.36, 14)} className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => navigate("catalog")}
+                  {...precargar("catalog")}
                   className="inline-flex items-center gap-2 px-6 py-3.5 bg-[#DC2626] text-white font-semibold rounded-xl hover:bg-red-700 active:scale-95 transition-all duration-200 shadow-md shadow-red-900/20 cursor-pointer text-sm"
                 >
                   🍕 Pedir ahora

@@ -6,6 +6,7 @@ import { Moon, ShoppingCart, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import type { CartItem } from "@/types/cart";
 import { SERIF } from "@/shared/utils/fonts";
+import { precargar } from "@/shared/utils/lazyScreens";
 
 export function PublicNav({
   navigate,
@@ -81,6 +82,7 @@ export function PublicNav({
           </button>
           <button
             onClick={() => navigate("catalog")}
+            {...precargar("catalog")}
             className="text-foreground hover:text-[#DC2626] transition-colors cursor-pointer text-sm font-semibold tracking-wide"
           >
             Ver Menú
@@ -100,6 +102,7 @@ export function PublicNav({
           {/* Cart */}
           <button
             onClick={() => navigate("cart")}
+            {...precargar("cart")}
             className="relative inline-flex items-center gap-2 px-4 py-2.5 max-md:min-h-11 bg-[#DC2626] text-white rounded-xl font-semibold text-sm hover:bg-red-700 active:scale-95 transition-all shadow-md shadow-red-900/20 cursor-pointer"
             aria-label={count > 0 ? `Ver carrito (${count} productos)` : "Ver carrito"}
           >
@@ -141,6 +144,7 @@ export function PublicNav({
           )) : (
             <button
               onClick={onLogin}
+              {...precargar("login")}
               className="hidden md:inline-flex px-3 sm:px-4 py-2.5 bg-[#DC2626] text-white rounded-xl text-sm font-semibold hover:bg-red-700 active:scale-95 transition-all cursor-pointer shadow-md shadow-red-900/20 whitespace-nowrap"
             >
               Iniciar sesión
