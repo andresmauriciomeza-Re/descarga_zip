@@ -346,11 +346,12 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
       <Dialog.Root open onOpenChange={a => { if (!a) cerrar(); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="pn-dialogo-fondo" />
-          <Dialog.Content className="pn-modal pn-modal--medio" aria-describedby={undefined}>
+          <Dialog.Content className="pn-modal pn-modal--formulario pn-modal--ancho" aria-describedby={undefined}>
             <div className="pn-modal__cab">
               <Dialog.Title className="pn-modal__titulo">{e ? `Cambiar «${e.nombre}»` : "Agregar una categoría"}</Dialog.Title>
             </div>
             <div className="grid gap-5">
+              <div className="pn-dos-columnas">
               <SeccionFormulario titulo="Datos de la categoría">
                 <div className="grid gap-4">
                   <CampoFormulario etiqueta="Nombre" ayuda={fija ? "Las categorías originales no cambian de nombre" : "Así sale en el menú"} error={errs.nombre}>
@@ -426,8 +427,9 @@ export function CategoriaProductoScreen({ categorias, cargando = false, errorCar
                   </>
                 )}
               </SeccionFormulario>
+              </div>
 
-              <div className="pn-dialogo__botones" style={{ justifyContent: "flex-start" }}>
+              <div className="pn-dialogo__botones pn-dialogo__botones--fin">
                 <BotonAccion variante="normal" onClick={cerrar}>Cancelar</BotonAccion>
                 <BotonAccion variante="principal" disabled={guardando} onClick={() => void (e ? handleEdit() : handleCreate())}>
                   {guardando ? "Guardando…" : e ? "Guardar cambios" : "Agregar la categoría"}

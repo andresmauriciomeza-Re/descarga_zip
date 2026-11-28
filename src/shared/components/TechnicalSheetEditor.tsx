@@ -864,7 +864,7 @@ export function FichaTecnicaEditor({
               <p className="shrink-0 text-xs text-red-500 dark:text-red-400 leading-tight">{errorInsumos}</p>
             )}
             {ficha.insumos.length > 0 ? (
-              <div className="mt-4 min-h-0 lg:flex-1">
+              <div className="mt-4 min-h-0 lg:flex-1 lg:min-h-[8rem]">
                 <InsumosFichaTable
                   insumos={ficha.insumos}
                   editable
@@ -877,6 +877,7 @@ export function FichaTecnicaEditor({
                   onPresentationChange={guardarPresentacionFila}
                                     contenedorRef={insumosScrollRef}
                   stickyHeader
+                  contenedorClassName="lg:max-h-full lg:overflow-y-auto"
                   insumosCatalogo={insumos}
                 />
               </div>

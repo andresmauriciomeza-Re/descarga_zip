@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { esEmpaque } from "@/shared/utils/units";
 import { type InsumoSolicitadoRow, InsumosSolicitadosTable, totalDeLineas } from "@/features/purchases/components/RequestedSuppliesTable";
 import { motion, AnimatePresence } from "motion/react";
+import { CLASES_DOS_PANELES, CabeceraLista, BarraTotalCelular } from "@/shared/components/panel/FormSection";
 import { ArrowLeft, X, CheckCircle2, AlertCircle, Ban, Search, Plus, Check, Send } from "lucide-react";
 import { EstadoBadge } from "@/features/purchase-orders/components/StatusBadge";
 import { formatearFechaHora } from "@/shared/utils/time";
@@ -547,14 +548,14 @@ export function OrdenModal({
       <div
         className={
           isPage
-            ? `w-full px-4 pt-4 pb-4 ${FORM_MAXW_PAGINA} mx-auto${dosPaneles ? " pn-pedido pn-pagina-con-barra" : ""}`
+            ? `w-full px-4 pt-4 pb-4 ${FORM_MAXW_PAGINA} mx-auto${dosPaneles ? ` ${CLASES_DOS_PANELES.pagina}` : ""}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full min-[1200px]:h-full"
+              ? CLASES_DOS_PANELES.interior
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -565,13 +566,13 @@ export function OrdenModal({
             transition={{ duration: 0.15 }}
             className={`flex flex-col w-full ${isPage ? FORM_MAXW_PAGINA : FORM_MAXW}${
               isPage
-                ? dosPaneles ? " min-[1200px]:h-full min-[1200px]:min-h-0" : ""
+                ? dosPaneles ? ` ${CLASES_DOS_PANELES.caja}` : ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
             {/* Cabecera: ← + título + subtítulo en pantalla completa; X en el
                 modal. Volver pide confirmación si hay datos escritos. */}
-            <div className={`flex items-center justify-between gap-3 px-5 ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
+            <div className={`flex items-center justify-between gap-3 ${dosPaneles ? "px-0" : "px-5"} ${isPage ? "py-1.5" : "py-4"} border-b border-border shrink-0`}>
               <div className="flex items-center gap-3 min-w-0">
                 {isPage && (
                   <button
@@ -609,7 +610,7 @@ export function OrdenModal({
             <div
               className={
                 dosPaneles
-                  ? "pt-3 grid grid-cols-[minmax(0,1fr)] gap-4 min-[1200px]:flex-1 min-[1200px]:min-h-0 min-[1200px]:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] min-[1200px]:grid-rows-[minmax(0,1fr)]"
+                  ? CLASES_DOS_PANELES.cuerpo
                   : isPage
                   ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
@@ -620,7 +621,7 @@ export function OrdenModal({
               <div
                 className={
                   dosPaneles
-                    ? "pn-pedido__form min-w-0 flex flex-col gap-4 p-4 bg-card border border-border rounded-2xl min-[1200px]:min-h-0 min-[1200px]:overflow-y-auto"
+                    ? CLASES_DOS_PANELES.formulario
                     : isPage
                     ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
@@ -1030,7 +1031,7 @@ export function OrdenModal({
               <div
                 className={
                   dosPaneles
-                    ? "min-w-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden min-[1200px]:min-h-0"
+                    ? CLASES_DOS_PANELES.lista
                     : isPage
                     ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
@@ -1039,12 +1040,10 @@ export function OrdenModal({
                 {/* Cabecera de la tabla: contador. Punto 3.3: la orden admite
                     insumos Y productos, así que se habla de "ítems". */}
                 {dosPaneles && (
-                  <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
-                    <h2 className="text-xl font-bold m-0">Ítems de la orden</h2>
-                    <span className="text-base font-medium text-muted-foreground">
-                      {form.items.length} {form.items.length === 1 ? "ítem" : "ítems"}
-                    </span>
-                  </div>
+                  <CabeceraLista
+                    titulo="Ítems de la orden"
+                    contador={`${form.items.length} ${form.items.length === 1 ? "ítem" : "ítems"}`}
+                  />
                 )}
 
               {isView ? (
@@ -1142,13 +1141,9 @@ export function OrdenModal({
 
             {/* Celular: total y acciones siempre a la vista. */}
             {dosPaneles && (
-              <div className="pn-barra-guardar pn-pedido__barra">
-                <p className="pn-barra-guardar__total">
-                  <span>Total estimado</span>
-                  <strong>{fmtCOP(totalDeLineas(form.items))}</strong>
-                </p>
-                <div className="pn-barra-guardar__botones">{botonesPagina}</div>
-              </div>
+              <BarraTotalCelular etiqueta="Total estimado" total={fmtCOP(totalDeLineas(form.items))}>
+                {botonesPagina}
+              </BarraTotalCelular>
             )}
 
             {/* Footer del modal — solo en creación; en detalle se cierra con

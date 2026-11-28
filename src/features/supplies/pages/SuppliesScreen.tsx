@@ -992,14 +992,16 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
         <Dialog.Root open onOpenChange={abierto => { if (!abierto) (esPI ? handleCancelarProducto() : cerrarModal()); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="pn-dialogo-fondo" />
-            <Dialog.Content className="pn-modal pn-modal--formulario" aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
+            <Dialog.Content className={`pn-modal pn-modal--formulario${esPI ? " pn-modal--ancho pn-modal--receta" : ""}`} aria-describedby={undefined} onInteractOutside={e => e.preventDefault()}>
               <div className="pn-modal__cab">
                 <Dialog.Title className="pn-modal__titulo">
                   {editingId ? `Cambiar «${nombre}»` : "Agregar un insumo"}
                 </Dialog.Title>
               </div>
 
-              <div className="grid gap-5">
+              <div className="pn-modal__cuerpo grid gap-5">
+                <div className={esPI ? "pn-dos-columnas" : "grid gap-5"}>
+                <div className="pn-columna">
                 <SeccionFormulario numero={1} titulo="¿Cómo se consigue?" ayuda={editingId ? "Esto no se puede cambiar después de creado." : undefined}>
                   <OpcionesBotones
                     etiqueta="Cómo se consigue"
@@ -1151,8 +1153,10 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                     )}
                   </div>
                 </SeccionFormulario>
+                </div>
 
                 {esPI && (
+                  <div className="pn-columna pn-columna--receta">
                   <SeccionFormulario
                     numero={3}
                     titulo="Receta (ficha técnica)"
@@ -1181,7 +1185,9 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                       />
                     </div>
                   </SeccionFormulario>
+                  </div>
                 )}
+                </div>
 
                 <div className="pn-dialogo__botones pn-dialogo__botones--fin">
                   <BotonAccion variante="normal" onClick={esPI ? handleCancelarProducto : cerrarModal}>Cancelar</BotonAccion>
