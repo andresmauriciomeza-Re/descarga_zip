@@ -92,9 +92,34 @@ body:has([data-panel-texto-grande]) {
 .pn-tabla-compra { table-layout: auto; font-size: 1.125rem; }
 .pn-tabla-compra th { font-size: 1rem; }
 .pn-tabla-compra tbody tr { height: 3.5rem; }
-.pn-tabla-compra td { overflow-wrap: anywhere; }
+/* El texto baja de línea entre palabras; las cifras y los botones no se parten. */
+.pn-tabla-compra td { overflow-wrap: break-word; }
+.pn-tabla-compra button { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
 .pn-tabla-compra .pn-boton { min-height: 2.75rem; padding: 0 0.75rem; font-size: 1rem; }
 .pn-tabla-compra tfoot td { font-size: 1.125rem; }
+
+/* ── Rejilla del formulario de líneas (pedido, factura y recepción) ── */
+/* z-index: la lista de sugerencias debe quedar por encima de lo que sigue. */
+.pn-lineas-marco { position: relative; z-index: 20; }
+/* Con la lista de sugerencias abierta, el formulario pasa por encima de la barra fija. */
+.pn-lineas-marco:has([class*="top-full"]) { z-index: 40; }
+.pn-lineas { display: grid; gap: 0.75rem 0.5rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.pn-lineas > * { min-width: 0; grid-column: 1 / -1; }
+.pn-lineas input, .pn-lineas button[role="combobox"], .pn-lineas [title="La medida la define el ítem del catálogo"] { height: 3.5rem; }
+@media (min-width: 641px) {
+  .pn-lineas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pn-lineas > * { grid-column: auto; }
+  .pn-lineas > .pn-c12, .pn-lineas > .pn-c9, .pn-lineas > .pn-c6 { grid-column: 1 / -1; }
+}
+@media (min-width: 821px) {
+  .pn-lineas { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .pn-lineas > .pn-c3 { grid-column: span 3; }
+  .pn-lineas > .pn-c4 { grid-column: span 4; }
+  .pn-lineas > .pn-c6 { grid-column: span 6; }
+  .pn-lineas > .pn-c9 { grid-column: span 9; }
+  .pn-lineas > .pn-c12 { grid-column: 1 / -1; }
+  .pn-lineas > .pn-c4.pn-nueva-fila { grid-column: 1 / span 4; }
+}
 
 @media (max-width: 820px) {
   .pn-tabla-compra { display: block; min-width: 0 !important; }
@@ -105,6 +130,19 @@ body:has([data-panel-texto-grande]) {
   .pn-tabla-compra td[data-etiqueta]::before {
     display: block; content: attr(data-etiqueta); font-size: 1rem; color: var(--gris-texto);
   }
+}
+
+/* ── Barra fija de guardar (pedido y factura a pantalla completa) ── */
+.pn-pagina-con-barra { scroll-padding-bottom: 9rem; }
+.pn-barra-guardar { position: sticky; bottom: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem 1.5rem; padding: 0.75rem 1.25rem; background: #fff; border-top: 2px solid var(--borde-suave); color: var(--texto); }
+.pn-barra-guardar__total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; margin: 0; font-size: 1rem; font-weight: 700; }
+.pn-barra-guardar__total strong { font: 700 1.5rem/1.2 var(--font-titulo); }
+.pn-barra-guardar__botones { display: flex; gap: 0.75rem; margin-left: auto; }
+.pn-barra-guardar .pn-boton { min-width: 11rem; }
+@media (max-width: 640px) {
+  .pn-barra-guardar { padding: 0.625rem 0.5rem; }
+  .pn-barra-guardar__botones { width: 100%; }
+  .pn-barra-guardar .pn-boton { flex: 1 1 0; min-width: 0; padding: 0 0.5rem; }
 }
 
 /* ── Tarjeta fila ── */

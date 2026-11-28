@@ -8,7 +8,7 @@ import type { CategoriaProducto } from "@/features/product-categories/utils/prod
 import { type NuevaCompraData, type ItemFactura, type TipoItem, labelPaginaCls, labelModalCls, iPaginaCls, iCls, SERIF, labelDatoCls, valorDatoCls, campoCortoCls, fmtCOP } from "@/features/purchases/utils/purchases";
 import { type ModoIva, calcularLineaIva, resolverModoIva, chipIvaSinPrefijo } from "@/features/purchases/services/vat";
 import { nombreBuscable, contenidoDe, presentacionCompra, empaqueDe, medidaCompra } from "@/shared/utils/presentation";
-import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm } from "@/features/purchases/components/CompactSupplyForm";
+import { type InsumoSuggestion, type CompactInsumoFormValues, CompactInsumoForm, irAlFormularioDeLinea } from "@/features/purchases/components/CompactSupplyForm";
 import { toast } from "sonner";
 import { esEmpaque, etiquetaPresentacion } from "@/shared/utils/units";
 import { motion, AnimatePresence } from "motion/react";
@@ -603,7 +603,8 @@ export function CompraForm({
     setItemPrecioVenta(row.precioVenta ?? 0);
     setItemSugAbierto(false);
     setEditando(row.rowId);
-    nombreRef.current?.focus();
+    // El foco abre las sugerencias: se cierran enseguida.
+    setTimeout(() => { irAlFormularioDeLinea(itemRef.current); setItemSugAbierto(false); }, 0);
   };
 
   const eliminarItem = (rowId: string) => {
@@ -702,14 +703,14 @@ export function CompraForm({
       <div
         className={
           isPage
-            ? "w-full px-4 sm:px-6 py-4 h-full flex flex-col overflow-hidden"
+            ? `w-full px-4 sm:px-6 pt-4 h-full overflow-y-auto overflow-x-hidden ${isView ? "pb-4" : "pn-pagina-con-barra"}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full h-full flex flex-col"
+              ? "w-full"
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -720,7 +721,7 @@ export function CompraForm({
             transition={{ duration: 0.15 }}
             className={`flex flex-col w-full ${isPage ? "max-w-[75rem]" : FORM_MAXW}${
               isPage
-                ? " h-full"
+                ? ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
@@ -765,7 +766,7 @@ export function CompraForm({
             <div
               className={
                 isPage
-                  ? "flex-1 min-h-0 px-5 py-3 flex flex-col lg:flex-row overflow-y-auto overflow-x-clip"
+                  ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : isView
                     // Detalle: el modal se AJUSTA al contenido (sin
                     // `flex-1 min-h-0`, que lo estiraba hasta el tope y
@@ -786,7 +787,7 @@ export function CompraForm({
                <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] shrink-0 lg:pr-6 min-h-0 flex flex-col gap-6 lg:h-full"
+                    ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1176,7 +1177,7 @@ export function CompraForm({
                     compacto={isPage}
                     // Punto B3: el formulario SIEMPRE es "Agregar"; la edición
                     // de una fila existente ocurre en línea, en la tabla.
-                    buttonLabel={editando ? "Guardar cambios" : "+ Agregar otra línea"}
+                    buttonLabel={editando ? "Guardar cambios" : "Agregar otra línea"}
                     onCancelar={editando ? () => limpiarFilaInsumo() : undefined}
                     variante="compacta"
                     // Fase 4: Presentación SIEMPRE visible. Para PRODUCTOS es
@@ -1248,7 +1249,7 @@ export function CompraForm({
               <div
                 className={
                   isPage
-                    ? "w-full lg:w-[50%] min-w-0 min-h-0 flex flex-col gap-3 lg:border-l lg:border-border lg:pl-6 lg:h-full"
+                    ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
                 }
               >
@@ -1431,33 +1432,32 @@ export function CompraForm({
                   onEdit={editarItem}
                   onRemove={eliminarItem}
                   enPagina={isPage}
+                  ocultarTotal={isPage}
                   rowEditando={editando}
-                  className={isPage ? "flex-1 min-h-0 flex flex-col" : ""}
+                  className=""
                 />
               )}
-
-                {/* Acciones: en pantalla completa van al final de ESTA columna
-                    (siempre visibles); en el modal siguen en el pie general. */}
-                {isPage && !isView && (
-                  <div className="flex flex-wrap gap-3 shrink-0 mt-auto pt-2">
-                    <button
-                      onClick={salir}
-                      className="pn-boton pn-boton--normal flex-1"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={guardar}
-                      disabled={!botonGuardarOk}
-                      className="pn-boton pn-boton--principal flex-1"
-                    >
-                      <Check className="w-4 h-4" />
-                      Guardar y sumar a la bodega
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Pantalla completa: barra fija abajo con el total y las acciones. */}
+            {isPage && !isView && (
+              <div className="pn-barra-guardar">
+                <p className="pn-barra-guardar__total">
+                  <span>Total pagado</span>
+                  <strong>{fmtCOP(totalPagado)}</strong>
+                </p>
+                <div className="pn-barra-guardar__botones">
+                  <button onClick={salir} className="pn-boton pn-boton--normal">
+                    Cancelar
+                  </button>
+                  <button onClick={guardar} disabled={!botonGuardarOk} className="pn-boton pn-boton--principal">
+                    <Check className="w-4 h-4" />
+                    Guardar y sumar a la bodega
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer del modal — solo en creación; en detalle se cierra con
                 la X del encabezado. */}

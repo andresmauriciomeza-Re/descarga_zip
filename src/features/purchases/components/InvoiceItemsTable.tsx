@@ -21,6 +21,7 @@ export function TablaItemsFactura({
   onEdit,
   onRemove,
   enPagina = false,
+  ocultarTotal = false,
   rowEditando = null,
   className = "",
   soloLectura = false,
@@ -31,6 +32,8 @@ export function TablaItemsFactura({
   onRemove: (rowId: string) => void;
   /** Misma estructura que la tabla compartida: sin card ni título. */
   enPagina?: boolean;
+  /** El total pagado ya se ve en otro sitio (barra fija). */
+  ocultarTotal?: boolean;
   /** Fila cargada en el formulario (se resalta suavemente). */
   rowEditando?: string | null;
   className?: string;
@@ -155,7 +158,7 @@ export function TablaItemsFactura({
                     }`}
                   >
                     <td className={td + " min-w-0 text-lg font-medium text-foreground"}>
-                      <div className="truncate" title={row.nombre}>
+                      <div className="break-words" title={row.nombre}>
                         {row.nombre}
                       </div>
                       <div className="text-base font-normal text-muted-foreground mt-0.5 break-words">
@@ -178,7 +181,7 @@ export function TablaItemsFactura({
                       >
                         {chipIvaSinPrefijo(resolverModoIva(row, null), row.iva)}
                       </span>
-                      <p className="text-base text-muted-foreground mt-0.5 truncate">
+                      <p className="text-base text-muted-foreground mt-0.5 break-words">
                         {fmtCOP(l.montoIva)}
                       </p>
                     </td>
@@ -186,7 +189,7 @@ export function TablaItemsFactura({
                       {fmtCOP(l.subtotalConIva)}
                     </td>
                     {!soloLectura && (
-                    <td className={td + " whitespace-nowrap"}>
+                    <td className={td}>
                       {/* Mientras la fila está cargada en el formulario se
                           ocultan sus acciones (sin mover la columna). */}
                       <div
@@ -197,7 +200,7 @@ export function TablaItemsFactura({
                           type="button"
                           onClick={() => onEdit(row)}
                           title="Editar ítem"
-                          className="pn-boton pn-boton--normal"
+                          className="pn-boton pn-boton--normal !px-2"
                         >
                           Cambiar
                         </button>
@@ -205,7 +208,7 @@ export function TablaItemsFactura({
                           type="button"
                           onClick={() => onRemove(row.rowId)}
                           title="Eliminar ítem"
-                          className="pn-boton pn-boton--peligro"
+                          className="pn-boton pn-boton--peligro !px-2"
                         >
                           Quitar
                         </button>
@@ -240,10 +243,14 @@ export function TablaItemsFactura({
               IVA
             </span>
             <span className="text-lg font-semibold text-foreground">{fmtCOP(totales.totalIva)}</span>
-            <span className="text-base font-bold text-muted-foreground">
-              Total pagado
-            </span>
-            <span style={{ font: "700 1.75rem var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
+            {!ocultarTotal && (
+              <>
+                <span className="text-base font-bold text-muted-foreground">
+                  Total pagado
+                </span>
+                <span style={{ font: "700 1.75rem var(--font-titulo)" }}>{fmtCOP(totales.totalPagado)}</span>
+              </>
+            )}
           </div>
         )}
       </div>
