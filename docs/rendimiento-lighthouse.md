@@ -39,6 +39,7 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 5, hero sin esperar animaciones | Escritorio | 77 | 100 | 100 | 100 | 0,6 s | 1,6 s | 265 ms | 2,5 s | 0,021 |
 | 4, fuentes locales | Móvil | 62 | 100 | 100 | 100 | 1,0 s | 1,0 s | 5933 ms | 7,3 s | 0 |
 | 4, fuentes locales | Escritorio | 58 | 100 | 100 | 100 | 0,3 s | 1,7 s | 1357 ms | 2,8 s | 0 |
+| 6, imágenes | Móvil | 63 | 100 | 100 | 100 | 0,9 s | 0,9 s | 5188 ms | 6,9 s | 0 |
 
 ## Línea base
 
@@ -147,3 +148,15 @@ En móvil los saltos los causaban Poppins 500 y 600, que llegaban tarde. Con sus
 - La página de licencias y los avisos ya no dicen que las fuentes vienen de Google Fonts; se agregaron los dos paquetes a la tabla y a los avisos regenerados.
 
 El puntaje queda limitado por el tiempo de bloqueo (mediana de varios segundos en móvil, con mucha variación). Conviene medirlo en un Chrome con ventana antes de la Fase 7, porque estas mediciones usan Chrome sin ventana.
+
+## Fase 6: imágenes del tamaño justo
+
+- `shared/components/Logo.tsx`: logos de 64 y 128 px (calidad 75), usados en los 5 lugares. Los originales de 128 px quedan como fuente y ya no entran en el build.
+- `getImageUrl.ts` excluye `logo*` de la carga por patrón; si no, los de 64 px se incrustaban en el archivo principal.
+- Fotos del menú y del local con `width`, `height` y carga diferida.
+- Se borraron 7 imágenes sin uso (2,2 MB). No aparecían en el código, en el backend ni en los productos y categorías que entrega la API pública. Si algún dato guardado las nombrara, se mostraría la imagen por defecto.
+- Comprobado: las imágenes ocupan lo mismo que antes en 1x, 2x y 3x.
+
+El aviso «Mejorar la entrega de imágenes» **no desaparece**: baja de 50 a 43 KiB. 34 KiB son la foto del hero. Recomprimirla ahorra poco sin perder detalle (WebP 55: 98 KB; AVIF 55: 86 KB; actual: 122 KB), así que se dejó igual. Comparación en `D:\Documentos\SIVPRO\lighthouse-informes\hero-comparacion\`.
+
+El puntaje móvil no cambia (64 → 63, 5 corridas alternadas).
