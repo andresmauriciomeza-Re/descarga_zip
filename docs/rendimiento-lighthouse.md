@@ -37,6 +37,8 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 3, Excel al exportar | Escritorio | 59 | 100 | 100 | 100 | 0,6 s | 1,7 s | 977 ms | 2,7 s | 0 |
 | 5, hero sin esperar animaciones | Móvil | 62 | 100 | 100 | 100 | 1,6 s | 1,6 s | 4954 ms | 7,2 s | 0,041 |
 | 5, hero sin esperar animaciones | Escritorio | 77 | 100 | 100 | 100 | 0,6 s | 1,6 s | 265 ms | 2,5 s | 0,021 |
+| 4, fuentes locales | Móvil | 62 | 100 | 100 | 100 | 1,0 s | 1,0 s | 5933 ms | 7,3 s | 0 |
+| 4, fuentes locales | Escritorio | 58 | 100 | 100 | 100 | 0,3 s | 1,7 s | 1357 ms | 2,8 s | 0 |
 
 ## Línea base
 
@@ -126,3 +128,22 @@ Observado:
 - El desplazamiento de diseño subió (móvil 0,009 → 0,041; sigue bajo 0,1). Lo causa el cambio de fuente: el texto se ve antes de que lleguen las fuentes de Google. Revisar tras la Fase 4.
 - El tiempo de bloqueo en móvil salió con mediana más alta (3517 → 4954 ms), con rangos que se solapan (1257–6477 y 1625–5445). Revisar en la Fase 7.
 - La precarga de la foto se aplica a cualquier dirección, también a las que no muestran el hero.
+
+## Fase 4: fuentes locales
+
+Montserrat 600 y 700 y Poppins 400, 500 y 600, subconjunto latino, desde `@fontsource` 5.3.0. Ya no hay peticiones a Google Fonts.
+
+Comparación alternada con la versión anterior (5 corridas, dos precargas):
+
+| Disp. | Rend. antes → después | Primer pintado | Bloqueo del primer pintado | CLS |
+|---|---|---|---|---|
+| Móvil | 61 (56–62) → 64 (61–66) | 1,7 s → 1,0 s | ~960 ms → ~260 ms | 0,023 → 0,040 |
+| Escritorio | 61 (57–66) → 58 (55–62) | 0,7 s → 0,3 s | ~430 ms → ~70 ms | 0,013 → 0 |
+
+En móvil los saltos los causaban Poppins 500 y 600, que llegaban tarde. Con sus precargas (4 en total), 5 corridas dieron 0; sin ellas, 2 de 5 tuvieron saltos.
+
+- Se agregó `woff2` a lo que guarda la PWA; sin eso la app instalada perdía las fuentes sin conexión (comprobado que las conserva).
+- Capturas de 12 pantallas antes y después: entre 0 y 0,05 % de píxeles distintos.
+- La página de licencias y los avisos ya no dicen que las fuentes vienen de Google Fonts; se agregaron los dos paquetes a la tabla y a los avisos regenerados.
+
+El puntaje queda limitado por el tiempo de bloqueo (mediana de varios segundos en móvil, con mucha variación). Conviene medirlo en un Chrome con ventana antes de la Fase 7, porque estas mediciones usan Chrome sin ventana.
