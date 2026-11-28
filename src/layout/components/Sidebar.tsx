@@ -2,7 +2,7 @@ import type React from "react";
 import type { Screen } from "@/shared/utils/screen";
 import type { AccesosMap } from "@/features/roles/utils/roles";
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, Home, Menu, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Menu, Search, X } from "lucide-react";
 import { Logo } from "@/shared/components/Logo";
 import { canViewPermission, NAV_SECTIONS } from "@/shared/utils/navigation";
 import { SERIF } from "@/shared/utils/fonts";
@@ -20,18 +20,22 @@ export function Sidebar({
   esMovil = false,
   onCerrarMovil,
   firstNavRef,
+  onExpandir,
 }: {
   current: Screen;
   navigate: (s: Screen) => void;
-  /** true = menú visible; false = totalmente oculto (fuera de pantalla). */
+  /** Escritorio: true = menú completo; false = franja de iconos.
+   *  Celular: true = menú visible; false = fuera de pantalla. */
   abierto: boolean;
-  /** Cierra el menú (escritorio) y devuelve el foco al botón hamburguesa. */
+  /** Expande el menú de escritorio sin mover el foco a la flecha. */
+  onExpandir?: () => void;
+  /** Cierra el menú (escritorio) y devuelve el foco a la flecha. */
   onClose?: () => void;
   darkMode?: boolean;
   userRole?: string;
   /** Nombre de quien inició sesión («Hola, {nombre}»). */
   userName?: string;
-  /** Botón «Menú» de la franja roja (celular): el foco vuelve aquí al cerrar. */
+  /** Flecha de contraer/expandir (escritorio) o botón «Menú» (celular). */
   menuButtonRef?: { current: HTMLButtonElement | null };
   onToggleMenu?: () => void;
   accesos: AccesosMap;
@@ -55,13 +59,16 @@ export function Sidebar({
   };
   const asideRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
-  // Con el menú oculto queda fuera de pantalla pero seguiría siendo enfocable
+  // En escritorio el menú nunca sale de pantalla: se contrae a una franja.
+  const visible = esMovil ? abierto : true;
+  const contraido = !esMovil && !abierto;
+  // En celular, cerrado queda fuera de pantalla pero seguiría siendo enfocable
   // con Tab: se marca inert + aria-hidden. Al abrir se registra la primera
-  // opción para mover el foco desde el botón hamburguesa.
+  // opción para mover el foco desde el botón «Menú».
   useLayoutEffect(() => {
     const el = asideRef.current;
     if (!el) return;
-    if (abierto) {
+    if (visible) {
       el.removeAttribute("inert");
       el.removeAttribute("aria-hidden");
       if (firstNavRef) {
@@ -72,7 +79,7 @@ export function Sidebar({
       el.setAttribute("aria-hidden", "true");
       if (firstNavRef) firstNavRef.current = null;
     }
-  }, [abierto, firstNavRef]);
+  }, [visible, firstNavRef]);
   const active = (s: Screen) =>
     current === s ||
     (s === "orden-compra" && current === "nueva-orden-compra") ||
@@ -85,7 +92,8 @@ export function Sidebar({
     canViewPermission(accesos, permKey);
 
   const [busqueda, setBusqueda] = useState("");
-  const q = busqueda.trim().toLowerCase();
+  // La franja contraída muestra todos los grupos, sin el filtro del buscador.
+  const q = contraido ? "" : busqueda.trim().toLowerCase();
   const nombrePila = (userName ?? "").trim().split(/\s+/)[0] ?? "";
 
   // Módulos visibles para este usuario (misma regla de permisos de siempre).
@@ -115,15 +123,25 @@ export function Sidebar({
     })
     .filter((m) => m.items.length > 0);
 
-  const opcion = (it: { screen: Screen; label: string; Icon: typeof Home }) => (
+  /** Desde la franja contraída: expande el menú con ese grupo abierto. */
+  const expandirGrupo = (key: string) => {
+    setBusqueda("");
+    setOpen((p) => ({ ...p, [key]: true }));
+    onExpandir?.();
+    requestAnimationFrame(() => document.getElementById(`menu-grupo-${key}`)?.focus());
+  };
+  const flechaRef = menuButtonRef as React.Ref<HTMLButtonElement>;
+
+  // `hija`: módulo dentro de un grupo en escritorio (segundo nivel).
+  const opcion = (it: { screen: Screen; label: string; Icon: typeof Home }, hija = false) => (
     <button
       key={it.screen}
       type="button"
       onClick={() => ir(it.screen)}
       aria-current={active(it.screen) ? "page" : undefined}
-      className="pn-sidebar__opcion"
+      className={hija ? "pn-sidebar__opcion pn-sidebar__opcion--hija" : "pn-sidebar__opcion"}
     >
-      <it.Icon size={22} aria-hidden="true" className="shrink-0" />
+      <it.Icon size={hija ? 18 : 22} aria-hidden="true" className="shrink-0" />
       <span>{it.label}</span>
     </button>
   );
@@ -155,16 +173,56 @@ export function Sidebar({
         aria-label="Menú principal"
         className={`pn-sidebar flex flex-col shadow-xl transition-transform duration-200 motion-reduce:transition-none ${esMovil
           ? "fixed left-0 right-0 bottom-0 top-16 z-30"
-          : "fixed left-0 top-0 h-full w-[var(--ancho-menu)] z-30"
-          } ${abierto ? "translate-x-0" : "-translate-x-full"}`}
+          : `fixed left-0 top-0 h-full z-30 ${contraido ? "w-[var(--ancho-menu-contraido)]" : "w-[var(--ancho-menu)]"}`
+          } ${visible ? "translate-x-0" : "-translate-x-full"}`}
       >
+        {contraido && (
+          <div className="pn-sidebar__franja">
+            <div className="pn-sidebar__logo pn-sidebar__logo--chico">
+              <Logo variante="claro" alt="S.I.V.PRO Logo" />
+            </div>
+            <button
+              ref={flechaRef}
+              type="button"
+              className="pn-sidebar__icono"
+              onClick={onToggleMenu}
+              aria-label="Expandir menú"
+              aria-expanded={false}
+              title="Expandir menú"
+            >
+              <ChevronRight size={24} aria-hidden="true" />
+            </button>
+            {modulos.map(({ sec, items }) => {
+              const directo = sec.key === "dashboard" || sec.key === "inicio";
+              // Recibir y ver un pedido no tienen opción propia, pero son de Compras.
+              const actual = items.some((it) => active(it.screen)) ||
+                (sec.key === "compras" && (current === "recepcion-compra" || current === "orden-detalle"));
+              return (
+                <button
+                  key={sec.key}
+                  type="button"
+                  className="pn-sidebar__icono"
+                  onClick={() => (directo ? ir(items[0].screen) : expandirGrupo(sec.key))}
+                  aria-current={actual ? (directo ? "page" : "true") : undefined}
+                  aria-label={sec.label}
+                  title={sec.label}
+                >
+                  <sec.Icon size={22} aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {!contraido && (
+          <>
         {/* Logo, nombre y saludo */}
         {!esMovil && (
           <div className="flex items-center gap-3 px-4 py-5 shrink-0">
             <div className="pn-sidebar__logo">
               <Logo variante="claro" alt="S.I.V.PRO Logo" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "1.3125rem", lineHeight: 1.2 }}>La Sirena</p>
               {nombrePila && (
                 <p style={{ fontSize: "1.125rem", lineHeight: 1.3 }} className="truncate">
@@ -172,6 +230,17 @@ export function Sidebar({
                 </p>
               )}
             </div>
+            <button
+              ref={flechaRef}
+              type="button"
+              className="pn-sidebar__icono pn-sidebar__flecha"
+              onClick={onToggleMenu}
+              aria-label="Contraer menú"
+              aria-expanded={true}
+              title="Contraer menú"
+            >
+              <ChevronLeft size={24} aria-hidden="true" />
+            </button>
           </div>
         )}
         {esMovil && nombrePila && (
@@ -202,13 +271,14 @@ export function Sidebar({
           )}
           {modulos.map(({ sec, items }) => {
             if (sec.key === "dashboard" || sec.key === "inicio") {
-              return <div key={sec.key}>{items.map(opcion)}</div>;
+              return <div key={sec.key}>{items.map((it) => opcion(it))}</div>;
             }
             const abiertoGrupo = q ? true : !!open[sec.key];
             return (
               <div key={sec.key}>
                 <div className="pn-sidebar__sep" />
                 <button
+                  id={`menu-grupo-${sec.key}`}
                   type="button"
                   onClick={() => toggle(sec.key)}
                   className="pn-sidebar__grupo"
@@ -222,11 +292,15 @@ export function Sidebar({
                     className={`transition-transform ${abiertoGrupo ? "rotate-180" : ""}`}
                   />
                 </button>
-                {abiertoGrupo && items.map(opcion)}
+                {abiertoGrupo && (esMovil
+                  ? items.map((it) => opcion(it))
+                  : <div className="pn-sidebar__sub">{items.map((it) => opcion(it, true))}</div>)}
               </div>
             );
           })}
         </nav>
+          </>
+        )}
       </aside>
     </>
   );

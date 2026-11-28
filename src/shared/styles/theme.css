@@ -4,6 +4,7 @@
   --font-size: 16px;
   /* Ancho del menú lateral del panel (lo usan el aside y el margen del contenido). */
   --ancho-menu: 17.5rem;
+  --ancho-menu-contraido: 4.5rem;
   --font-titulo: 'Montserrat', sans-serif;
   --font-texto: 'Poppins', sans-serif;
   --background: #ffffff;

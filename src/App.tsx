@@ -918,8 +918,8 @@ function AppContent() {
     };
   };
 
-  // Un solo estado para escritorio: true = menú completo visible,
-  // false = menú totalmente oculto (sin franja de íconos). Se persiste en
+  // Un solo estado para escritorio: true = menú completo,
+  // false = franja angosta de iconos. Se persiste en
   // localStorage; en celular no se guarda (el drawer siempre arranca cerrado).
   const [menuAbierto, setMenuAbierto] = useState(() => {
     try {
@@ -2235,11 +2235,10 @@ function AppContent() {
       } else {
         setSidebarMovilAbierto(false);
       }
-    } else if (!menuAbierto) {
-      setMenuAbierto(true);
-      requestAnimationFrame(() => firstNavRef.current?.focus());
     } else {
-      setMenuAbierto(false);
+      // El foco sigue en la flecha, que cambia de lugar al contraer o expandir.
+      setMenuAbierto((v) => !v);
+      requestAnimationFrame(() => menuButtonRef.current?.focus());
     }
   };
 
@@ -2248,7 +2247,7 @@ function AppContent() {
       ? ""
       : menuAbierto
         ? "ml-[var(--ancho-menu)]"
-        : "ml-0"
+        : "ml-[var(--ancho-menu-contraido)]"
     : "";
 
   const isLockedScreen = isAdmin && (
@@ -2306,6 +2305,7 @@ function AppContent() {
               userName={sesionRestaurandose ? "" : loggedInUserName}
               menuButtonRef={menuButtonRef}
               onToggleMenu={alternarMenu}
+              onExpandir={() => setMenuAbierto(true)}
               accesos={loggedInAccesos}
               esSuperAdminSesion={esSuperAdminSesion}
               hasDashboardAccess={hasDashboardAccess}
@@ -2345,10 +2345,7 @@ function AppContent() {
             <Suspense fallback={<header className="pn-header" aria-hidden="true" />}>
               <AdminTopBar
                 current={screen}
-                onToggleSidebar={alternarMenu}
-                esMovil={esMovil}
-                menuVisible={esMovil ? sidebarMovilAbierto : menuAbierto}
-                menuButtonRef={menuButtonRef} ordenAEditar={ordenAEditar}
+                ordenAEditar={ordenAEditar}
                 navigate={navigate}
                 darkMode={darkMode}
                 setDarkMode={setDarkMode}
