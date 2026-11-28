@@ -9,10 +9,14 @@ export function CambiarRolMenu({
   roles,
   rolActivoNombre,
   onSelect,
+  claseBoton,
 }: {
   roles: Rol[];
   rolActivoNombre: string;
   onSelect: (id: string) => void;
+  /** Reemplaza el estilo del botón (el encabezado del panel usa el de sus
+   *  vecinos); sin ella queda el de Mi perfil. */
+  claseBoton?: string;
 }) {
   const { t } = useIdioma();
   const [open, setOpen] = useState(false);
@@ -34,7 +38,7 @@ export function CambiarRolMenu({
 
   if (roles.length === 0) {
     return (
-      <span className="inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground">
+      <span className={claseBoton ? `${claseBoton} cursor-default!` : "inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground"}>
         <UserCog className="w-4 h-4 text-primary" />
         <span className="hidden sm:inline max-w-[8.75rem] truncate">{rolActivoNombre}</span>
       </span>
@@ -47,7 +51,7 @@ export function CambiarRolMenu({
         type="button"
         onClick={() => setOpen(o => !o)}
         title={t("menu.cambiarRol")}
-        className="inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"
+        className={claseBoton ?? "inline-flex items-center min-h-11 gap-2 max-md:gap-1 px-3 max-md:px-2 py-2 rounded-xl border border-border text-xs font-semibold text-foreground hover:bg-muted active:scale-95 transition-all cursor-pointer"}
       >
         <UserCog className="w-4 h-4 text-primary" />
         <span className="hidden sm:inline max-w-[8.75rem] truncate">{rolActivoNombre}</span>

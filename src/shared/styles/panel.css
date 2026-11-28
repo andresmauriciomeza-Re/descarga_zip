@@ -273,6 +273,16 @@ html:has(.pn-pagina-con-barra) { scroll-padding: 5.5rem 0 9rem; }
 .pn-header__nombre span:first-child { font-size: 1.125rem; font-weight: 600; }
 .pn-header__nombre span:last-child { font-size: 1rem; color: var(--gris-texto); }
 
+/* Ventana angosta con el menú abierto: una sola línea. Se oculta el rol bajo el
+   nombre y, si aún no cabe, el nombre se corta con puntos. */
+@media (min-width: 821px) and (max-width: 1100px) {
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__solo-escritorio { display: none; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__acciones { flex-wrap: nowrap; min-width: 0; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__acciones > :not(.pn-header__perfil) { flex: none; }
+  [class*="ml-[var(--ancho-menu)]"] :is(.pn-header__perfil, .pn-header__nombre) { min-width: 0; }
+  [class*="ml-[var(--ancho-menu)]"] .pn-header__nombre span:first-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+}
+
 /* ═══════════ Celular y tableta (≤ 820px) ═══════════ */
 .pn-tira { display: none; }
 @media (max-width: 820px) {
