@@ -135,8 +135,8 @@ export function Content({
 
               {/* Main title */}
               <motion.h1
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 28 }}
+                animate={{ y: 0 }}
                 transition={{ duration: 0.75, delay: 0.14, ease: REVEAL_EASE }}
                 className="text-[clamp(3rem,8vw,5.5rem)] font-bold text-white leading-[1.0] mb-6"
                 style={{ fontFamily: SERIF }}
@@ -160,8 +160,8 @@ export function Content({
 
               {/* Description */}
               <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ y: 20 }}
+                animate={{ y: 0 }}
                 transition={{ duration: 0.65, delay: 0.24, ease: REVEAL_EASE }}
                 className="text-white/70 text-lg md:text-xl leading-relaxed mb-10"
               >

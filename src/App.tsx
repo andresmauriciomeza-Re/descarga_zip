@@ -221,6 +221,10 @@ function AppContent() {
     rutaInicial?.id ? { screen: rutaInicial.screen, id: rutaInicial.id } : null,
   );
   const reemplazarRutaRef = useRef(false);
+  /** La primera pantalla se pinta sin el fundido de entrada, para que se vea en
+      cuanto React la monta. Las siguientes lo conservan. */
+  const primeraPantallaRef = useRef(true);
+  useEffect(() => { primeraPantallaRef.current = false; }, []);
   /** Venta cuya devolución se debe abrir ya lista. La pone el botón "Gestionar"
       de la tabla de ventas para no obligar a buscarla otra vez en el módulo. */
   const [devolucionAAbrir, setDevolucionAAbrir] = useState<string | null>(null);
@@ -2399,7 +2403,7 @@ function AppContent() {
             <motion.div
               key={screen}
               className="h-full"
-              initial={{ opacity: 0, y: 8 }}
+              initial={primeraPantallaRef.current ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
