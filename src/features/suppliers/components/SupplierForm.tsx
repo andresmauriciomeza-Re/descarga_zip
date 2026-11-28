@@ -40,7 +40,7 @@ import {
 // Layout compacto (tarea "sin scroll"): inputs de ~36px (py-2), labels con
 // menos margen y rejillas de 2 columnas iguales desde 768px (`md:`).
 const inputCls =
-  "w-full px-3 py-2 max-md:min-h-11 bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2 min-h-[2.875rem] bg-muted rounded-xl border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 const lecturaCls = "pn-lectura";
 

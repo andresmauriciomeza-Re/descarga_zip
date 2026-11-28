@@ -217,12 +217,12 @@ export const FORM_MAXW = "max-w-4xl";
 /** Ancho del contenido cuando el formulario va a pantalla completa (no modal):
  *  ocupa casi todo el panel para que las dos columnas (40 % / 60 %) quepan en
  *  1366×768 sin scroll. */
-export const FORM_MAXW_PAGINA = "max-w-[75rem]";
+export const FORM_MAXW_PAGINA = "max-w-[1600px]";
 
-/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
- *  (py-2.5 + border da 42px), igual que la fila de insumos y el pie. */
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 2.875rem
+ *  EXACTOS, igual que la fila de insumos y el pie. */
 export const iPaginaCls =
-  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full h-[2.875rem] px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ��������� HELPERS ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
@@ -251,7 +251,7 @@ export function calcTotal(items: OrdenItem[]) {
   return sumarTotales(items.map(calcularIvaLineaOrden)).totalPagado;
 }
 
-export const iCls = "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+export const iCls = "w-full px-3 py-2.5 min-h-[2.875rem] bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // ��������� ORDEN MODAL ������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������������
 

@@ -10,7 +10,7 @@ import { mensajeErrorProductos } from "@/features/products/services/productsApi"
 const SERIF = "var(--font-titulo)";
 
 const iCls =
-  "w-full px-4 min-h-[3.5rem] bg-white border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 min-h-[2.875rem] bg-white border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** Datos de una bebida ("Producto terminado") que comparten el Crear de
     Gestión de Productos y el "+ Crear producto" de Compras. */

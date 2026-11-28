@@ -1502,7 +1502,7 @@ export function OrdenProduccionScreen({
               </div>
               <button type="button"
                 onClick={() => setForm(p => ({ ...p, lineas: [...p.lineas, nuevaLinea("preparacion")] }))}
-                className="inline-flex items-center justify-center gap-2.5 w-full h-[3.375rem] border-[1.5px] border-dashed border-border rounded-[0.875rem] text-[0.9375rem] font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
+                className="inline-flex items-center justify-center gap-2.5 w-full h-[2.875rem] border-[1.5px] border-dashed border-border rounded-[0.875rem] text-base font-semibold text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer">
                 <Plus className="w-[1.125rem] h-[1.125rem]" /> Agregar otro producto
               </button>
 
@@ -1841,7 +1841,7 @@ export function OrdenProduccionScreen({
                                       type="button"
                                       disabled={rec <= 0}
                                       onClick={() => setPreciosCompletar((p) => ({ ...p, [`${pz.id}:${t}`]: String(rec) }))}
-                                      className="shrink-0 min-h-14 px-3 py-2 rounded-xl border border-border text-base font-semibold text-foreground hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                      className="shrink-0 min-h-[2.875rem] px-3 py-2 rounded-xl border border-border text-base font-semibold text-foreground hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                       Usar recomendado
                                     </button>
@@ -1878,7 +1878,7 @@ export function OrdenProduccionScreen({
               </div>
               <div className="shrink-0 flex gap-3 px-5 py-4 border-t border-border">
                 <button onClick={() => { setCompletarItem(null); setReales({}); setCalculosDebidos({}); }}
-                  className="flex-1 py-4 min-h-[3.5rem] border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+                  className="flex-1 py-2 min-h-[2.875rem] border-2 border-black rounded-2xl text-base font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
                   Todavía no
                 </button>
                 <button
@@ -1896,7 +1896,7 @@ export function OrdenProduccionScreen({
                     }
                     confirmarCompletar();
                   }}
-                  className={`flex-1 py-4 min-h-[3.5rem] bg-primary text-white rounded-2xl text-lg font-semibold transition-colors active:scale-95 ${
+                  className={`flex-1 py-2 min-h-[2.875rem] bg-primary text-white rounded-2xl text-base font-semibold transition-colors active:scale-95 ${
                     completarOk ? "hover:bg-red-700 cursor-pointer" : "opacity-50 cursor-not-allowed"
                   }`}>
                   Terminar y sumar a lo que hay

@@ -135,7 +135,7 @@ export function NuevoProveedorModal({
           <ProveedorFormCampos form={form} />
         </div>
         <div className="flex justify-end gap-3 px-4 sm:px-6 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="px-5 h-10 max-md:min-h-11 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
+          <button onClick={onClose} className="px-5 h-[2.875rem] border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors">
             Cancelar
           </button>
           <button
@@ -143,7 +143,7 @@ export function NuevoProveedorModal({
             // Fase 2: habilitado siempre; si hay errores, `submit` los pinta y
             // enfoca el primero en lugar de guardar.
             disabled={guardando}
-            className="px-5 h-10 max-md:min-h-11 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
+            className="px-5 h-[2.875rem] bg-primary text-white rounded-xl text-sm font-semibold hover:bg-red-700 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary transition-all"
           >
             {guardando ? "Guardando…" : "Crear Proveedor"}
           </button>

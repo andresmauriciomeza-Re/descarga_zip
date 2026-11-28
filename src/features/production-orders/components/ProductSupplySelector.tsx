@@ -185,7 +185,7 @@ export function SelectorProductoInsumo({
     <>
       <div
         ref={trigger}
-        className={`relative min-h-[3.5rem] h-[3.5rem] w-full rounded-[0.875rem] bg-white border-2 focus-within:ring-2 focus-within:ring-primary/30 ${
+        className={`relative min-h-[2.875rem] h-[2.875rem] w-full rounded-[0.875rem] bg-white border-2 focus-within:ring-2 focus-within:ring-primary/30 ${
           open ? "border-primary" : "border-border"
         }`}
       >

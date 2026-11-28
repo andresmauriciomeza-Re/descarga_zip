@@ -620,7 +620,7 @@ export function GestionProductosScreen({
 
   const fmtCOP = (n: number) => `$${n.toLocaleString("es-CO")}`;
   const inputCls =
-    "w-full px-4 min-h-[3.5rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+    "w-full px-3 min-h-[2.875rem] bg-white rounded-[0.875rem] border-2 border-[var(--borde-campo)] text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
   /** Nombre visible de una categoría: el del listado del módulo Categoría de
       Productos; si el id ya no existe ahí, "Sin categoría" (nunca el código
       CAT-###, ni en la lista, ni en el buscador ni en el Excel). */
@@ -1335,7 +1335,7 @@ export function GestionProductosScreen({
     }
   };
 
-  const roCls = "w-full px-4 min-h-[3.5rem] flex items-center bg-[var(--gris-suave)] rounded-[0.875rem] border-2 border-[var(--borde-suave)] text-lg text-foreground cursor-not-allowed";
+  const roCls = "w-full px-3 min-h-[2.875rem] flex items-center bg-[var(--gris-suave)] rounded-[0.875rem] border-2 border-[var(--borde-suave)] text-base text-foreground cursor-not-allowed";
   const recomendadosPizza = (
     f: Parameters<typeof precioRecomendadoPorPorcion>[0] | null | undefined,
     idCategoria: string,

@@ -146,7 +146,7 @@ export function CampoImagenes({
         <>
           {/* Fila 1: alta desde el equipo, a ancho completo. */}
           <label
-            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-4 min-h-[3.5rem] bg-white border-2 border-black rounded-2xl text-lg font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
+            className={`flex w-full items-center justify-center gap-1.5 mt-2 px-4 min-h-[2.875rem] bg-white border-2 border-black rounded-2xl text-base font-semibold text-foreground hover:bg-border cursor-pointer transition-colors ${
               completa || subiendo ? "opacity-50 pointer-events-none" : ""
             }`}
           >
@@ -191,7 +191,7 @@ export function CampoImagenes({
               type="button"
               onClick={() => agregar(url)}
               disabled={completa || subiendo || !url.trim()}
-              className="shrink-0 inline-flex items-center gap-1.5 px-4 min-h-[3.5rem] bg-primary text-white rounded-2xl text-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 min-h-[2.875rem] bg-primary text-white rounded-2xl text-base font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" /> Agregar la foto
             </button>

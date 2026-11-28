@@ -852,7 +852,7 @@ export function FichaTecnicaEditor({
                 onClick={addInsumo}
                 title="Agregar insumo"
                 disabled={!puedeAgregarInsumo}
-                className="h-14 shrink-0 inline-flex items-center justify-center gap-2 px-4 bg-primary text-white rounded-xl text-base font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
+                className="h-[2.875rem] shrink-0 inline-flex items-center justify-center gap-2 px-4 bg-primary text-white rounded-xl text-base font-semibold hover:bg-red-700 disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted disabled:cursor-not-allowed cursor-pointer transition-colors active:scale-95"
               >
                 <Plus className="w-5 h-5" /> Agregar otro insumo
               </button>

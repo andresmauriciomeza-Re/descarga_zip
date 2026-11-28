@@ -98,7 +98,7 @@ export function GestionUsuariosScreen({
     const u = detail;
     const nombreCorto = u.nombre;
     return (
-      <div className="pn-contenido">
+      <div className="pn-contenido pn-detalle">
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
@@ -111,7 +111,7 @@ export function GestionUsuariosScreen({
           </div>
         </div>
 
-        <div className="grid gap-5" style={{ maxWidth: "56.25rem" }}>
+        <div className="grid gap-5">
           <SeccionFormulario titulo="Sus datos">
             <DatosDetalle datos={[
               { etiqueta: "Documento", valor: documentoLegible(u.tipo_documento, String(u.id_usuario)) },

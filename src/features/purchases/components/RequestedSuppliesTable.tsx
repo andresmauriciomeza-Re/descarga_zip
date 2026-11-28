@@ -69,6 +69,7 @@ export function InsumosSolicitadosTable({
   mostrarSubtotal = true,
   textoVacioPagina,
   className = "",
+  piePanel,
 }: {
   items: InsumoSolicitadoRow[];
   onRemove?: (rowId: string) => void;
@@ -96,6 +97,10 @@ export function InsumosSolicitadosTable({
    *  ítems" cuando la orden admite insumos Y productos). */
   textoVacioPagina?: string;
   className?: string;
+  /** Modo panel (junto con `enPagina`): la tabla ocupa el alto libre con
+   *  scroll propio y encabezado fijo; debajo quedan siempre visibles los
+   *  totales y este contenido (los botones). */
+  piePanel?: React.ReactNode;
 }) {
   const esAmber = tono === "amber";
 
@@ -122,6 +127,7 @@ export function InsumosSolicitadosTable({
   const ivaGeneral = totales.montoIva;
   const total = totales.total;
 
+  const enPanel = piePanel !== undefined;
   const headers = ["Nombre", "Cantidad + presentación", "Monto unitario"];
   if (mostrarIva) headers.push("IVA");
   if (mostrarSubtotal) headers.push("Subtotal");
@@ -226,7 +232,7 @@ export function InsumosSolicitadosTable({
                 </span>
               </td>
 
-              <td data-etiqueta="Monto unitario" className={tdBase + " text-lg whitespace-nowrap"}>
+              <td data-etiqueta={enPanel ? "Monto" : "Monto unitario"} className={tdBase + " text-lg whitespace-nowrap"}>
                 {fmtCOP(item.precioUnitario)}
               </td>
 
@@ -254,7 +260,7 @@ export function InsumosSolicitadosTable({
                   {/* Mientras la fila está cargada en el formulario se
                       ocultan sus acciones (sin mover la columna). */}
                   <div
-                    className={`flex flex-wrap items-start gap-1${enEdicion ? " invisible" : ""}`}
+                    className={`flex ${enPanel ? "flex-nowrap" : "flex-wrap"} items-start gap-1${enEdicion ? " invisible" : ""}`}
                     aria-hidden={enEdicion || undefined}
                   >
                     {onEdit && (
@@ -369,6 +375,49 @@ export function InsumosSolicitadosTable({
         )}
       </div>
     );
+
+  if (enPagina && enPanel) {
+    const titulos: Record<string, string> = {
+      "Cantidad + presentación": "Cantidad",
+      "Monto unitario": "Monto",
+    };
+    const filaTotal = (etiqueta: string, valor: number) => (
+      <div className="flex items-baseline justify-between gap-3">
+        <dt className="text-base text-muted-foreground">{etiqueta}</dt>
+        <dd className="text-base font-semibold text-foreground m-0">{fmtCOP(valor)}</dd>
+      </div>
+    );
+    return (
+      <div className={"flex flex-col min-h-0 " + className}>
+        <div className="pn-pedido__tabla">
+          <table className="pn-tabla-compra w-full">
+            <thead className="text-base text-muted-foreground">
+              <tr>
+                {headers.map((h) => (
+                  <th key={h} className="px-1 py-2 text-left font-semibold">{titulos[h] ?? h}</th>
+                ))}
+                {showActions && <th aria-label="Acciones" className="px-1 py-2" />}
+              </tr>
+            </thead>
+            {renderTbody()}
+          </table>
+        </div>
+        <div className="shrink-0 border-t border-border px-4 py-3 flex flex-col gap-3">
+          <dl className="m-0 flex flex-col gap-1">
+            {filaTotal(labelSubtotal, subtotalGeneral)}
+            {mostrarIva && filaTotal("IVA", ivaGeneral)}
+            {mostrarTotal && (
+              <div className="pn-pedido__total flex items-baseline justify-between gap-3">
+                <dt className="text-lg font-bold text-foreground">{totalLabel}</dt>
+                <dd className="text-2xl font-bold text-foreground m-0">{fmtCOP(total)}</dd>
+              </div>
+            )}
+          </dl>
+          {piePanel}
+        </div>
+      </div>
+    );
+  }
 
   if (enPagina) {
     return (

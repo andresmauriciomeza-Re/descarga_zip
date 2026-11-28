@@ -392,7 +392,7 @@ export function GestionCompraScreen({
       unidadBase: item.unidadBase,
     }));
     return (
-      <div className="pn-contenido" style={{ maxWidth: "68.75rem" }}>
+      <div className="pn-contenido pn-detalle">
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetail(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>

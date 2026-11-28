@@ -1064,7 +1064,7 @@ export function GestionInsumosScreen({ insumos, setInsumos, categorias, cargando
                           ariaLabel="Unidad de medida"
                           dataField={esPI ? "unidad" : undefined}
                           mostrarValorSeleccionadoCorto
-                          fieldClassName={`h-[3.75rem] border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-[1.25rem] ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
+                          fieldClassName={`h-[2.875rem] border-2 border-[var(--borde-campo)] rounded-[0.875rem] text-base ${editingId ? campoBloqueado : "bg-white text-foreground"}`}
                         />
                         {esOtraPresentacion(unidadForm) && (
                           <div className="relative w-40 shrink-0">

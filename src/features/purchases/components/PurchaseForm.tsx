@@ -990,7 +990,7 @@ export function CompraForm({
                       <div className="relative">
                         <label className={labelCls}>Estado</label>
                         {/* Badge "Recibido" alineado a la izquierda, centrado verticalmente a la altura del input */}
-                        <div className="h-10 flex items-center">
+                        <div className="h-[2.875rem] flex items-center">
                           <EstadoBadge e="Recibido" />
                         </div>
                       </div>

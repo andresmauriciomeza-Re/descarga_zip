@@ -2634,7 +2634,7 @@ export function VentasScreen({
                           maxLength={MOTIVO_OTRO_MAX}
                           rows={2}
                           placeholder="Ej.: el cliente pidió cambiar la hora de recogida"
-                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-lg text-foreground focus:outline-none focus:border-red-400"
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-base text-foreground focus:outline-none focus:border-red-400"
                         />
                         <div className="flex justify-between gap-3 mt-1">
                           <p className="text-base text-red-600">
@@ -2697,7 +2697,7 @@ export function VentasScreen({
                 <div className="flex gap-2 px-5 pb-5">
                   <button
                     onClick={cerrarAnular}
-                    className="flex-1 py-2.5 max-md:min-h-11 rounded-2xl min-h-[3.5rem] border-2 border-black text-lg font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
+                    className="flex-1 py-2.5 max-md:min-h-11 rounded-2xl min-h-[2.875rem] border-2 border-black text-base font-semibold text-foreground hover:bg-muted cursor-pointer transition-colors"
                   >
                     No, dejarlo como está
                   </button>

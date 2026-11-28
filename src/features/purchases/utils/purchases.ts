@@ -17,7 +17,7 @@ export function fmtCOP(n: number) {
 // ─── NUEVA COMPRA ─────────────────────────────────────────────────────────────
 
 export const iCls =
-  "w-full px-3 py-2.5 max-md:min-h-11 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full px-3 py-2.5 min-h-[2.875rem] bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 // Anchos compactos de los campos superiores, en línea con el detalle de Orden de Compra
 export const campoCortoCls = "max-w-[11.25rem]"; // Fecha de factura · Estado
@@ -37,11 +37,10 @@ export const labelDatoCls =
 
 export const valorDatoCls = "block text-sm font-semibold text-foreground break-words";
 
-/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 40px EXACTOS
- *  (py-2.5 + border da 42px, y la fila de insumos y el selector de IVA van a
- *  40px, así todos los controles del formulario miden lo mismo). */
+/** Inputs en pantalla completa: mismo estilo que `iCls` pero con 2.875rem
+ *  EXACTOS, como la fila de insumos y el selector de IVA ( así todos los controles del formulario miden lo mismo). */
 export const iPaginaCls =
-  "w-full h-10 max-md:min-h-11 px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
+  "w-full h-[2.875rem] px-3 bg-muted border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30";
 
 /** P14: qué se está agregando a la factura de compra. Mismos valores que
  *  `OrdenItem.tipoItem`, para que el dato guardado sea compatible con las

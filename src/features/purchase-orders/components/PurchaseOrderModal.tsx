@@ -523,19 +523,38 @@ export function OrdenModal({
           : "Crea una orden de compra para un proveedor"
         : "";
 
+  /** Crear y cambiar a pantalla completa: formulario a la izquierda y lista a
+   *  la derecha desde 1200px; por debajo se apilan. */
+  const dosPaneles = isPage && !isView;
+  const botonesPagina = (
+    <>
+      <button onClick={salir} className="pn-boton pn-boton--normal flex-1">
+        Cancelar
+      </button>
+      <button
+        onClick={handleGuardar}
+        disabled={!formValido || guardando}
+        className="pn-boton pn-boton--principal flex-[2]"
+      >
+        <Check className="w-4 h-4" />
+        {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
+      </button>
+    </>
+  );
+
   return (
     <>
       <div
         className={
           isPage
-            ? `w-full px-4 pt-4 ${FORM_MAXW_PAGINA} mx-auto ${isView ? "pb-4" : "pn-pagina-con-barra"}`
+            ? `w-full px-4 pt-4 pb-4 ${FORM_MAXW_PAGINA} mx-auto${dosPaneles ? " pn-pedido pn-pagina-con-barra" : ""}`
             : "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm overflow-hidden"
         }
       >
         <div
           className={
             isPage
-              ? "w-full"
+              ? "w-full min-[1200px]:h-full"
               : "h-full flex items-center justify-center p-4"
           }
         >
@@ -546,7 +565,7 @@ export function OrdenModal({
             transition={{ duration: 0.15 }}
             className={`flex flex-col w-full ${isPage ? FORM_MAXW_PAGINA : FORM_MAXW}${
               isPage
-                ? ""
+                ? dosPaneles ? " min-[1200px]:h-full min-[1200px]:min-h-0" : ""
                 : " max-h-[calc(100dvh-2rem)] bg-card rounded-2xl shadow-2xl border border-border my-4"
             }`}
           >
@@ -589,7 +608,9 @@ export function OrdenModal({
 
             <div
               className={
-                isPage
+                dosPaneles
+                  ? "pt-3 grid grid-cols-[minmax(0,1fr)] gap-4 min-[1200px]:flex-1 min-[1200px]:min-h-0 min-[1200px]:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] min-[1200px]:grid-rows-[minmax(0,1fr)]"
+                  : isPage
                   ? "px-5 pt-3 pb-4 flex flex-col gap-4"
                   : "flex-1 min-h-0 px-5 py-5 flex flex-col gap-5 overflow-y-auto"
               }
@@ -598,7 +619,9 @@ export function OrdenModal({
                   grupo vertical: mantiene el mismo flujo de antes. */}
               <div
                 className={
-                  isPage
+                  dosPaneles
+                    ? "pn-pedido__form min-w-0 flex flex-col gap-4 p-4 bg-card border border-border rounded-2xl min-[1200px]:min-h-0 min-[1200px]:overflow-y-auto"
+                    : isPage
                     ? "w-full min-w-0 flex flex-col gap-6"
                     : "flex flex-col gap-5"
                 }
@@ -637,9 +660,7 @@ export function OrdenModal({
                   className={`grid gap-4 shrink-0 ${
                     isView
                       ? "grid-cols-2 md:grid-cols-3"
-                      : isPage
-                        ? "grid-cols-1"
-                        : "grid-cols-2"
+                      : "grid-cols-2"
                   }`}
                 >
                   <div className="relative col-span-2">
@@ -659,7 +680,7 @@ export function OrdenModal({
                             onFocus={() => setShowProvSug(true)}
                             onBlur={() => marcarTocado("proveedor")}
                             placeholder="Buscar por nombre, NIT, asesor o email..."
-                            className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} min-h-14 pl-10 text-lg`}
+                            className={`${campoCls((tocado.proveedor || intentoGuardar) ? errorProveedor : undefined)} min-h-[2.875rem] pl-10 text-base`}
                             aria-invalid={!!((tocado.proveedor || intentoGuardar) && errorProveedor)}
                           />
                           {/* Punto 6: el desplegable va por encima de todo el
@@ -1008,23 +1029,21 @@ export function OrdenModal({
                   botones. Separada de la izquierda por una línea vertical. */}
               <div
                 className={
-                  isPage
+                  dosPaneles
+                    ? "min-w-0 flex flex-col bg-card border border-border rounded-2xl overflow-hidden min-[1200px]:min-h-0"
+                    : isPage
                     ? "w-full min-w-0 flex flex-col gap-3 border-t border-border pt-4"
                     : "flex flex-col gap-5"
                 }
               >
                 {/* Cabecera de la tabla: contador. Punto 3.3: la orden admite
                     insumos Y productos, así que se habla de "ítems". */}
-                {isPage && !isView && (
-                  <div className="shrink-0">
-                    <div className="flex items-center justify-between gap-3 pb-1.5 border-b border-border">
-                      <p className="text-base leading-none font-bold uppercase tracking-widest text-muted-foreground">
-                        Ítems de la orden
-                      </p>
-                      <span className="text-base font-medium text-muted-foreground">
-                        {form.items.length} {form.items.length === 1 ? "ítem" : "ítems"}
-                      </span>
-                    </div>
+                {dosPaneles && (
+                  <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
+                    <h2 className="text-xl font-bold m-0">Ítems de la orden</h2>
+                    <span className="text-base font-medium text-muted-foreground">
+                      {form.items.length} {form.items.length === 1 ? "ítem" : "ítems"}
+                    </span>
                   </div>
                 )}
 
@@ -1108,9 +1127,9 @@ export function OrdenModal({
                     rowEditando={editando}
                     sinScrollX
                     totalLabel="Total estimado"
-                    mostrarTotal={!isPage}
                     enPagina={isPage}
-                    className=""
+                    className={dosPaneles ? "flex-1" : ""}
+                    piePanel={dosPaneles ? <div className="pn-pedido__botones flex flex-wrap gap-3">{botonesPagina}</div> : undefined}
                     // Usa las mismas columnas que Nueva Compra; la orden admite
                     // insumos y productos.
                     titulo="Lo que vamos a pedir"
@@ -1121,26 +1140,14 @@ export function OrdenModal({
               </div>
             </div>
 
-            {/* Pantalla completa: barra fija abajo con el total y las acciones. */}
-            {isPage && !isView && (
-              <div className="pn-barra-guardar">
+            {/* Celular: total y acciones siempre a la vista. */}
+            {dosPaneles && (
+              <div className="pn-barra-guardar pn-pedido__barra">
                 <p className="pn-barra-guardar__total">
                   <span>Total estimado</span>
                   <strong>{fmtCOP(totalDeLineas(form.items))}</strong>
                 </p>
-                <div className="pn-barra-guardar__botones">
-                  <button onClick={salir} className="pn-boton pn-boton--normal">
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleGuardar}
-                    disabled={!formValido || guardando}
-                    className="pn-boton pn-boton--principal"
-                  >
-                    <Check className="w-4 h-4" />
-                    {guardando ? "Guardando…" : mode === "edit" ? "Guardar cambios" : isCompra ? "Guardar" : "Guardar como borrador"}
-                  </button>
-                </div>
+                <div className="pn-barra-guardar__botones">{botonesPagina}</div>
               </div>
             )}
 

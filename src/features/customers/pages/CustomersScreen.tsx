@@ -237,7 +237,7 @@ export function GestionClientesScreen({ canCreate = true, canEdit = true, canDel
     // La lista se recarga al cambiar el estado: se toma la versión más nueva.
     const c = clientes.find(x => x.id === detailItem.id) ?? detailItem;
     return (
-      <div className="pn-contenido" style={{ maxWidth: "56.25rem" }}>
+      <div className="pn-contenido pn-detalle">
         <BotonRuta>
           <BotonAccion icono={ArrowLeft} onClick={() => setDetailItem(null)}>Volver a la lista</BotonAccion>
         </BotonRuta>
