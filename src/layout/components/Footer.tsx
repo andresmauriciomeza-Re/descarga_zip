@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { Logo } from "@/shared/components/Logo";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { RUTA_LICENCIAS } from "@/features/legal/navigation";
@@ -16,7 +16,7 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
       <div className="max-w-6xl mx-auto px-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 mb-8">
           {/* Brand */}
-          <motion.div {...reveal(0, 12, 0.15)} className="flex flex-col gap-3">
+          <m.div {...reveal(0, 12, 0.15)} className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <Logo
                 variante="blanco"
@@ -38,9 +38,9 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
               artesanales de Medellín con receta familiar y
               amor auténtico.
             </p>
-          </motion.div>
+          </m.div>
           {/* Contacto */}
-          <motion.div {...reveal(0.08, 12, 0.15)} className="flex flex-col gap-3">
+          <m.div {...reveal(0.08, 12, 0.15)} className="flex flex-col gap-3">
             <h3 className="font-bold text-white text-sm uppercase tracking-wider">
               Contacto
             </h3>
@@ -61,9 +61,9 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
                 <span>{DIRECCION_LOCAL}</span>
               </div>
             </div>
-          </motion.div>
+          </m.div>
           {/* Horario */}
-          <motion.div {...reveal(0.16, 12, 0.15)} className="flex flex-col gap-3">
+          <m.div {...reveal(0.16, 12, 0.15)} className="flex flex-col gap-3">
             <h3 className="font-bold text-white text-sm uppercase tracking-wider">
               Horario de atención
             </h3>
@@ -97,9 +97,9 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
                 Solo pedidos presenciales en local
               </p>
             </div>
-          </motion.div>
+          </m.div>
         </div>
-        <motion.div
+        <m.div
           {...reveal(0.24, 10, 0.15)}
           className="pt-6 flex flex-col md:flex-row items-center justify-between gap-3"
           style={{
@@ -120,7 +120,7 @@ export function Footer({ navigate }: { navigate: (s: Screen) => void }) {
             NIT: 900.123.456-7 · Establecimiento de comercio
             registrado
           </p>
-        </motion.div>
+        </m.div>
         <div className="mt-3 flex justify-center md:justify-start">
           <a
             href={RUTA_LICENCIAS}

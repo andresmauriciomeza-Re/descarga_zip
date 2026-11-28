@@ -2,7 +2,7 @@ import type { Screen } from "@/shared/utils/screen";
 import { useEffect, useState } from "react";
 import { Logo } from "@/shared/components/Logo";
 import { Moon, ShoppingCart, Sun } from "lucide-react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { CartItem } from "@/types/cart";
 import { SERIF } from "@/shared/utils/fonts";
 import { precargar } from "@/shared/utils/lazyScreens";
@@ -108,7 +108,7 @@ export function PublicNav({
             <ShoppingCart className="w-4 h-4" />
             <span className="hidden sm:inline">Carrito</span>
             {count > 0 && (
-              <motion.span
+              <m.span
                 key={count}
                 initial={{ scale: 0.5 }}
                 animate={{ scale: 1 }}
@@ -116,7 +116,7 @@ export function PublicNav({
                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white text-[#DC2626] text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-red-100 shadow-sm"
               >
                 {count}
-              </motion.span>
+              </m.span>
             )}
           </button>
 

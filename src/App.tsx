@@ -1,5 +1,5 @@
 import { AlertTriangle, Archive, Banknote, CircleCheck, ClipboardList, Eye, ImageIcon, Lock, PackageCheck, QrCode, RefreshCw, Upload } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
 import { Component, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
@@ -169,15 +169,19 @@ export default function App() {
   // el estado guardado.
   respaldarDatosProductosFase1();
   return (
-    <AuthProvider>
-      <CartProvider>
-        {/* Sin transiciones: las redirecciones de `AppContent` esperan que la
-            ruta cambie junto con el resto del estado. */}
-        <BrowserRouter useTransitions={false}>
-          <AppRoutes shell={<AppContent />} />
-        </BrowserRouter>
-      </CartProvider>
-    </AuthProvider>
+    // `m.*` con solo las animaciones que se usan al arrancar (sin arrastre ni
+    // `layout`); las pantallas que importan `motion` traen el resto al cargarse.
+    <LazyMotion features={domAnimation}>
+      <AuthProvider>
+        <CartProvider>
+          {/* Sin transiciones: las redirecciones de `AppContent` esperan que la
+              ruta cambie junto con el resto del estado. */}
+          <BrowserRouter useTransitions={false}>
+            <AppRoutes shell={<AppContent />} />
+          </BrowserRouter>
+        </CartProvider>
+      </AuthProvider>
+    </LazyMotion>
   );
 }
 
@@ -2400,7 +2404,7 @@ function AppContent() {
             </div>
           )}
           <AnimatePresence mode="wait">
-            <motion.div
+            <m.div
               key={screen}
               className="h-full"
               initial={primeraPantallaRef.current ? false : { opacity: 0, y: 8 }}
@@ -3155,7 +3159,7 @@ function AppContent() {
                     )}
                 </LandingErrorBoundary>
               </Suspense>
-            </motion.div>
+            </m.div>
           </AnimatePresence>
         </main>
 

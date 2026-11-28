@@ -3,7 +3,7 @@ import { productoACatalogo, limiteStockDe, estadoDeProducto, etiquetaEstadoMenu,
 import { estadoDe } from "@/features/product-categories/utils/product-categories";
 import type { CategoriaProducto } from "@/features/product-categories/utils/product-categories";
 import type { Producto } from "@/features/products/utils/products";
-import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { m, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useIsMobile } from "@/shared/components/ui/use-mobile";
 import { useRef } from "react";
 import pizzaHero from "@/assets/img/image-23.webp";
@@ -88,7 +88,7 @@ export function Content({
             La escala y el desplazamiento están compensados (la imagen crece lo
             mismo que se desplaza) para que nunca se vean bordes vacíos. El
             movimiento va en el contenedor para no interferir con la carga. */}
-        <motion.div
+        <m.div
           aria-hidden="true"
           style={profundidadActiva ? { y: heroFotoY, scale: heroFotoEscala } : undefined}
           className="absolute inset-0"
@@ -102,7 +102,7 @@ export function Content({
             decoding="async"
             className="w-full h-full object-cover object-center"
           />
-        </motion.div>
+        </m.div>
 
         {/* Velo oscuro en degradado (lado izquierdo, donde va el texto) para
             garantizar el contraste del texto blanco sobre la foto, sin tocar
@@ -114,7 +114,7 @@ export function Content({
 
         {/* Contenido sobre la zona oscura izquierda */}
         <div className="relative z-10 w-full min-h-screen flex items-center">
-          <motion.div
+          <m.div
             style={
               profundidadActiva
                 ? { y: heroContenidoY, opacity: heroContenidoOpacidad }
@@ -124,17 +124,17 @@ export function Content({
           >
             <div>
               {/* Badge */}
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.45, delay: 0.06, ease: REVEAL_EASE }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[#DC2626] text-white text-sm font-bold rounded-full mb-8 shadow-lg shadow-red-900/30"
               >
                 ⭐ Artesanal · Medellín · Desde 1994
-              </motion.div>
+              </m.div>
 
               {/* Main title */}
-              <motion.h1
+              <m.h1
                 initial={{ y: 28 }}
                 animate={{ y: 0 }}
                 transition={{ duration: 0.75, delay: 0.14, ease: REVEAL_EASE }}
@@ -142,24 +142,24 @@ export function Content({
                 style={{ fontFamily: SERIF }}
               >
                 <span className="block overflow-hidden">
-                  <motion.span {...revealHeroLine(0.2)} className="block">
+                  <m.span {...revealHeroLine(0.2)} className="block">
                     La Sirena
-                  </motion.span>
+                  </m.span>
                 </span>
                 <span className="block overflow-hidden">
-                  <motion.span {...revealHeroLine(0.3)} className="block text-[#DC2626]">
+                  <m.span {...revealHeroLine(0.3)} className="block text-[#DC2626]">
                     El sabor que
-                  </motion.span>
+                  </m.span>
                 </span>
                 <span className="block overflow-hidden">
-                  <motion.span {...revealHeroLine(0.4)} className="block">
+                  <m.span {...revealHeroLine(0.4)} className="block">
                     conquista
-                  </motion.span>
+                  </m.span>
                 </span>
-              </motion.h1>
+              </m.h1>
 
               {/* Description */}
-              <motion.p
+              <m.p
                 initial={{ y: 20 }}
                 animate={{ y: 0 }}
                 transition={{ duration: 0.65, delay: 0.24, ease: REVEAL_EASE }}
@@ -168,7 +168,7 @@ export function Content({
                 Pizzas artesanales horneadas con tradición
                 familiar. Ingredientes frescos, masa propia y
                 treinta años de amor.
-              </motion.p>
+              </m.p>
 
               {/* CTAs — en columna solo por debajo de `sm`; en escritorio van
                   siempre en la misma fila. `flex-col` estira los dos botones al
@@ -177,7 +177,7 @@ export function Content({
                   Por debajo de `md` este botón lleva un velo oscuro propio
                   (`max-md:bg-black/45`): sin fondo dependía de lo que se viera
                   detrás de la imagen del hero y en móvil se veía transparente. */}
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, y: 18 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.32, ease: REVEAL_EASE }}
@@ -199,7 +199,7 @@ export function Content({
                   Ver menú completo
                   <ArrowRight className="w-5 h-5" />
                 </button>
-              </motion.div>
+              </m.div>
 
               {/* Estadísticas del hero — tarjeta oscura con divisores, NO la
                   franja roja de ancho completo de más abajo: esa se mantiene
@@ -209,7 +209,7 @@ export function Content({
                   que a 360 px bajaba "30 años / De tradición" a una segunda
                   fila). `divide-x` conserva los divisores verticales; `min-w-0`
                   en cada celda evita que la cifra o la etiqueta desborden. */}
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.4, ease: REVEAL_EASE }}
@@ -248,9 +248,9 @@ export function Content({
                     </p>
                   </div>
                 ))}
-              </motion.div>
+              </m.div>
             </div>
-          </motion.div>
+          </m.div>
         </div>
       </section>
 
@@ -263,7 +263,7 @@ export function Content({
       <section className="bg-muted pt-16 md:pt-20 pb-10 md:pb-12">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Heading */}
-          <motion.div {...reveal(0, 14, 0.3)} className="text-center mb-12">
+          <m.div {...reveal(0, 14, 0.3)} className="text-center mb-12">
             <h2
               className="text-4xl md:text-5xl font-bold text-foreground mb-3"
               style={{ fontFamily: SERIF }}
@@ -273,7 +273,7 @@ export function Content({
             <p className="text-muted-foreground text-base md:text-lg">
               Descubre todo lo que tenemos para ti
             </p>
-          </motion.div>
+          </m.div>
 
           {/* Cards — grid 3/2/1 columnas al ancho completo del contenedor
               (mismo ancho que "Las favoritas"), cards de alto mínimo generoso. */}
@@ -281,7 +281,7 @@ export function Content({
             {categorias
               .filter((c) => estadoDe(c) !== "Inactivo")
               .map((c, i) => (
-                <motion.button
+                <m.button
                   key={c.id}
                   {...reveal(
                     (i % 3) * 0.06,
@@ -311,7 +311,7 @@ export function Content({
                   >
                     {c.nombre}
                   </p>
-                </motion.button>
+                </m.button>
               ))}
           </div>
         </div>
@@ -321,7 +321,7 @@ export function Content({
       <section className="bg-muted pt-10 md:pt-12 pb-16 md:pb-20">
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           {/* Header row */}
-          <motion.div {...reveal(0, 14, 0.25)} className="flex flex-wrap items-center justify-between gap-3 mb-10">
+          <m.div {...reveal(0, 14, 0.25)} className="flex flex-wrap items-center justify-between gap-3 mb-10">
             <h2
               className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground"
               style={{ fontFamily: SERIF }}
@@ -335,7 +335,7 @@ export function Content({
             >
               Ver todas <ArrowRight className="w-4 h-4" />
             </button>
-          </motion.div>
+          </m.div>
 
           {/* Cards — punto 2.2: en móvil pasan a grid de 1 columna (antes
               carrusel con `overflow-x-auto`, donde la última tarjeta quedaba
@@ -383,7 +383,7 @@ export function Content({
                 // con "No disponible" (se ve inline en su className).
                 const atenuada = etiqueta !== "disponible";
                 return (
-                  <motion.div
+                  <m.div
                     key={producto.id}
                     initial={reduceMotion ? "visible" : "hidden"}
                     whileInView="visible"
@@ -430,7 +430,7 @@ export function Content({
                         onPointerLeave={reposarFotoProducto}
                         onPointerCancel={reposarFotoProducto}
                       >
-                        <motion.img
+                        <m.img
                           src={getImageUrl(favorita.image)}
                           alt={favorita.name}
                           onError={onErrorImagen}
@@ -513,7 +513,7 @@ export function Content({
                         </div>
                       </div>
                     </div>
-                  </motion.div>
+                  </m.div>
                 );
               });
             })()}
@@ -526,7 +526,7 @@ export function Content({
         <div className="max-w-[1400px] mx-auto px-6 md:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             {/* Left — image with floating founder card */}
-            <motion.div
+            <m.div
               initial={reduceMotion ? "visible" : "hidden"}
               whileInView="visible"
               viewport={{ once: true, amount: 0.2 }}
@@ -541,7 +541,7 @@ export function Content({
               className="relative"
             >
               <div className="rounded-[24px] overflow-hidden shadow-xl aspect-[4/3]">
-                <motion.img
+                <m.img
                   src={imagenLocal}
                   alt="Interior de La Sirena Pizza — Medellín"
                   width={1200}
@@ -560,7 +560,7 @@ export function Content({
                 />
               </div>
               {/* Floating founder card */}
-              <motion.div
+              <m.div
                 {...reveal(0.22, 8)}
                 className="absolute bottom-5 left-5 bg-card rounded-2xl shadow-xl px-5 py-4 max-w-[220px]"
               >
@@ -583,32 +583,32 @@ export function Content({
                     </p>
                   </div>
                 </div>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
 
             {/* Right — text content */}
-            <motion.div
+            <m.div
               style={profundidadActiva ? { y: historiaContenidoY } : undefined}
               className="flex flex-col gap-6"
             >
               {/* Badge */}
-              <motion.div {...reveal(0.06, 14)} className="inline-flex">
+              <m.div {...reveal(0.06, 14)} className="inline-flex">
                 <span className="px-4 py-1.5 bg-red-50 text-[#DC2626] text-sm font-semibold rounded-full border border-red-100">
                   Nuestra historia
                 </span>
-              </motion.div>
+              </m.div>
 
               {/* Title */}
-              <motion.h2
+              <m.h2
                 {...reveal(0.12, 20)}
                 className="text-4xl md:text-5xl font-bold text-foreground leading-[1.1]"
                 style={{ fontFamily: SERIF }}
               >
                 30 años de pasión por la pizza artesanal
-              </motion.h2>
+              </m.h2>
 
               {/* Body */}
-              <motion.p
+              <m.p
                 {...reveal(0.2, 16)}
                 className="text-muted-foreground text-base md:text-lg leading-relaxed"
               >
@@ -617,18 +617,18 @@ export function Content({
                 sabor con Medellín. Hoy, tres décadas después,
                 seguimos horneando cada pizza con el mismo amor
                 de siempre.
-              </motion.p>
-              <motion.p
+              </m.p>
+              <m.p
                 {...reveal(0.28, 16)}
                 className="text-muted-foreground text-base md:text-lg leading-relaxed"
               >
                 Masa elaborada a mano, ingredientes
                 seleccionados y el secreto inconfesable de
                 nuestra salsa artesanal. Eso es La Sirena.
-              </motion.p>
+              </m.p>
 
               {/* CTAs */}
-              <motion.div {...reveal(0.36, 14)} className="flex flex-wrap gap-3 pt-2">
+              <m.div {...reveal(0.36, 14)} className="flex flex-wrap gap-3 pt-2">
                 <button
                   onClick={() => navigate("catalog")}
                   {...precargar("catalog")}
@@ -644,8 +644,8 @@ export function Content({
                 >
                   📞 Llamar
                 </button>
-              </motion.div>
-            </motion.div>
+              </m.div>
+            </m.div>
           </div>
         </div>
       </section>
@@ -653,13 +653,13 @@ export function Content({
       {/* ── Por qué La Sirena ── */}
       <section className="bg-muted py-16">
         <div className="max-w-6xl mx-auto px-6">
-          <motion.h2
+          <m.h2
             {...reveal(0, 14)}
             className="text-3xl font-bold text-center mb-12 text-foreground"
             style={{ fontFamily: SERIF }}
           >
             ¿Por qué La Sirena?
-          </motion.h2>
+          </m.h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {[
               {
@@ -673,7 +673,7 @@ export function Content({
                 desc: "Seleccionamos los mejores ingredientes locales cada día para garantizar calidad en cada mordida.",
               },
             ].map(({ icon, title, desc }, i) => (
-              <motion.div
+              <m.div
                 key={title}
                 {...reveal(0.08 + i * 0.09, 16, 0.25, i === 0 ? -24 : 24, 0.98)}
                 className="group bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-md transition-shadow duration-200 text-center"
@@ -687,7 +687,7 @@ export function Content({
                 <p className="text-muted-foreground text-sm leading-relaxed">
                   {desc}
                 </p>
-              </motion.div>
+              </m.div>
             ))}
           </div>
         </div>
