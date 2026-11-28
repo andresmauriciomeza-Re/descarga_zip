@@ -42,6 +42,8 @@ Los números sirven para comparar entre fases con este mismo método. DevTools e
 | 6, imágenes | Móvil | 63 | 100 | 100 | 100 | 0,9 s | 0,9 s | 5188 ms | 6,9 s | 0 |
 | 7, animaciones más livianas | Móvil | 64 | 100 | 100 | 100 | 1,0 s | 1,0 s | 4766 ms | 6,3 s | 0 |
 | 7, animaciones más livianas | Escritorio | 61 | 100 | 100 | 100 | 0,3 s | 1,6 s | 850 ms | 2,3 s | 0 |
+| 8, final | Móvil | 62 | 100 | 100 | 100 | 1,8 s | 1,8 s | 4944 ms | 6,8 s | 0 |
+| 8, final | Escritorio | 62 | 100 | 100 | 100 | 0,3 s | 1,6 s | 841 ms | 2,3 s | 0 |
 
 ## Línea base
 
@@ -184,3 +186,50 @@ Diagnóstico del bloqueo (sin cambiar código):
 | Página vacía, configuración usada | 0–136 ms |
 
 El bloqueo lo produce la app, no el método de medición, pero la simulación de CPU lo multiplica en este equipo (índice de rendimiento de Chrome cercano a 1000). La mayor parte es trabajo que Lighthouse clasifica como «otros», no JavaScript; no se identificó su origen.
+
+## Fase 8: verificación final (2026-11-27)
+
+### Metas del plan
+
+| Meta | Resultado |
+|---|---|
+| Accesibilidad 100 | cumplida |
+| Prácticas recomendadas 100 y SEO 100 | cumplidas |
+| Pintado principal ≤ 2,5 s | cumplida (móvil 1,8 s; escritorio 1,6 s) |
+| Rendimiento escritorio 95–100 | **no cumplida** (62) |
+| Rendimiento móvil ≥ 90 | **no cumplida** (62) |
+| Bloqueo ≤ 200 ms | **no cumplida** (móvil 4,9 s) |
+
+Las metas de rendimiento y de bloqueo dependen de lo mismo: ver el diagnóstico de la Fase 7. Falta contrastarlo con una medición en un Chrome con ventana.
+
+En móvil, el primer pintado de las 3 corridas fue 1,9 / 1,8 / 0,9 s.
+
+### Comprobaciones automáticas (backend simulado)
+
+- typecheck sin errores, build correcto, 30 de 30 tests, 1 ciclo de importación.
+- 66 de 66 comprobaciones de rutas.
+- 15 pantallas de listado y ventanas de 25 rutas: sin diferencias con la versión anterior, salvo las dos filas nuevas en la página de licencias.
+- Excel de los 7 módulos idéntico; sin la librería, aviso de error y sin recarga.
+- Recorrido de 22 pasos sin errores de JavaScript. El cambio de rol no se puede pulsar en ninguna de las dos versiones con ese recorrido (la opción se oculta con rol Administrador).
+- App instalada: se actualiza desde la versión anterior (a la segunda recarga) y las 6 pantallas públicas abren sin conexión.
+- Modo oscuro: logos y franja roja revisados en capturas.
+
+Diferencias conocidas, sin cambio de comportamiento:
+
+- En Roles, con datos simulados sin permisos, el aviso emergente aparece hasta unas décimas más tarde (la pantalla se pide al abrirla).
+- Al volver del detalle de un producto, el scroll alterna entre dos posiciones cercanas; también en la versión anterior.
+
+Detalle menor: en equipos que ya tenían la app instalada queda el caché antiguo de Google Fonts, sin uso.
+
+### Pendiente de revisar a mano (con el backend real)
+
+- [ ] Medir con Lighthouse en incógnito, móvil y escritorio.
+- [ ] Pedido completo con comprobante.
+- [ ] Registro, verificación de correo e invitación de empleado.
+- [ ] Cada módulo del panel, con crear y editar.
+- [ ] Descargar Excel en los 7 módulos.
+- [ ] Revisar el texto nuevo de tipografías en la página de licencias.
+- [ ] Instalar y actualizar la app en un celular real.
+- [ ] Vista previa en Vercel: recargar en `/admin/suppliers`.
+
+La rama `perf/lighthouse` sale de `refactor/estructura-ingles`; ninguna de las dos se ha subido.
