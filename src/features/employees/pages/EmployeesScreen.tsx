@@ -27,16 +27,11 @@ import type { Rol } from "@/features/roles/utils/roles";
 import { DOC_TIPOS, fmtDoc } from "@/features/users/utils/users";
 import type { Cliente } from "@/features/customers/utils/customers";
 import { useEmployees } from "@/features/employees/hooks/useEmployees";
-import { type Empleado, mensajeError, type Contratacion } from "@/features/employees/utils/employees";
+import { type Empleado, mensajeError } from "@/features/employees/utils/employees";
+import { ordenarContrataciones } from "@/features/employees/utils/employees";
 
 const SERIF = "var(--font-titulo)";
 const MONO  = "var(--font-texto)";
-
-// De la más reciente a la más antigua. Primero por fecha de inicio y, si empatan
-// (dos contrataciones el mismo día), por id, que ya refleja el orden en que se
-// fueron registrando.
-export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
-  [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
 
 // ── Cuenta de super administrador (Gloria) ─────────────────────────────────
 // La marca proviene del usuario autenticado/del API, no de la semilla local.

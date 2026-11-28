@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "motion/react";
 import { User, Mail, Phone, ArrowLeft, Pencil, X, Check, LogOut, FileText, ShieldCheck, Briefcase, KeyRound, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { ordenarContrataciones } from "@/features/employees/pages/EmployeesScreen";
+import { ordenarContrataciones } from "@/features/employees/utils/employees";
 import type { Contratacion } from "@/features/employees/utils/employees";
 import { etiquetaTipoDocumento } from "@/shared/utils/documentTypes";
 import { CambiarRolMenu } from "@/shared/components/SwitchRoleMenu";

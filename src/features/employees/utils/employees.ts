@@ -80,3 +80,9 @@ export const mensajeError = (error: unknown, porDefecto: string): string => {
   if (e?.status === 403) return e.message || "No tienes permiso para realizar esta acción.";
   return e?.message || porDefecto;
 };
+
+// De la más reciente a la más antigua. Primero por fecha de inicio y, si empatan
+// (dos contrataciones el mismo día), por id, que ya refleja el orden en que se
+// fueron registrando.
+export const ordenarContrataciones = (cs: Contratacion[]): Contratacion[] =>
+  [...cs].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio) || Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
